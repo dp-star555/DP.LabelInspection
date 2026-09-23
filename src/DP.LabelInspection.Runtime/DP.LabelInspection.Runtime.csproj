@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../DP.LabelInspection.Core/DP.LabelInspection.Core.csproj" />
+        <ProjectReference Include="../DP.LabelInspection.Adapter.Vision/DP.LabelInspection.Adapter.Vision.csproj" />
+        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.OpenCv/DP.Vision.OpenCv.csproj" />
+        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.Onnx/DP.Vision.Onnx.csproj" />
+        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.Zxing/DP.Vision.Zxing.csproj" />
+        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.OnnxDetection/DP.Vision.OnnxDetection.csproj" />
+    </ItemGroup>
+</Project>

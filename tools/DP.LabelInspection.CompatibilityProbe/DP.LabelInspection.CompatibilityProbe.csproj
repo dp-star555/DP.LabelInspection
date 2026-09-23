@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+        <OutputType>Exe</OutputType>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../src/DP.LabelInspection.Core/DP.LabelInspection.Core.csproj" />
+        <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\DP.LabelInspection.Runtime\DP.LabelInspection.Runtime.csproj" />
+    </ItemGroup>
+</Project>

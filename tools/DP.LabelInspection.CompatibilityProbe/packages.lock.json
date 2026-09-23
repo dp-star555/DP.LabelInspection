@@ -1,0 +1,302 @@
+{
+  "version": 1,
+  "dependencies": {
+    ".NETFramework,Version=v4.8": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.28.0, )",
+        "resolved": "1.28.0",
+        "contentHash": "xpguSCrXBe5E1l1088S7UqnI36EHaTL6CJMHEhwfGBoSwyPH5Q/IkbkBBk/GwXWzsVyEXpQm42ZimSAQs0/zKA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.28.0"
+        }
+      },
+      "Microsoft.NETFramework.ReferenceAssemblies.net48": {
+        "type": "Direct",
+        "requested": "[1.0.3, )",
+        "resolved": "1.0.3",
+        "contentHash": "zMk4D+9zyiEWByyQ7oPImPN/Jhpj166Ky0Nlla4eXlNL8hI/BtSJsgR8Inldd4NNpIAH3oh8yym0W2DrhXdSLQ=="
+      },
+      "Microsoft.ML.OnnxRuntime.Managed": {
+        "type": "Transitive",
+        "resolved": "1.28.0",
+        "contentHash": "4ecKjwASHhAZXczK/xm5KU6MdvoIGfMd23UAwDbM9vfcfgqZgNqvFWPZPT0Elc1wu5vXWs2Kij1ZBmHCcv1UlA==",
+        "dependencies": {
+          "System.Memory": "4.5.5"
+        }
+      },
+      "OpenCvSharp4": {
+        "type": "Transitive",
+        "resolved": "4.10.0.20240616",
+        "contentHash": "+iaFSUq0Cp+B9s1sUqDwB3PvQ5HdWWvRE50WsAw1PL8smD3VZNbe0P786E4Yfu7LHM7jeqkulOwjk2CoihsZeg==",
+        "dependencies": {
+          "System.Memory": "4.5.5",
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0",
+          "System.ValueTuple": "4.5.0"
+        }
+      },
+      "OpenCvSharp4.runtime.win": {
+        "type": "Transitive",
+        "resolved": "4.10.0.20240616",
+        "contentHash": "dpQNIR6PpeB/oZM0e0fZpt9lOS3Htjm6ZjtOgLyxN7QwjRekbNevrmO8VbgezUoetk68CRwxYZGaymCm2vt8Sg=="
+      },
+      "System.Buffers": {
+        "type": "Transitive",
+        "resolved": "4.5.1",
+        "contentHash": "Rw7ijyl1qqRS0YQD/WycNst8hUUMgrMH4FCn1nNm27M4VxchZ1js3fVjQaANHO5f3sN4isvP4a+Met9Y4YomAg=="
+      },
+      "System.Memory": {
+        "type": "Transitive",
+        "resolved": "4.5.5",
+        "contentHash": "XIWiDvKPXaTveaB7HVganDlOCRoj03l+jrwNvcge/t8vhGYKvqV+dMv6G4SAX2NoNmN0wZfVPTAlFwZcZvVOUw==",
+        "dependencies": {
+          "System.Buffers": "4.5.1",
+          "System.Numerics.Vectors": "4.5.0",
+          "System.Runtime.CompilerServices.Unsafe": "4.5.3"
+        }
+      },
+      "System.Numerics.Vectors": {
+        "type": "Transitive",
+        "resolved": "4.5.0",
+        "contentHash": "QQTlPTl06J/iiDbJCiepZ4H//BVraReU4O4EoRw1U02H5TLUIT7xn3GnDp9AXPSlJUDyFs4uWjWafNX6WrAojQ=="
+      },
+      "System.Runtime.CompilerServices.Unsafe": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "/iUeP3tq1S0XdNNoMz5C9twLSrM/TH+qElHkXWaPvuNOt+99G75NrV0OS2EqHx5wMN7popYjpc8oTjC1y16DLg=="
+      },
+      "System.ValueTuple": {
+        "type": "Transitive",
+        "resolved": "4.5.0",
+        "contentHash": "okurQJO6NRE/apDIP23ajJ0hpiNmJ+f0BwOlB/cSqTLQlw5upkf+5+96+iG2Jw40G1fCVCyPz/FhIABUjMR+RQ=="
+      },
+      "ZXing.Net": {
+        "type": "Transitive",
+        "resolved": "0.16.11",
+        "contentHash": "OZfAVu88hl87BffQ+rlWCj/vLvAhhCK4QnFaoveeF/MY8SjHNSYBQ3qyUEWlPKNgBQGh1syXhCDg10vUnCsqkg=="
+      },
+      "dp.labelinspection.adapter.vision": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.labelinspection.contracts": {
+        "type": "Project"
+      },
+      "dp.labelinspection.core": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.labelinspection.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
+          "DP.Vision.Onnx": "[0.1.0-preview.2, )",
+          "DP.Vision.OnnxDetection": "[0.1.0-preview.2, )",
+          "DP.Vision.OpenCv": "[0.1.0-preview.2, )",
+          "DP.Vision.Zxing": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.vision": {
+        "type": "Project"
+      },
+      "dp.vision.algorithms": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.vision.onnx": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "Microsoft.ML.OnnxRuntime": "[1.28.0, )"
+        }
+      },
+      "dp.vision.onnxdetection": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "Microsoft.ML.OnnxRuntime": "[1.28.0, )",
+          "OpenCvSharp4": "[4.10.0.20240616, )",
+          "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
+        }
+      },
+      "dp.vision.opencv": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "OpenCvSharp4": "[4.10.0.20240616, )",
+          "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
+        }
+      },
+      "dp.vision.zxing": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "ZXing.Net": "[0.16.11, )"
+        }
+      }
+    },
+    ".NETFramework,Version=v4.8/win-x64": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.28.0, )",
+        "resolved": "1.28.0",
+        "contentHash": "xpguSCrXBe5E1l1088S7UqnI36EHaTL6CJMHEhwfGBoSwyPH5Q/IkbkBBk/GwXWzsVyEXpQm42ZimSAQs0/zKA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.28.0"
+        }
+      },
+      "OpenCvSharp4.runtime.win": {
+        "type": "Transitive",
+        "resolved": "4.10.0.20240616",
+        "contentHash": "dpQNIR6PpeB/oZM0e0fZpt9lOS3Htjm6ZjtOgLyxN7QwjRekbNevrmO8VbgezUoetk68CRwxYZGaymCm2vt8Sg=="
+      }
+    },
+    "net8.0-windows7.0": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.28.0, )",
+        "resolved": "1.28.0",
+        "contentHash": "xpguSCrXBe5E1l1088S7UqnI36EHaTL6CJMHEhwfGBoSwyPH5Q/IkbkBBk/GwXWzsVyEXpQm42ZimSAQs0/zKA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.28.0"
+        }
+      },
+      "Microsoft.ML.OnnxRuntime.Managed": {
+        "type": "Transitive",
+        "resolved": "1.28.0",
+        "contentHash": "4ecKjwASHhAZXczK/xm5KU6MdvoIGfMd23UAwDbM9vfcfgqZgNqvFWPZPT0Elc1wu5vXWs2Kij1ZBmHCcv1UlA==",
+        "dependencies": {
+          "System.Memory": "4.5.5",
+          "System.Numerics.Tensors": "9.0.0"
+        }
+      },
+      "OpenCvSharp4": {
+        "type": "Transitive",
+        "resolved": "4.10.0.20240616",
+        "contentHash": "+iaFSUq0Cp+B9s1sUqDwB3PvQ5HdWWvRE50WsAw1PL8smD3VZNbe0P786E4Yfu7LHM7jeqkulOwjk2CoihsZeg==",
+        "dependencies": {
+          "System.Memory": "4.5.5",
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
+        }
+      },
+      "OpenCvSharp4.runtime.win": {
+        "type": "Transitive",
+        "resolved": "4.10.0.20240616",
+        "contentHash": "dpQNIR6PpeB/oZM0e0fZpt9lOS3Htjm6ZjtOgLyxN7QwjRekbNevrmO8VbgezUoetk68CRwxYZGaymCm2vt8Sg=="
+      },
+      "System.Memory": {
+        "type": "Transitive",
+        "resolved": "4.5.5",
+        "contentHash": "XIWiDvKPXaTveaB7HVganDlOCRoj03l+jrwNvcge/t8vhGYKvqV+dMv6G4SAX2NoNmN0wZfVPTAlFwZcZvVOUw=="
+      },
+      "System.Numerics.Tensors": {
+        "type": "Transitive",
+        "resolved": "9.0.0",
+        "contentHash": "hyJB4UlpAi19Xr9AXzu2NuagKC4lPfHObNMEAA0HmqFz2rX7wKgzeYzO/jM/eBHDhnUGFFEjk5cOoJaxqg5J4A=="
+      },
+      "System.Runtime.CompilerServices.Unsafe": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "/iUeP3tq1S0XdNNoMz5C9twLSrM/TH+qElHkXWaPvuNOt+99G75NrV0OS2EqHx5wMN7popYjpc8oTjC1y16DLg=="
+      },
+      "ZXing.Net": {
+        "type": "Transitive",
+        "resolved": "0.16.11",
+        "contentHash": "OZfAVu88hl87BffQ+rlWCj/vLvAhhCK4QnFaoveeF/MY8SjHNSYBQ3qyUEWlPKNgBQGh1syXhCDg10vUnCsqkg=="
+      },
+      "dp.labelinspection.adapter.vision": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.labelinspection.contracts": {
+        "type": "Project"
+      },
+      "dp.labelinspection.core": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.labelinspection.runtime": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
+          "DP.Vision.Onnx": "[0.1.0-preview.2, )",
+          "DP.Vision.OnnxDetection": "[0.1.0-preview.2, )",
+          "DP.Vision.OpenCv": "[0.1.0-preview.2, )",
+          "DP.Vision.Zxing": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.vision": {
+        "type": "Project"
+      },
+      "dp.vision.algorithms": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.vision.onnx": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "Microsoft.ML.OnnxRuntime": "[1.28.0, )"
+        }
+      },
+      "dp.vision.onnxdetection": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "Microsoft.ML.OnnxRuntime": "[1.28.0, )",
+          "OpenCvSharp4": "[4.10.0.20240616, )",
+          "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
+        }
+      },
+      "dp.vision.opencv": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "OpenCvSharp4": "[4.10.0.20240616, )",
+          "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
+        }
+      },
+      "dp.vision.zxing": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "ZXing.Net": "[0.16.11, )"
+        }
+      }
+    },
+    "net8.0-windows7.0/win-x64": {
+      "Microsoft.ML.OnnxRuntime": {
+        "type": "Direct",
+        "requested": "[1.28.0, )",
+        "resolved": "1.28.0",
+        "contentHash": "xpguSCrXBe5E1l1088S7UqnI36EHaTL6CJMHEhwfGBoSwyPH5Q/IkbkBBk/GwXWzsVyEXpQm42ZimSAQs0/zKA==",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime.Managed": "1.28.0"
+        }
+      },
+      "OpenCvSharp4.runtime.win": {
+        "type": "Transitive",
+        "resolved": "4.10.0.20240616",
+        "contentHash": "dpQNIR6PpeB/oZM0e0fZpt9lOS3Htjm6ZjtOgLyxN7QwjRekbNevrmO8VbgezUoetk68CRwxYZGaymCm2vt8Sg=="
+      }
+    }
+  }
+}

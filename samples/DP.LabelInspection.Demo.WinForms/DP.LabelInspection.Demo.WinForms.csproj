@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+        <UseWindowsForms>true</UseWindowsForms>
+        <OutputType>WinExe</OutputType>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../src/DP.LabelInspection/DP.LabelInspection.csproj" />
+        <ProjectReference Include="../../src/DP.LabelInspection.Core/DP.LabelInspection.Core.csproj" />
+        <ProjectReference Include="../../src/DP.LabelInspection.Storage/DP.LabelInspection.Storage.csproj" />
+        <ProjectReference Include="..\..\src\DP.LabelInspection.Runtime\DP.LabelInspection.Runtime.csproj" />
+    </ItemGroup>
+</Project>

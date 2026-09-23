@@ -1,0 +1,5 @@
+<Project>
+  <Target Name="RequireX64InspectionBuild" BeforeTargets="CoreCompile">
+    <Error Condition="'$(PlatformTarget)' != 'x64' Or '$(Platform)' == 'x86'" Text="DP.LabelInspection currently supports x64 only. Do not override PlatformTarget to x86 or AnyCPU." />
+  </Target>
+</Project>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms</value></resheader>
+  <data name="Aligned" xml:space="preserve"><value>已由上游对齐</value></data>
+  <data name="Run" xml:space="preserve"><value>开始检测</value></data>
+  <data name="Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="ClearRois" xml:space="preserve"><value>清空ROI</value></data>
+  <data name="Unattached" xml:space="preserve"><value>未连接检测引擎；本控件不加载算法运行库。</value></data>
+  <data name="Drag" xml:space="preserve"><value>拖动框选：</value></data>
+  <data name="Verdict" xml:space="preserve"><value>结论</value></data>
+  <data name="Check" xml:space="preserve"><value>区域 / 检查</value></data>
+  <data name="Coordinates" xml:space="preserve"><value>原始像素坐标</value></data>
+  <data name="Description" xml:space="preserve"><value>说明</value></data>
+  <data name="Cancelled" xml:space="preserve"><value>检测已取消，不生成合格结果。</value></data>
+  <data name="Failed" xml:space="preserve"><value>检测未完成：{0}</value></data>
+  <data name="Connected" xml:space="preserve"><value>已接入：{0}；未实现的检查只会待复核。</value></data>
+  <data name="Running" xml:space="preserve"><value>检测中…</value></data>
+  <data name="Summary" xml:space="preserve"><value>{0} · {1:F1} ms · 对比度 {2:F1} / 清晰度 {3:F1} · 仅配置范围，不是产线放行认证</value></data>
+  <data name="WithinScope" xml:space="preserve"><value>范围内</value></data>
+  <data name="ScopeNotice" xml:space="preserve"><value>本区域未发现超阈值差异；不代表整标签合格。</value></data>
+  <data name="Global" xml:space="preserve"><value>全局</value></data>
+  <data name="KindFixed" xml:space="preserve"><value>固定内容</value></data>
+  <data name="KindText" xml:space="preserve"><value>单行可变文字</value></data>
+  <data name="KindBarcode" xml:space="preserve"><value>条码</value></data>
+  <data name="KindBlank" xml:space="preserve"><value>空白</value></data>
+  <data name="KindIgnore" xml:space="preserve"><value>忽略</value></data>
+</root>

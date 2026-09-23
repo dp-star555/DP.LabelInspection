@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../src/DP.LabelInspection.Core/DP.LabelInspection.Core.csproj" />
+        <ProjectReference Include="../../src/DP.LabelInspection.Adapter.Vision/DP.LabelInspection.Adapter.Vision.csproj" />
+        <ProjectReference Include="../../src/DP.LabelInspection.Storage/DP.LabelInspection.Storage.csproj" />
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+        <PackageReference Include="MSTest.TestFramework" Version="4.1.0" />
+        <PackageReference Include="MSTest.TestAdapter" Version="4.1.0" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+        <Reference Include="System.IO.Compression" />
+    </ItemGroup>
+    <ItemGroup>
+        <ProjectReference Include="..\..\src\DP.LabelInspection.Runtime\DP.LabelInspection.Runtime.csproj" />
+    </ItemGroup>
+</Project>

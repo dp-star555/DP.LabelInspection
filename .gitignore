@@ -1,0 +1,23 @@
+**/bin/
+**/obj/
+.vs/
+TestResults/
+artifacts/
+dist/
+*.user
+*.suo
+
+# 模型、生产样例、报告和本机运行数据不进入公开源码仓库。
+*.onnx
+*.engine
+*.weights
+*.model-sha256
+models/
+samples/production/
+samples/private/
+reports/
+jobs/
+
+# 架构图工具生成的历史HTML、截图和校验JSON不进入源码仓库。
+docs/decision-flow/archive-v1/
+docs/decision-flow/index.html

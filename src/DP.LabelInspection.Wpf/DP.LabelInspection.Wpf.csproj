@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFrameworks>net48;net8.0-windows</TargetFrameworks>
+        <UseWPF>true</UseWPF>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../DP.LabelInspection.Contracts/DP.LabelInspection.Contracts.csproj" />
+        <ProjectReference Include="../DP.LabelInspection.Adapter.Vision/DP.LabelInspection.Adapter.Vision.csproj" />
+        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.WPF/DP.Vision.WPF.csproj" />
+    </ItemGroup>
+</Project>
