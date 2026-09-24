@@ -129,6 +129,10 @@
 | `UiText` | [src/DP.LabelInspection/Localization/UiText.cs](src/DP.LabelInspection/Localization/UiText.cs) |
 | `InspectionCompletedEventArgs` | [src/DP.LabelInspection/Workbench/InspectionCompletedEventArgs.cs](src/DP.LabelInspection/Workbench/InspectionCompletedEventArgs.cs) |
 | `LabelInspectionControl` | [src/DP.LabelInspection/Workbench/LabelInspectionControl.cs](src/DP.LabelInspection/Workbench/LabelInspectionControl.cs) |
+| `ActionGroup` | [src/DP.LabelInspection/Workbench/Layout/ActionGroup.cs](src/DP.LabelInspection/Workbench/Layout/ActionGroup.cs) |
+| `ActionSidebar` | [src/DP.LabelInspection/Workbench/Layout/ActionSidebar.cs](src/DP.LabelInspection/Workbench/Layout/ActionSidebar.cs) |
+| `CanvasViewBar` | [src/DP.LabelInspection/Workbench/Layout/CanvasViewBar.cs](src/DP.LabelInspection/Workbench/Layout/CanvasViewBar.cs) |
+| `VerdictBanner` | [src/DP.LabelInspection/Workbench/Layout/VerdictBanner.cs](src/DP.LabelInspection/Workbench/Layout/VerdictBanner.cs) |
 | `AlgorithmIsolationTests` | [tests/DP.LabelInspection.Tests/Architecture/AlgorithmIsolationTests.cs](tests/DP.LabelInspection.Tests/Architecture/AlgorithmIsolationTests.cs) |
 | `EnumContractTests` | [tests/DP.LabelInspection.Tests/Architecture/EnumContractTests.cs](tests/DP.LabelInspection.Tests/Architecture/EnumContractTests.cs) |
 | `ProjectBoundaryTests` | [tests/DP.LabelInspection.Tests/Architecture/ProjectBoundaryTests.cs](tests/DP.LabelInspection.Tests/Architecture/ProjectBoundaryTests.cs) |

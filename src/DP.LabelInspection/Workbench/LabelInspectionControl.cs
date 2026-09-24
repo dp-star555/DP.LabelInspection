@@ -11,7 +11,10 @@ using DP.LabelInspection.Contracts;
 namespace DP.LabelInspection;
 
 /// <summary>可嵌入的WinForms检测工作台；注入的引擎和图像快照由宿主拥有。</summary>
-/// <remarks>UI方法必须在UI线程调用；释放控件会取消自身工作，但不释放宿主引擎。</remarks>
+/// <remarks>
+/// 布局：左侧按流程分组的操作侧栏；右侧上方为画布及视图工具条，下方为可拖动分隔的判定与证据区。
+/// UI方法必须在UI线程调用；释放控件会取消自身工作，但不释放宿主引擎。
+/// </remarks>
 [ToolboxItem(true)]
 [DefaultEvent(nameof(InspectionCompleted))]
 public sealed class LabelInspectionControl : UserControl
@@ -29,15 +32,30 @@ public sealed class LabelInspectionControl : UserControl
         FormattingEnabled = true,
     };
     private readonly CheckBox _aligned = new CheckBox { Text = UiText.Get("Aligned"), AutoSize = true };
-    private readonly Button _run = new Button { Text = UiText.Get("Run"), AutoSize = true };
-    private readonly Button _cancelButton = new Button { Text = UiText.Get("Cancel"), AutoSize = true };
-    private readonly Button _clear = new Button { Text = UiText.Get("ClearRois"), AutoSize = true };
-    private readonly Label _status = new Label
+    private readonly Button _run = new Button
     {
+        Text = UiText.Get("Run"),
         AutoSize = true,
-        Text = UiText.Get("Unattached"),
-        Padding = new Padding(6),
+        Padding = new Padding(0, 4, 0, 4),
     };
+    private readonly Button _cancelButton = new Button
+    {
+        Text = UiText.Get("Cancel"),
+        AutoSize = true,
+        Enabled = false,
+    };
+    private readonly Button _clear = new Button { Text = UiText.Get("ClearRois"), AutoSize = true };
+    private readonly VerdictBanner _status = new VerdictBanner();
+    private readonly ActionSidebar _sidebar = new ActionSidebar { Dock = DockStyle.Left };
+    private readonly SplitContainer _split = new SplitContainer
+    {
+        Dock = DockStyle.Fill,
+        Orientation = Orientation.Horizontal,
+        SplitterWidth = 6,
+    };
+    private readonly List<ActionGroup> _idleOnly = new List<ActionGroup>();
+    private readonly ToolTip _tips = new ToolTip();
+    private bool _splitInitialized;
     private readonly ListView _evidence = new ListView
     {
         Dock = DockStyle.Fill,
@@ -49,6 +67,13 @@ public sealed class LabelInspectionControl : UserControl
         Dock = DockStyle.Fill,
         AutoScroll = true,
     };
+    private readonly Label _glyphFilterInfo = new Label
+    {
+        Name = "GlyphFilterInfo",
+        AutoSize = true,
+        Visible = false,
+        Margin = new Padding(8, 7, 0, 0),
+    };
     private IGlyphLibraryManager? _libraryManager;
     private InspectionOptions _options = new InspectionOptions();
     private IReadOnlyList<FieldBinding> _bindings = Array.Empty<FieldBinding>();
@@ -58,7 +83,7 @@ public sealed class LabelInspectionControl : UserControl
     private IInspectionEngine? _engine;
     private ImageFrame? _actual;
     private ImageFrame? _reference;
-    private readonly Label _referenceMode = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
+    private readonly Label _referenceMode = new Label { AutoSize = true };
     private CancellationTokenSource? _cancel;
     private Task<InspectionReport>? _active;
     private int _regionNumber;
@@ -70,12 +95,6 @@ public sealed class LabelInspectionControl : UserControl
         Dock = DockStyle.Fill;
         Font = new Font("Microsoft YaHei UI", 9);
         MinimumSize = new Size(600, 400);
-        var toolbar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            Padding = new Padding(6),
-        };
         _kind.Format += (_, e) =>
             e.Value =
                 e.ListItem is EBarcodeKind type ? (type == EBarcodeKind.QrCode ? "二维码（QR）" : "一维条码")
@@ -89,82 +108,48 @@ public sealed class LabelInspectionControl : UserControl
         _kind.Items.Add(EBarcodeKind.OneDimensional);
         _kind.Items.Add(EBarcodeKind.QrCode);
         _kind.SelectedItem = ERegionKind.Blank;
-        toolbar.Controls.AddRange(
-            new Control[]
-            {
-                new Label
-                {
-                    Text = UiText.Get("Drag"),
-                    AutoSize = true,
-                    Padding = new Padding(0, 6, 0, 0),
-                },
-                _kind,
-                _aligned,
-                _run,
-                _cancelButton,
-                _clear,
-            }
-        );
-        var layout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 4,
-        };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 70));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 30));
-        var details = new TabControl { Dock = DockStyle.Fill };
-        var evidenceTab = new TabPage("检查证据");
-        var glyphTab = new TabPage("缺陷标记 / 单字");
-        evidenceTab.Controls.Add(_evidence);
-        glyphTab.Controls.Add(_glyphGallery);
-        details.TabPages.Add(evidenceTab);
-        details.TabPages.Add(glyphTab);
-        layout.Controls.Add(toolbar, 0, 0);
-        layout.Controls.Add(_viewer, 0, 1);
-        layout.Controls.Add(_status, 0, 2);
-        layout.Controls.Add(details, 0, 3);
-        var editRois = new CheckBox { Text = "选中/调整ROI", AutoSize = true };
-        editRois.CheckedChanged += (_, _) =>
-        {
-            _viewer.EditRegions = editRois.Checked;
-            _viewer.Invalidate();
-        };
-        toolbar.Controls.Add(editRois);
-        AddAction(
-            toolbar,
-            "放大+",
-            () => _viewer.ZoomAt(1.25f, new Point(_viewer.Width / 2, _viewer.Height / 2))
-        );
-        AddAction(
-            toolbar,
-            "缩小−",
-            () => _viewer.ZoomAt(.8f, new Point(_viewer.Width / 2, _viewer.Height / 2))
-        );
-        toolbar.Controls.Add(
+
+        var details = BuildResults(out var glyphTab);
+        BuildSidebar(details, glyphTab);
+        var canvas = new Panel { Dock = DockStyle.Fill };
+        canvas.Controls.Add(_viewer);
+        canvas.Controls.Add(new CanvasViewBar(_viewer));
+        _split.Panel1.Controls.Add(canvas);
+        _split.Panel2.Controls.Add(details);
+        _split.Panel2.Controls.Add(_status);
+        _split.SizeChanged += (_, _) => InitializeSplit();
+        // 停靠按Z序倒序处理：侧栏先占左侧，其后分隔线，余下区域给画布与结果。
+        Controls.Add(_split);
+        Controls.Add(
             new Label
             {
-                Text = "画布：DP.Vision",
-                AutoSize = true,
-                Padding = new Padding(4, 6, 4, 0),
+                Dock = DockStyle.Left,
+                AutoSize = false,
+                Width = 1,
+                BackColor = SystemColors.ControlDark,
             }
         );
-        AddAction(toolbar, "1:1", () => _viewer.ActualSize());
-        AddAction(toolbar, "适应窗口", () => _viewer.FitToWindow());
-        var zoomLabel = new Label { AutoSize = true, Padding = new Padding(0, 6, 0, 0) };
-        void UpdateZoom()
-        {
-            zoomLabel.Text = $"{_viewer.ImageScale * 100:0.#}% · 滚轮缩放 / 中或右键拖动 / Home复位";
-        }
+        Controls.Add(_sidebar);
+        _status.Message = UiText.Get("Unattached");
+        UpdateReferenceMode();
+        WireCanvas(details, glyphTab);
+    }
 
-        _viewer.ViewChanged += (_, _) => UpdateZoom();
-        UpdateZoom();
-        toolbar.Controls.Add(zoomLabel);
+    private TabControl BuildResults(out TabPage glyphTab)
+    {
+        var details = new TabControl { Dock = DockStyle.Fill };
+        var evidenceTab = new TabPage("检查证据");
+        glyphTab = new TabPage("缺陷标记 / 单字");
+        evidenceTab.Controls.Add(_evidence);
+        var glyphBar = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
+            Padding = new Padding(2),
+        };
         AddAction(
-            toolbar,
+            glyphBar,
             "显示全部单字",
             () =>
             {
@@ -176,8 +161,247 @@ public sealed class LabelInspectionControl : UserControl
                 FilterGlyphs(null);
             }
         );
+        glyphBar.Controls.Add(_glyphFilterInfo);
+        glyphTab.Controls.Add(_glyphGallery);
+        glyphTab.Controls.Add(glyphBar);
+        details.TabPages.Add(evidenceTab);
+        details.TabPages.Add(glyphTab);
+        _evidence.Columns.Add(UiText.Get("Verdict"), 85);
+        _evidence.Columns.Add(UiText.Get("Check"), 220);
+        _evidence.Columns.Add(UiText.Get("Coordinates"), 150);
+        _evidence.Columns.Add(UiText.Get("Description"), 550);
         _evidence.MultiSelect = false;
         _evidence.HideSelection = false;
+        _evidence.Resize += (_, _) => FitDescriptionColumn();
+        return details;
+    }
+
+    private void BuildSidebar(TabControl details, TabPage glyphTab)
+    {
+        var run = _sidebar.AddGroup("检测");
+        run.Add(_run);
+        run.Emphasize(_run);
+        run.Add(_cancelButton);
+        _tips.SetToolTip(_run, "按当前ROI与规则检测已载入的待检图（F5）");
+        _tips.SetToolTip(_cancelButton, "取消正在进行的检测，不生成合格结果");
+
+        var reference = _sidebar.AddGroup("参考模式");
+        reference.Add(_referenceMode);
+        reference.Add(_aligned);
+        _tips.SetToolTip(_aligned, "宿主已确认待检图与参考图坐标对齐时勾选，不再执行模板平移");
+        var free = reference.AddButton(
+            "无整图参考（可用单字库）",
+            () =>
+            {
+                SetReferenceImage(null);
+                _status.Message =
+                    "已关闭整图模板模式；ROI、单字库及字段绑定保留。固定区域模板差异/模板平移不再执行。";
+            }
+        );
+        _tips.SetToolTip(free, "关闭整图模板模式；保留ROI、单字库及字段绑定");
+        _idleOnly.Add(reference);
+
+        var roi = _sidebar.AddGroup("ROI");
+        roi.Add(new Label { Text = UiText.Get("Drag"), AutoSize = true });
+        roi.Add(_kind);
+        var editRois = roi.Add(new CheckBox { Text = "选中/调整ROI", AutoSize = true });
+        _tips.SetToolTip(editRois, "开启后左键选中并移动/缩放ROI；按住Shift仍可新建");
+        editRois.CheckedChanged += (_, _) =>
+        {
+            _viewer.EditRegions = editRois.Checked;
+            _viewer.Invalidate();
+        };
+        var edit = roi.AddButton(
+            "编辑ROI/规则",
+            () =>
+            {
+                EnsureIdle();
+                var edited = RegionEditor.Edit(_regions, _libraryManager);
+                if (edited != null)
+                {
+                    SetRegions(edited);
+                }
+            }
+        );
+        _tips.SetToolTip(edit, "在表格中编辑ROI名称、类型、检查项目及规则");
+        var explore = roi.AddButton(
+            "采用探索文字ROI",
+            () =>
+            {
+                EnsureIdle();
+                if (LastReport == null)
+                {
+                    throw new InvalidOperationException("先在无参考、无ROI模式执行探索。");
+                }
+
+                var regions = LastReport
+                    .Analysis.Regions.Where(r =>
+                        r.RegionName.StartsWith("auto-text-", StringComparison.Ordinal)
+                    )
+                    .Select(r => new
+                    {
+                        Result = r,
+                        Bounds = r.Recognition?.Bounds
+                            ?? r.Findings.FirstOrDefault(f => f.Bounds.HasValue)?.Bounds,
+                    })
+                    .Where(r => r.Bounds.HasValue)
+                    .Select(r => new InspectionRegion(
+                        r.Result.RegionName,
+                        ERegionKind.Text,
+                        r.Bounds!.Value,
+                        true
+                    ))
+                    .ToArray();
+                if (regions.Length == 0)
+                {
+                    throw new InvalidOperationException("没有可采用的文字候选。");
+                }
+
+                SetRegions(regions);
+            }
+        );
+        _tips.SetToolTip(explore, "把无参考、无ROI探索检测找到的文字区域转为ROI");
+        roi.Add(_clear);
+        _tips.SetToolTip(_clear, "删除全部ROI及字段绑定");
+        _idleOnly.Add(roi);
+
+        var rules = _sidebar.AddGroup("规则与数据");
+        var bind = rules.AddButton(
+            "字段绑定",
+            () =>
+            {
+                EnsureIdle();
+                var bindings = BindingEditor.Edit(_regions, _bindings);
+                if (bindings != null)
+                {
+                    SetBindings(bindings);
+                }
+            }
+        );
+        _tips.SetToolTip(bind, "设置ROI之间或ROI与任务数据之间的内容约束");
+        var data = rules.AddButton(
+            "本次任务数据",
+            () =>
+            {
+                EnsureIdle();
+                var snapshot = BindingEditor.TaskData();
+                if (snapshot != null)
+                {
+                    SetTaskData(snapshot.CycleId, snapshot);
+                }
+            }
+        );
+        _tips.SetToolTip(data, "为当前图像提供本周期业务数据；载入新图后自动清除");
+        var thresholds = rules.AddButton(
+            "阈值",
+            () =>
+            {
+                EnsureIdle();
+                string? text = EditorDialogs.Ask(
+                    "阈值：墨迹,原图容差,最小面积,对比度,清晰度",
+                    string.Join(
+                        ",",
+                        _options.InkThreshold,
+                        _options.TolerancePixels,
+                        _options.MinimumDefectArea,
+                        _options.MinimumContrast,
+                        _options.MinimumSharpness
+                    )
+                );
+                if (text == null)
+                {
+                    return;
+                }
+
+                var p = text.Split(',');
+                if (p.Length != 5)
+                {
+                    throw new ArgumentException("需要5个参数。");
+                }
+
+                _options = new InspectionOptions(
+                    int.Parse(p[0]),
+                    int.Parse(p[1]),
+                    int.Parse(p[2]),
+                    double.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture),
+                    double.Parse(p[4], System.Globalization.CultureInfo.InvariantCulture)
+                );
+            }
+        );
+        _tips.SetToolTip(thresholds, "墨迹、原图容差、最小面积、对比度及清晰度阈值");
+        _idleOnly.Add(rules);
+
+        var library = _sidebar.AddGroup("单字库");
+        var glyphs = library.AddButton(
+            "单字库",
+            () =>
+            {
+                EnsureIdle();
+                OpenLibrary(null);
+            }
+        );
+        _tips.SetToolTip(glyphs, "管理单字模板库及版本");
+        var quick = library.AddButton(
+            "多图制库",
+            () =>
+            {
+                EnsureIdle();
+                GlyphQuickBuilderControl.ShowPage(
+                    FindForm(),
+                    _libraryManager ?? throw new InvalidOperationException("宿主未连接字库管理器。"),
+                    _engine as IGlyphCandidateService,
+                    _actual
+                );
+            }
+        );
+        _tips.SetToolTip(quick, "从多张图像的字符候选制作单字库新版本");
+        _idleOnly.Add(library);
+
+        _clear.Click += (_, _) =>
+        {
+            if (_active == null)
+            {
+                _regions.Clear();
+                _bindings = Array.Empty<FieldBinding>();
+                RefreshRegions();
+            }
+        };
+        _cancelButton.Click += (_, _) => _cancel?.Cancel();
+        _run.Click += async (_, _) =>
+        {
+            try
+            {
+                await RunInspectionAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                if (!IsDisposed)
+                {
+                    _status.Message = UiText.Get("Cancelled");
+                }
+            }
+            catch (Exception error)
+            {
+                if (!IsDisposed)
+                {
+                    _status.Message = UiText.Format("Failed", error.Message);
+                    if (error is ArgumentException)
+                    {
+                        MessageBox.Show(
+                            this,
+                            error.Message,
+                            "检测配置未通过",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        );
+                    }
+                }
+            }
+        };
+    }
+
+    private void WireCanvas(TabControl details, TabPage glyphTab)
+    {
         _evidence.SelectedIndexChanged += (_, _) =>
         {
             if (
@@ -221,7 +445,7 @@ public sealed class LabelInspectionControl : UserControl
                 y = e.Bounds.Y - (LastReport?.Analysis.OffsetY ?? 0);
             if (x < 0 || y < 0 || x + e.Bounds.Width > _actual.Width || y + e.Bounds.Height > _actual.Height)
             {
-                _status.Text = "调整超出配方坐标范围，未保存。";
+                _status.Message = "调整超出配方坐标范围，未保存。";
                 return;
             }
 
@@ -234,161 +458,8 @@ public sealed class LabelInspectionControl : UserControl
                 old.Kind == ERegionKind.Text || old.Kind == ERegionKind.Barcode ? old.Field : null
             ).WithTasks(old.Tasks);
             RefreshRegions();
-            _status.Text = "ROI已修改；旧检测结果已清除，请重新检测。";
+            _status.Message = "ROI已修改；旧检测结果已清除，请重新检测。";
         };
-        AddAction(
-            toolbar,
-            "编辑ROI/规则",
-            () =>
-            {
-                EnsureIdle();
-                var edited = RegionEditor.Edit(_regions, _libraryManager);
-                if (edited != null)
-                {
-                    SetRegions(edited);
-                }
-            }
-        );
-        AddAction(
-            toolbar,
-            "无整图参考（可用单字库）",
-            () =>
-            {
-                SetReferenceImage(null);
-                _status.Text =
-                    "已关闭整图模板模式；ROI、单字库及字段绑定保留。固定区域模板差异/模板平移不再执行。";
-            }
-        );
-        toolbar.Controls.Add(_referenceMode);
-        UpdateReferenceMode();
-        AddAction(
-            toolbar,
-            "字段绑定",
-            () =>
-            {
-                EnsureIdle();
-                var bindings = BindingEditor.Edit(_regions, _bindings);
-                if (bindings != null)
-                {
-                    SetBindings(bindings);
-                }
-            }
-        );
-        AddAction(
-            toolbar,
-            "本次任务数据",
-            () =>
-            {
-                EnsureIdle();
-                var data = BindingEditor.TaskData();
-                if (data != null)
-                {
-                    SetTaskData(data.CycleId, data);
-                }
-            }
-        );
-        AddAction(
-            toolbar,
-            "单字库",
-            () =>
-            {
-                EnsureIdle();
-                OpenLibrary(null);
-            }
-        );
-        AddAction(
-            toolbar,
-            "多图制库",
-            () =>
-            {
-                EnsureIdle();
-                GlyphQuickBuilderControl.ShowPage(
-                    FindForm(),
-                    _libraryManager ?? throw new InvalidOperationException("宿主未连接字库管理器。"),
-                    _engine as IGlyphCandidateService,
-                    _actual
-                );
-            }
-        );
-        AddAction(
-            toolbar,
-            "采用探索文字ROI",
-            () =>
-            {
-                EnsureIdle();
-                if (LastReport == null)
-                {
-                    throw new InvalidOperationException("先在无参考、无ROI模式执行探索。");
-                }
-
-                var regions = LastReport
-                    .Analysis.Regions.Where(r =>
-                        r.RegionName.StartsWith("auto-text-", StringComparison.Ordinal)
-                    )
-                    .Select(r => new
-                    {
-                        Result = r,
-                        Bounds = r.Recognition?.Bounds
-                            ?? r.Findings.FirstOrDefault(f => f.Bounds.HasValue)?.Bounds,
-                    })
-                    .Where(r => r.Bounds.HasValue)
-                    .Select(r => new InspectionRegion(
-                        r.Result.RegionName,
-                        ERegionKind.Text,
-                        r.Bounds!.Value,
-                        true
-                    ))
-                    .ToArray();
-                if (regions.Length == 0)
-                {
-                    throw new InvalidOperationException("没有可采用的文字候选。");
-                }
-
-                SetRegions(regions);
-            }
-        );
-        AddAction(
-            toolbar,
-            "阈值",
-            () =>
-            {
-                EnsureIdle();
-                string? text = EditorDialogs.Ask(
-                    "阈值：墨迹,原图容差,最小面积,对比度,清晰度",
-                    string.Join(
-                        ",",
-                        _options.InkThreshold,
-                        _options.TolerancePixels,
-                        _options.MinimumDefectArea,
-                        _options.MinimumContrast,
-                        _options.MinimumSharpness
-                    )
-                );
-                if (text == null)
-                {
-                    return;
-                }
-
-                var p = text.Split(',');
-                if (p.Length != 5)
-                {
-                    throw new ArgumentException("需要5个参数。");
-                }
-
-                _options = new InspectionOptions(
-                    int.Parse(p[0]),
-                    int.Parse(p[1]),
-                    int.Parse(p[2]),
-                    double.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture),
-                    double.Parse(p[4], System.Globalization.CultureInfo.InvariantCulture)
-                );
-            }
-        );
-        _evidence.Columns.Add(UiText.Get("Verdict"), 85);
-        _evidence.Columns.Add(UiText.Get("Check"), 220);
-        _evidence.Columns.Add(UiText.Get("Coordinates"), 150);
-        _evidence.Columns.Add(UiText.Get("Description"), 550);
-        Controls.Add(layout);
         _viewer.RegionDrawn += (_, e) =>
         {
             if (_active != null)
@@ -417,47 +488,80 @@ public sealed class LabelInspectionControl : UserControl
             );
             RefreshRegions();
         };
-        _clear.Click += (_, _) =>
+    }
+
+    private void InitializeSplit()
+    {
+        // SplitContainer在尺寸过小时设置最小尺寸会抛出异常，因此首次获得实际高度后再设定比例。
+        const int canvasMin = 160,
+            resultsMin = 120;
+        if (_splitInitialized || _split.Height < canvasMin + resultsMin + _split.SplitterWidth + 20)
         {
-            if (_active == null)
-            {
-                _regions.Clear();
-                _bindings = Array.Empty<FieldBinding>();
-                RefreshRegions();
-            }
-        };
-        _cancelButton.Click += (_, _) => _cancel?.Cancel();
-        _run.Click += async (_, _) =>
+            return;
+        }
+
+        _splitInitialized = true;
+        _split.SplitterDistance = Math.Max(
+            canvasMin,
+            Math.Min(_split.Height - resultsMin - _split.SplitterWidth, (int)(_split.Height * .64))
+        );
+        _split.Panel1MinSize = canvasMin;
+        _split.Panel2MinSize = resultsMin;
+    }
+
+    private void FitDescriptionColumn()
+    {
+        if (_evidence.Columns.Count < 4)
         {
-            try
-            {
-                await RunInspectionAsync();
-            }
-            catch (OperationCanceledException)
-            {
-                if (!IsDisposed)
-                {
-                    _status.Text = UiText.Get("Cancelled");
-                }
-            }
-            catch (Exception error)
-            {
-                if (!IsDisposed)
-                {
-                    _status.Text = UiText.Format("Failed", error.Message);
-                    if (error is ArgumentException)
-                    {
-                        MessageBox.Show(
-                            this,
-                            error.Message,
-                            "检测配置未通过",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning
-                        );
-                    }
-                }
-            }
-        };
+            return;
+        }
+
+        int used = 0;
+        for (int i = 0; i < _evidence.Columns.Count - 1; i++)
+        {
+            used += _evidence.Columns[i].Width;
+        }
+
+        _evidence.Columns[_evidence.Columns.Count - 1].Width = Math.Max(
+            200,
+            _evidence.ClientSize.Width - used - 4
+        );
+    }
+
+    /// <inheritdoc/>
+    protected override void OnLayout(LayoutEventArgs e)
+    {
+        // 左停靠只使用当前宽度；字体变化后按各组所需宽度重设，避免裁切按钮文字。
+        int width = _sidebar.GetPreferredSize(Size.Empty).Width;
+        if (_sidebar.Width != width)
+        {
+            _sidebar.Width = width;
+        }
+
+        base.OnLayout(e);
+    }
+
+    private void SetBusy(bool busy)
+    {
+        _run.Enabled = !busy;
+        _cancelButton.Enabled = busy;
+        _viewer.Enabled = !busy;
+        foreach (var group in _idleOnly)
+        {
+            group.Enabled = !busy;
+        }
+    }
+
+    /// <inheritdoc/>
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (keyData == Keys.F5 && _run.Enabled && _run.CanFocus)
+        {
+            _run.PerformClick();
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
     }
 
     /// <summary>完整报告显示后在UI线程触发。</summary>
@@ -469,7 +573,7 @@ public sealed class LabelInspectionControl : UserControl
     {
         EnsureIdle();
         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
-        _status.Text = UiText.Format("Connected", engine.Capabilities);
+        _status.Message = UiText.Format("Connected", engine.Capabilities);
     }
 
     /// <summary>设置输入图像，可选择清除旧ROI。</summary>
@@ -514,15 +618,22 @@ public sealed class LabelInspectionControl : UserControl
             && _actual != null
             && (_reference.Width != _actual.Width || _reference.Height != _actual.Height);
         _referenceMode.ForeColor = mismatch ? Color.Firebrick : SystemColors.ControlText;
+        // 侧栏较窄，按行显示模式、参考及待检尺寸。
         _referenceMode.Text =
             _reference == null
-                ? "模式：无整图参考 · 可独立绑定单字库"
-                : "模式：整图模板 · 参考 "
+                ? "无整图参考" + Environment.NewLine + "可独立绑定单字库"
+                : "整图模板"
+                    + Environment.NewLine
+                    + "参考 "
                     + _reference.Width
                     + "×"
                     + _reference.Height
-                    + (_actual == null ? "" : " / 待检 " + _actual.Width + "×" + _actual.Height)
-                    + (mismatch ? "（尺寸不符）" : "");
+                    + (
+                        _actual == null
+                            ? ""
+                            : Environment.NewLine + "待检 " + _actual.Width + "×" + _actual.Height
+                    )
+                    + (mismatch ? Environment.NewLine + "尺寸不符" : "");
     }
 
     /// <summary>替换ROI配置并复制输入集合。</summary>
@@ -566,8 +677,9 @@ public sealed class LabelInspectionControl : UserControl
         LastRequest = request;
         LastReport = null;
         _cancel = new CancellationTokenSource();
-        _run.Enabled = _clear.Enabled = _kind.Enabled = _aligned.Enabled = _viewer.Enabled = false;
-        _status.Text = UiText.Get("Running");
+        SetBusy(true);
+        _status.ShowRunning();
+        _status.Message = UiText.Get("Running");
         try
         {
             _active = _engine.InspectAsync(request, _cancel.Token);
@@ -585,7 +697,8 @@ public sealed class LabelInspectionControl : UserControl
         {
             if (!IsDisposed && !Disposing)
             {
-                _status.Text = UiText.Get("Cancelled");
+                _status.ShowCancelled();
+                _status.Message = UiText.Get("Cancelled");
             }
 
             throw;
@@ -594,7 +707,8 @@ public sealed class LabelInspectionControl : UserControl
         {
             if (!IsDisposed && !Disposing)
             {
-                _status.Text = UiText.Format("Failed", error.Message);
+                _status.ShowFailed();
+                _status.Message = UiText.Format("Failed", error.Message);
             }
 
             throw;
@@ -606,7 +720,7 @@ public sealed class LabelInspectionControl : UserControl
             _cancel = null;
             if (!IsDisposed && !Disposing)
             {
-                _run.Enabled = _clear.Enabled = _kind.Enabled = _aligned.Enabled = _viewer.Enabled = true;
+                SetBusy(false);
             }
         }
     }
@@ -731,7 +845,7 @@ public sealed class LabelInspectionControl : UserControl
         _cycleId = captureCycleId;
         _taskData = data;
         RefreshRegions();
-        _status.Text =
+        _status.Message =
             data == null
                 ? "本次任务数据已清空"
                 : "已绑定本次任务数据：" + captureCycleId + " / " + data.Source;
@@ -762,6 +876,7 @@ public sealed class LabelInspectionControl : UserControl
         ClearGallery();
         _viewer.SetCharacters(Array.Empty<CharacterPatch>());
         _lastFindings = Array.Empty<InspectionFinding>();
+        _status.ShowIdle();
         _viewer.SetOverlays(Regions, _lastFindings);
         _evidence.Items.Clear();
         foreach (var region in _regions)
@@ -776,7 +891,8 @@ public sealed class LabelInspectionControl : UserControl
 
     private void Display(InspectionReport report)
     {
-        _status.Text = double.IsNaN(report.Analysis.Contrast)
+        _status.ShowVerdict(report.Verdict);
+        _status.Message = double.IsNaN(report.Analysis.Contrast)
             ? $"{report.Verdict.ToString().ToUpperInvariant()} · {report.ElapsedMilliseconds:F1} ms · 逐ROI数据/印刷质量；未执行整图可检性评估"
             : UiText.Format(
                 "Summary",
@@ -978,19 +1094,7 @@ public sealed class LabelInspectionControl : UserControl
             }
         }
 
-        var info = _glyphGallery.Controls.Find("GlyphFilterInfo", false).FirstOrDefault();
-        if (info == null)
-        {
-            info = new Label
-            {
-                Name = "GlyphFilterInfo",
-                AutoSize = true,
-                Padding = new Padding(6),
-            };
-            _glyphGallery.Controls.Add(info);
-            _glyphGallery.Controls.SetChildIndex(info, 0);
-        }
-
+        var info = _glyphFilterInfo;
         if (barcode != null && LastRequest != null)
         {
             if (barcode.IsBarcode)
@@ -1038,6 +1142,10 @@ public sealed class LabelInspectionControl : UserControl
             )
             {
                 Tag = Tuple.Create(region, finding),
+                ForeColor =
+                    finding.Verdict == EInspectionVerdict.Ng ? Color.FromArgb(198, 40, 40)
+                    : finding.Verdict == EInspectionVerdict.Review ? Color.FromArgb(230, 100, 0)
+                    : SystemColors.WindowText,
             }
         );
     }
@@ -1074,19 +1182,7 @@ public sealed class LabelInspectionControl : UserControl
 
     private static void AddAction(Control parent, string text, Action action)
     {
-        var b = new Button { Text = text, AutoSize = true };
-        b.Click += (_, _) =>
-        {
-            try
-            {
-                action();
-            }
-            catch (Exception error)
-            {
-                MessageBox.Show(error.Message, "操作未完成");
-            }
-        };
-        parent.Controls.Add(b);
+        parent.Controls.Add(ActionGroup.CreateButton(text, action));
     }
 
     private static void AddPreview(Control card, ImageFrame frame, string label)
@@ -1115,6 +1211,8 @@ public sealed class LabelInspectionControl : UserControl
         }
 
         _glyphGallery.Controls.Clear();
+        _glyphFilterInfo.Visible = false;
+        _glyphFilterInfo.Text = "";
     }
 
     /// <inheritdoc/>
@@ -1124,6 +1222,7 @@ public sealed class LabelInspectionControl : UserControl
         {
             _cancel?.Cancel();
             ClearGallery();
+            _tips.Dispose();
         }
 
         base.Dispose(disposing);
