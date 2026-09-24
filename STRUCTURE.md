@@ -11,7 +11,7 @@
 | `DP.LabelInspection.Runtime` | `Inspection`组装和ROI会话；`Registration`定位；`Imaging`编解码；`Codes`码读取与质量适配；`Text`字符分割、比较、识别和检测；`Surfaces`固定及空白质量组合 |
 | `DP.LabelInspection.Storage` | `Persistence`持久化入口，其私有序列化辅助类型独立存放在`Internal/InspectionStore` |
 | `DP.LabelInspection.Adapter.Vision` | `Algorithms`算法契约转换；`Display`图像与显示几何转换 |
-| `DP.LabelInspection` | `Workbench`工作台及完成事件；`Canvas`图像视图及交互事件；`Configuration`ROI与绑定编辑；`Configuration/Converters`中文属性转换；`Libraries`字库管理；`Libraries/Drafting`快速制作；`Codes`码证据视图；`Imaging`位图转换；`Localization`资源访问；`Resources`原资源文件 |
+| `DP.LabelInspection` | `Workbench`工作台及完成事件；`Workbench/Layout`工作台侧栏、视图工具条及判定徽标等内部布局控件；`Canvas`图像视图及交互事件；`Configuration`ROI与绑定编辑；`Configuration/Converters`中文属性转换；`Libraries`字库管理；`Libraries/Drafting`快速制作；`Codes`码证据视图；`Imaging`位图转换；`Localization`资源访问；`Resources`原资源文件 |
 | `DP.LabelInspection.Wpf` | `Workbench`原生WPF工作台及事件 |
 
 ## 约定
