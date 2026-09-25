@@ -1406,7 +1406,7 @@ internal static class UiInteractionProbe
             || result == null
             || result.Single().Field.GlyphTolerance != 0
             || result.Single().Kind != ERegionKind.Text
-            || result.Single().Field.MaximumDifference != .18
+            || result.Single().Field.MaximumDifference != .05
         )
         {
             throw new InvalidOperationException(
