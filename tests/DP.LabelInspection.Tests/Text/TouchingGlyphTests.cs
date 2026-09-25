@@ -37,21 +37,22 @@ public sealed class TouchingGlyphTests
         return new ImageFrame(130, 36, EImagePixelFormat.Gray8, p);
     }
 
-    /// <summary>一个细连接字符对不能导致其余已分离的八字符参考行全部不可用。</summary>
+    /// <summary>细连接按字符数在最薄处切开；制作参考的候选路径仍要求逐字复核。</summary>
     [TestMethod]
-    public async Task ThinJoinOffersReviewedCandidatesOnly()
+    public async Task ThinJoinIsCutAtBridge()
     {
         var frame = Line(1);
         var roi = new PixelRect(0, 0, 130, 36);
         var original = new CharacterSegmenter().Segment(frame, roi, "WF675907");
-        Assert.AreEqual(0, original.Characters.Count);
+        Assert.AreEqual(8, original.Characters.Count);
+        Assert.AreEqual("provisional", original.Status);
+        Assert.AreEqual("count_guided_cuts", original.Basis);
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
         var result = await engine.ExtractGlyphCandidatesAsync(frame, roi, "WF675907");
         Assert.AreEqual(8, result.Segmentation.Characters.Count);
         Assert.AreEqual("review_required", result.Segmentation.Status);
         Assert.AreEqual(7, result.Segmentation.PhysicalCount);
-        Assert.AreEqual(0, new CharacterSegmenter().Segment(frame, roi, "WF675907").Characters.Count);
     }
 
     /// <summary>不能仅为符合提供的字符数而切开宽连接。</summary>

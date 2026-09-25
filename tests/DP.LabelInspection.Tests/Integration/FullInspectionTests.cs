@@ -161,6 +161,13 @@ public sealed partial class FullInspectionTests
         Assert.AreEqual(1, chars.Select(c => c.ReferenceSha256).Distinct().Count());
         Assert.AreEqual("exceeds_threshold", chars[1].Status);
         Assert.AreEqual("compared", chars[2].Status);
+        var findings = report.Analysis.Regions[0].Findings;
+        var failed = findings.Single(f => f.Code == "glyph_exceeds_threshold");
+        StringAssert.Contains(failed.Message, "（第2位）：印刷差异超过阈值；差异");
+        var summary = findings.Single(f => f.Code == "text_quality_summary");
+        Assert.AreEqual(EInspectionVerdict.Ok, summary.Verdict);
+        StringAssert.Contains(summary.Message, "字符假设=[AAA]，来源：引导值（等宽单元）");
+        StringAssert.Contains(summary.Message, "3字中1字未通过");
     }
 
     /// <summary>真实ECC仅从固定内容估计有界平移，并比较实际原图坐标像素。</summary>
