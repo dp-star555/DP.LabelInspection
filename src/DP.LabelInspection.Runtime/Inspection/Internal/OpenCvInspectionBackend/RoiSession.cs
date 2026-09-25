@@ -388,6 +388,48 @@ public sealed partial class OpenCvInspectionBackend
             );
         }
 
+        private static string GlyphStatusText(string status)
+        {
+            switch (status)
+            {
+                case "compared":
+                    return "通过";
+                case "exceeds_threshold":
+                    return "印刷差异超过阈值";
+                case "missing_template":
+                    return "单字库缺少该字符的参考";
+                default:
+                    return "未能比较（" + status + "）";
+            }
+        }
+
+        /// <summary>
+        /// 逐字汇总：字符假设来源、分割依据及每个字的差异/缺墨/多墨，便于在OK时也能看到余量。
+        /// 汇总只作说明，判定仍由逐字结果和分割状态决定。
+        /// </summary>
+        private static string TextQualitySummary(
+            InspectionRegion r,
+            string hypothesis,
+            CharacterSegmentation? segmentation,
+            IReadOnlyList<GlyphInspection> glyphs
+        )
+        {
+            string source =
+                r.Field.EqualCells ? "引导值（等宽单元）"
+                : r.Field.Expected != null && r.Field.Expected == hypothesis ? "OCR读数（已与引导值一致）"
+                : "OCR读数（盲测假设，未经业务真值确认）";
+            var parts = glyphs.Select(g =>
+                g.Comparison == null
+                    ? $"{g.Character.Character}:{GlyphStatusText(g.Status)}"
+                    : $"{g.Character.Character}:{g.Comparison.Difference:P1}/缺{g.Comparison.Missing}/多{g.Comparison.Extra}"
+                        + (g.Status == "compared" ? "" : "✗")
+            );
+            int failed = glyphs.Count(g => g.Status != "compared");
+            return $"字符假设=[{hypothesis}]，来源：{source}；分割依据={segmentation?.Basis ?? "-"}；"
+                + $"{glyphs.Count}字中{failed}字未通过，差异阈值{r.Field.MaximumDifference:P2}。逐字（差异/内部缺墨px/多墨px）："
+                + string.Join("  ", parts);
+        }
+
         private RoiQualityMeasurement TextQuality(
             InspectionRegion r,
             RegionInspectionResult reading,
@@ -431,11 +473,12 @@ public sealed partial class OpenCvInspectionBackend
                             ? comparer.Algorithm
                             : new LegacyComparer(_owner._comparer, legacy)
                     );
+                string hypothesis = r.Field.EqualCells ? r.Field.Expected! : reading.Recognition?.Text ?? "";
                 using var measured = strategy.Inspect(
                     new A.TextQualityRequest(
                         actual,
                         Bridge.ToVision(r.Bounds),
-                        r.Field.EqualCells ? r.Field.Expected! : reading.Recognition?.Text ?? "",
+                        hypothesis,
                         r.Field.EqualCells,
                         references,
                         _request.Recipe.Options.InkThreshold,
@@ -500,13 +543,29 @@ public sealed partial class OpenCvInspectionBackend
                         findings.Add(
                             new InspectionFinding(
                                 g.Status == "missing_template" ? "missing_template" : "glyph_" + g.Status,
-                                $"字符[{character.Character}]，位置{character.TokenIndex}：{g.Status}"
-                                    + (comparison == null ? "" : $"，差异={comparison.Difference:F5}"),
+                                $"字符[{character.Character}]（第{character.TokenIndex + 1}位）：{GlyphStatusText(g.Status)}"
+                                    + (
+                                        comparison == null
+                                            ? ""
+                                            : $"；差异{comparison.Difference:P2}（阈值{r.Field.MaximumDifference:P2}），内部缺墨{comparison.Missing}px、多墨{comparison.Extra}px"
+                                    ),
                                 EInspectionVerdict.Ng,
                                 character.Bounds
                             )
                         );
                     }
+                }
+
+                if (glyphs.Count > 0)
+                {
+                    findings.Add(
+                        new InspectionFinding(
+                            "text_quality_summary",
+                            TextQualitySummary(r, hypothesis, segmentation, glyphs),
+                            EInspectionVerdict.Ok,
+                            r.Bounds
+                        )
+                    );
                 }
 
                 return new RoiQualityMeasurement(
