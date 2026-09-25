@@ -108,6 +108,7 @@
 | `InspectionStore.FrameConverter` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/FrameConverter.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/FrameConverter.cs) |
 | `InspectionStore.RecipeResolver` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RecipeResolver.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RecipeResolver.cs) |
 | `InspectionStore.RectConverter` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RectConverter.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RectConverter.cs) |
+| `SampleExporter` | [src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs](src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs) |
 | `LabelInspectionControl` | [src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs](src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs) |
 | `WpfInspectionCompletedEventArgs` | [src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs](src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs) |
 | `CanvasGeometryLayer` | [src/DP.LabelInspection/Canvas/CanvasGeometryLayer.cs](src/DP.LabelInspection/Canvas/CanvasGeometryLayer.cs) |
