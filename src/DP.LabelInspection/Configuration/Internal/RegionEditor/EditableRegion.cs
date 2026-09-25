@@ -201,7 +201,7 @@ internal static partial class RegionEditor
             DisplayName("检测一维条码墨色变浅"),
             TypeConverter(typeof(ChineseBooleanConverter)),
             Description(
-                "仅一维条码且印刷检查开启时生效，默认是。除二值化后的孔洞外，补充检查条内部灰度变浅；不作用于QR或单字库，不替代缺墨/多墨检查。"
+                "仅一维条码且印刷检查开启时生效，默认是。除二值化后的孔洞外，补充检查条内部灰度变浅；去掉两侧条边容差后内部不足4像素的窄条，灰度起伏由成像模糊主导，只按二值化缺墨判定。不作用于QR或单字库，不替代缺墨/多墨检查。"
             )
         ]
         public bool DetectInkLoss { get; set; }
