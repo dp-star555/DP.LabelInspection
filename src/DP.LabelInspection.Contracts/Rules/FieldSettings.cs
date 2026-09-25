@@ -18,7 +18,7 @@ public sealed class FieldSettings
     /// <param name = "minimumLength">最小文本长度，非负。</param>
     /// <param name = "maximumLength">最大文本长度，不小于最小值且不超过1024。</param>
     /// <param name = "equalCells">是否明确声明固定等宽单元，不从OCR推断。</param>
-    /// <param name = "maximumDifference">归一化差异比上限，范围0–5，默认0.18。</param>
+    /// <param name = "maximumDifference">归一化差异比上限，范围0–5，默认0.05（按实拍良品最大约0.025留出一倍余量）。</param>
     /// <param name = "glyphTolerance">归一化像素边缘带宽度，范围0–8，默认2；只触及边缘带的差异视为印刷波动。</param>
     /// <param name = "minimumConfidence">最低OCR置信度，范围0–1，默认0.75。</param>
     /// <param name = "barcodePrint">可选码印刷配置，具体项目启用以ROI的Tasks为准。</param>
@@ -32,7 +32,7 @@ public sealed class FieldSettings
         int minimumLength = 0,
         int maximumLength = 128,
         bool equalCells = false,
-        double maximumDifference = .18,
+        double maximumDifference = .05,
         int glyphTolerance = 2,
         double minimumConfidence = .75,
         BarcodePrintOptions? barcodePrint = null,
