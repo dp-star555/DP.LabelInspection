@@ -46,7 +46,7 @@ public sealed class GlyphLibraryControl : UserControl
         Size = new Size(960, 650);
         Dock = DockStyle.Fill;
         Font = new Font("Microsoft YaHei UI", 9);
-        _mode.Items.AddRange(new object[] { "otsu", "fixed" });
+        _mode.Items.AddRange(new object[] { "otsu", "fixed", "midpoint" });
         _mode.SelectedIndex = 0;
         var top = new FlowLayoutPanel { Dock = DockStyle.Top, AutoSize = true };
         top.Controls.AddRange(new Control[] { _libraries, _revision });

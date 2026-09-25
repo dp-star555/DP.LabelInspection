@@ -450,12 +450,7 @@ public sealed partial class OpenCvInspectionBackend
                         owned.Add(image);
                         references.Add(
                             entry.Key,
-                            new A.GlyphTemplate(
-                                image,
-                                entry.Value.Binarization == "otsu"
-                                    ? A.EGlyphBinarization.Otsu
-                                    : A.EGlyphBinarization.Fixed
-                            )
+                            new A.GlyphTemplate(image, Bridge.ToVisionBinarization(entry.Value.Binarization))
                         );
                         legacy[image] = entry.Value;
                     }

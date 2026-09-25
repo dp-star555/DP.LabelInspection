@@ -160,6 +160,7 @@
 | `GlyphDraftSessionTests.Store` | [tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphDraftSessionTests/Store.cs](tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphDraftSessionTests/Store.cs) |
 | `GlyphQuickLibraryTests.GateBackend` | [tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/GateBackend.cs](tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/GateBackend.cs) |
 | `GlyphQuickLibraryTests.Store` | [tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/Store.cs](tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/Store.cs) |
+| `GlyphBinarizationTests` | [tests/DP.LabelInspection.Tests/Text/GlyphBinarizationTests.cs](tests/DP.LabelInspection.Tests/Text/GlyphBinarizationTests.cs) |
 | `IndependentTextQualityTests` | [tests/DP.LabelInspection.Tests/Text/IndependentTextQualityTests.cs](tests/DP.LabelInspection.Tests/Text/IndependentTextQualityTests.cs) |
 | `IndependentTextQualityTests.Strategy` | [tests/DP.LabelInspection.Tests/Text/TestDoubles/IndependentTextQualityTests/Strategy.cs](tests/DP.LabelInspection.Tests/Text/TestDoubles/IndependentTextQualityTests/Strategy.cs) |
 | `TextRecognitionTests.FakeRecognizer` | [tests/DP.LabelInspection.Tests/Text/TestDoubles/TextRecognitionTests/FakeRecognizer.cs](tests/DP.LabelInspection.Tests/Text/TestDoubles/TextRecognitionTests/FakeRecognizer.cs) |

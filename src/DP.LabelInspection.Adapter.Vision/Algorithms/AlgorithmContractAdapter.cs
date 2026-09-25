@@ -51,6 +51,15 @@ public static class AlgorithmContractAdapter
         );
     }
 
+    /// <summary>字库条目的二值化模式名映射为算法枚举：otsu、midpoint，其余（fixed）为固定阈值。</summary>
+    /// <param name = "binarization">字库条目保存的二值化模式名。</param>
+    public static A.EGlyphBinarization ToVisionBinarization(string binarization)
+    {
+        return binarization == "otsu" ? A.EGlyphBinarization.Otsu
+            : binarization == "midpoint" ? A.EGlyphBinarization.Midpoint
+            : A.EGlyphBinarization.Fixed;
+    }
+
     /// <summary>保留离散像素坐标。</summary>
     /// <param name = "r">标签侧原图整数矩形。</param>
     public static A.PixelBounds ToVision(L.PixelRect r)

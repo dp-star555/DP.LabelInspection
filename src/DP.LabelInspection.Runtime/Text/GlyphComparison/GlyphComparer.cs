@@ -43,7 +43,7 @@ public sealed class GlyphComparer : Contracts.IGlyphComparer
             new GlyphComparisonOptions(
                 threshold,
                 tolerance,
-                reference.Binarization == "otsu" ? EGlyphBinarization.Otsu : EGlyphBinarization.Fixed
+                Bridge.ToVisionBinarization(reference.Binarization)
             )
         );
         if (result.Actual == null || result.Reference == null || result.Delta == null)

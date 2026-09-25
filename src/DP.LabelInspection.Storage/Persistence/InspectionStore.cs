@@ -194,7 +194,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     /// <param name = "expectedRevision">调用方基于的版本，过期修改会被拒绝。</param>
     /// <param name = "character">大小写敏感的独立字符标签。</param>
     /// <param name = "image">独立不可变参考图块。</param>
-    /// <param name = "binarization">二值化模式：otsu自动阈值或fixed固定阈值。</param>
+    /// <param name = "binarization">二值化模式：otsu自动阈值、fixed固定阈值或midpoint墨色/纸色中点阈值。</param>
     /// <param name = "provenanceJson">可选来源证据JSON。</param>
     public int PutGlyph(
         string id,
