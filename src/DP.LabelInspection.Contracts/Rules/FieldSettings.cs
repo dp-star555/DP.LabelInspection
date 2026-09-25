@@ -19,7 +19,7 @@ public sealed class FieldSettings
     /// <param name = "maximumLength">最大文本长度，不小于最小值且不超过1024。</param>
     /// <param name = "equalCells">是否明确声明固定等宽单元，不从OCR推断。</param>
     /// <param name = "maximumDifference">归一化差异比上限，范围0–5，默认0.18。</param>
-    /// <param name = "glyphTolerance">归一化像素膨胀半径，范围0–8，默认2。</param>
+    /// <param name = "glyphTolerance">归一化像素边缘带宽度，范围0–8，默认2；只触及边缘带的差异视为印刷波动。</param>
     /// <param name = "minimumConfidence">最低OCR置信度，范围0–1，默认0.75。</param>
     /// <param name = "barcodePrint">可选码印刷配置，具体项目启用以ROI的Tasks为准。</param>
     /// <param name = "barcodeType">明确码族，Auto仅在具有可靠结构时推断。</param>
@@ -147,10 +147,10 @@ public sealed class FieldSettings
     /// <summary>明确声明的等宽单元几何，不从OCR推断。</summary>
     public bool EqualCells { get; }
 
-    /// <summary>归一化缺墨与多墨之和除以参考墨迹面积。</summary>
+    /// <summary>计入的归一化缺墨与多墨之和除以参考墨迹面积的上限；边缘印刷波动不计入。</summary>
     public double MaximumDifference { get; }
 
-    /// <summary>归一化像素容差，不是原图像素。</summary>
+    /// <summary>归一化像素边缘带宽度，不是原图像素；不再以膨胀方式缩小真实缺陷。</summary>
     public int GlyphTolerance { get; }
 
     /// <summary>外观候选要求的最低OCR置信度。</summary>

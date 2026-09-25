@@ -1353,8 +1353,8 @@ internal static class UiInteractionProbe
                 if (
                     !help.Visible
                     || help.Height < 100
-                    || !help.Text.Contains("0关闭")
-                    || !help.Text.Contains("5×5")
+                    || !help.Text.Contains("边缘带")
+                    || !help.Text.Contains("完整面积")
                     || !help.Text.Contains("不是原图像素")
                 )
                 {
