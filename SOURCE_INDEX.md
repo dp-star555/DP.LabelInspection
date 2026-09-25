@@ -141,6 +141,7 @@
 | `AlgorithmIsolationTests.QrProbe` | [tests/DP.LabelInspection.Tests/Architecture/TestDoubles/AlgorithmIsolationTests/QrProbe.cs](tests/DP.LabelInspection.Tests/Architecture/TestDoubles/AlgorithmIsolationTests/QrProbe.cs) |
 | `VisionAdapterTests` | [tests/DP.LabelInspection.Tests/Architecture/VisionAdapterTests.cs](tests/DP.LabelInspection.Tests/Architecture/VisionAdapterTests.cs) |
 | `BarcodeEvidenceGroupTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodeEvidenceGroupTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodeEvidenceGroupTests.cs) |
+| `CodeRepairTests` | [tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs](tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs) |
 | `BarcodePrintTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs) |
 | `BarcodeReadabilityTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs) |
 | `QrPrintTests` | [tests/DP.LabelInspection.Tests/Codes/QrPrintTests.cs](tests/DP.LabelInspection.Tests/Codes/QrPrintTests.cs) |

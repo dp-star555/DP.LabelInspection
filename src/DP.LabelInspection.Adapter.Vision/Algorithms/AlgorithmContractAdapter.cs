@@ -98,7 +98,8 @@ public static class AlgorithmContractAdapter
                     s.ModuleGrid.Dimension,
                     s.ModuleGrid.Corners.Select(v => v - .5),
                     s.ModuleGrid.SampledModules
-                )
+                ),
+            s.Preprocessing
         );
     }
 
@@ -116,7 +117,8 @@ public static class AlgorithmContractAdapter
                     s.ModuleGrid.Dimension,
                     s.ModuleGrid.Corners.Select(v => v + .5),
                     s.ModuleGrid.SampledModules
-                )
+                ),
+            s.Preprocessing
         );
     }
 
