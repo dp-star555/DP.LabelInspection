@@ -60,7 +60,7 @@ public sealed class CharacterAnomalyDetector
         var grays = new Dictionary<ImageFrame, Mat>();
         try
         {
-            var samples = new List<(char c, Mat gray, CharacterLine line, PixelRect cell)>();
+            var samples = new List<(string key, Mat gray, CharacterLine line, PixelRect cell)>();
             foreach (var sample in lines)
             {
                 token.ThrowIfCancellationRequested();
@@ -84,7 +84,9 @@ public sealed class CharacterAnomalyDetector
                         && FieldSettings.IsAlphanumeric(c.Character[0])
                     )
                     {
-                        samples.Add((c.Character[0], gray, line, c.Bounds));
+                        samples.Add(
+                            (AnomalyModelEntry.CharacterKey(sample.Group, c.Character), gray, line, c.Bounds)
+                        );
                     }
                 }
             }
@@ -96,7 +98,7 @@ public sealed class CharacterAnomalyDetector
 
             var options = new PatchAnomalyOptions(thresholdMargin: ThresholdMargin, localRadius: LocalRadius);
             var entries = new List<AnomalyModelEntry>();
-            foreach (var group in samples.GroupBy(s => s.c).OrderBy(g => g.Key))
+            foreach (var group in samples.GroupBy(s => s.key).OrderBy(g => g.Key, StringComparer.Ordinal))
             {
                 token.ThrowIfCancellationRequested();
                 var all = group.ToArray();
@@ -115,7 +117,7 @@ public sealed class CharacterAnomalyDetector
                     var bytes = model.ToBytes();
                     entries.Add(
                         new AnomalyModelEntry(
-                            group.Key.ToString(),
+                            group.Key,
                             bytes,
                             Sha256(bytes),
                             model.FeatureSource,
@@ -246,8 +248,10 @@ public sealed class CharacterAnomalyDetector
                 RegionAnomalyDetector.DetectionOptions(model.Entry, model.Model),
                 token
             );
+            // 每字符的评分说明（patch_anomaly_scope）不逐条输出，整行汇总中已有各字符的阈值倍数，避免结果列表被OK说明淹没。
             var findings = result
-                .Findings.Select(f =>
+                .Findings.Where(f => f.Kind != EQualityFindingKind.Information)
+                .Select(f =>
                     f.Bounds is { } b
                         ? new QualityFinding(
                             f.Code,
@@ -311,8 +315,8 @@ public sealed class CharacterAnomalyDetector
     /// 按顺序等间隔抽取会漏掉少数形态不同的良品（例如另一行字号略不同的同一字符），检测时这些良品会被误报；
     /// 实拍标签上“WF675907”中的“0”即如此。超过400个样本时先等间隔抽到400个再选。
     /// </summary>
-    private (char c, Mat gray, CharacterLine line, PixelRect cell)[] Diverse(
-        (char c, Mat gray, CharacterLine line, PixelRect cell)[] all,
+    private (string key, Mat gray, CharacterLine line, PixelRect cell)[] Diverse(
+        (string key, Mat gray, CharacterLine line, PixelRect cell)[] all,
         int width
     )
     {
@@ -383,35 +387,48 @@ public sealed class CharacterAnomalyDetector
     /// </summary>
     private static List<AnomalyModelEntry> Floor(List<AnomalyModelEntry> entries)
     {
-        if (entries.Count < 5)
+        // 按字符组分别取中位数：不同字体的组阈值水平不同；字符少于5种的组（如“300”）用本批全部字符的中位数。
+        double all = entries.Count >= 5 ? Median(entries) : double.NaN;
+        return entries
+            .GroupBy(e => e.Group ?? "")
+            .SelectMany(g => Floor(g.ToList(), g.Count() >= 5 ? Median(g) : all))
+            .OrderBy(e => e.Key, StringComparer.Ordinal)
+            .ToList();
+    }
+
+    private static double Median(IEnumerable<AnomalyModelEntry> entries)
+    {
+        var sorted = entries.Select(e => e.Threshold).OrderBy(t => t).ToArray();
+        return sorted[sorted.Length / 2];
+    }
+
+    private static IEnumerable<AnomalyModelEntry> Floor(List<AnomalyModelEntry> entries, double median)
+    {
+        if (double.IsNaN(median))
         {
             return entries;
         }
 
-        var sorted = entries.Select(e => e.Threshold).OrderBy(t => t).ToArray();
-        double median = sorted[sorted.Length / 2];
-        return entries
-            .Select(e =>
-                e.Threshold >= median
-                    ? e
-                    : new AnomalyModelEntry(
-                        e.Key,
-                        e.CopyModel(),
-                        e.Sha256,
-                        e.FeatureSource,
-                        e.Width,
-                        e.Height,
-                        e.LocalRadius,
-                        e.TrainingImages,
-                        median,
-                        e.Margin,
-                        e.Stride,
-                        e.MinimumArea,
-                        e.Calibration + $"；阈值取各字符阈值中位数{median:F3}（本字符{e.Threshold:F3}）",
-                        e.Scope
-                    )
-            )
-            .ToList();
+        return entries.Select(e =>
+            e.Threshold >= median
+                ? e
+                : new AnomalyModelEntry(
+                    e.Key,
+                    e.CopyModel(),
+                    e.Sha256,
+                    e.FeatureSource,
+                    e.Width,
+                    e.Height,
+                    e.LocalRadius,
+                    e.TrainingImages,
+                    median,
+                    e.Margin,
+                    e.Stride,
+                    e.MinimumArea,
+                    e.Calibration + $"；阈值取各字符阈值中位数{median:F3}（本字符{e.Threshold:F3}）",
+                    e.Scope
+                )
+        );
     }
 
     private static Mat Gray(ImageFrame frame)

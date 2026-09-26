@@ -113,23 +113,33 @@ internal static partial class RegionEditor
             var models = anomalyManager.LoadAnomalyLibrary(l.Id, l.Revision).Models;
             string key = string.IsNullOrWhiteSpace(r.AnomalyModelKey) ? r.Name : r.AnomalyModelKey!;
             bool whole = models.TryGetValue(key, out var own) && own.Scope == EAnomalyModelScope.Region;
-            var characters = models
+            // 字符模型按字符组（null为不分组）归类；优先与模型键/ROI同名的组，其次不分组，再次唯一的组。
+            var groups = models
                 .Values.Where(m => m.Scope == EAnomalyModelScope.Character)
-                .Select(m => m.Key)
-                .OrderBy(k => k, StringComparer.Ordinal)
-                .ToArray();
+                .GroupBy(m => m.Group ?? "")
+                .ToDictionary(
+                    g => g.Key,
+                    g => string.Concat(g.Select(m => m.Character).OrderBy(c => c, StringComparer.Ordinal))
+                );
+            string? group =
+                groups.ContainsKey(key) ? key
+                : groups.ContainsKey("") ? ""
+                : groups.Count == 1 ? groups.Keys.Single()
+                : null;
+            string Describe(string g) => (g.Length == 0 ? "不分组" : "组[" + g + "]") + "：" + groups[g];
             string note;
             if (whole)
             {
                 r.AnomalyPerCharacter = false;
                 note = $"已绑定 {l.Name} r{l.Revision}：整ROI模型[{key}]。";
             }
-            else if (r.Kind == ERegionKind.Text && characters.Length > 0)
+            else if (r.Kind == ERegionKind.Text && group != null)
             {
                 r.AnomalyPerCharacter = true;
-                r.AnomalyModelKey = null;
+                r.AnomalyModelKey = group.Length == 0 ? null : group;
                 note =
-                    $"已绑定 {l.Name} r{l.Revision}：库中是字符模型（{string.Join("", characters)}），已自动选择“逐字符检查”（需要OCR）。";
+                    $"已绑定 {l.Name} r{l.Revision}：字符模型（{Describe(group)}），已自动选择“逐字符检查”（需要OCR）。"
+                    + (groups.Count > 1 ? "库中还有其他字符组，可在“模型键”中改填。" : "");
             }
             else
             {
@@ -144,7 +154,17 @@ internal static partial class RegionEditor
                             ? "库中没有整ROI模型。"
                             : "库中现有整ROI模型：" + string.Join("、", regions) + "（可在“模型键”中填写）。"
                     )
-                    + (characters.Length > 0 ? "字符模型只能用于文字ROI的逐字符检查。" : "")
+                    + (
+                        groups.Count == 0 ? ""
+                        : r.Kind == ERegionKind.Text
+                            ? "库中有多个字符组（"
+                                + string.Join(
+                                    "；",
+                                    groups.Keys.OrderBy(g => g, StringComparer.Ordinal).Select(Describe)
+                                )
+                                + "），请选“逐字符检查”并在“模型键”中填写字符组。"
+                        : "字符模型只能用于文字ROI的逐字符检查。"
+                    )
                     + "请先在“批量训练(B)”中为本ROI训练并发布。";
                 MessageBox.Show(form, note, "异常模型库中没有此ROI的模型");
             }

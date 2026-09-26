@@ -10,6 +10,7 @@ public sealed class AnomalyTrainingModel
         Name = name;
         Kind = kind;
         Region = region;
+        CharacterGroup = AnomalyModelEntry.IsCharacterGroup(name) ? name : "文字";
     }
 
     /// <summary>模型名称（模型键）；对应配方ROI时与ROI同名。</summary>
@@ -26,6 +27,12 @@ public sealed class AnomalyTrainingModel
 
     /// <summary>内容固定模型的样本框高度。</summary>
     public int? Height { get; internal set; }
+
+    /// <summary>
+    /// 逐字符模型的字符组，默认与模型名称相同（每个文字行单独一组）。同一字体、字号的几行可填相同的组共用样本；
+    /// 不同字体混在一组会使同一字符的良品差异变大，阈值被抬高，缺陷不易检出。其他训练方式不使用。
+    /// </summary>
+    public string CharacterGroup { get; internal set; } = "";
 
     /// <summary>显示名称。</summary>
     public override string ToString()

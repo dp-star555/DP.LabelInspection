@@ -16,13 +16,21 @@ public sealed class CharacterAnomalySample
     /// <param name = "characters">该行按顺序的字符，身份须已人工确认；原图坐标。</param>
     /// <param name = "excluded">不作为训练样本的字符序号（在<paramref name = "characters"/>中的下标），例如切割可疑或身份不确定的字。</param>
     /// <param name = "source">可选来源说明（文件名等）。</param>
+    /// <param name = "group">字符组（同一字体的行共用；null为不分组），同组同字符的样本合训一个模型。</param>
     public CharacterAnomalySample(
         ImageFrame image,
         IEnumerable<CharacterPatch> characters,
         IEnumerable<int>? excluded = null,
-        string? source = null
+        string? source = null,
+        string? group = null
     )
     {
+        if (group != null && !AnomalyModelEntry.IsCharacterGroup(group))
+        {
+            throw new ArgumentException("字符组名称须为1–60字符且不含“/”。", nameof(group));
+        }
+
+        Group = group;
         Image = image ?? throw new ArgumentNullException(nameof(image));
         var list = (characters ?? throw new ArgumentNullException(nameof(characters))).ToArray();
         if (list.Length == 0 || list.Any(c => c == null))
@@ -52,4 +60,7 @@ public sealed class CharacterAnomalySample
 
     /// <summary>可选来源说明。</summary>
     public string? Source { get; }
+
+    /// <summary>字符组；null为不分组。</summary>
+    public string? Group { get; }
 }

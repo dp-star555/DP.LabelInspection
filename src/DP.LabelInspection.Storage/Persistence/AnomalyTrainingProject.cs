@@ -59,6 +59,7 @@ public static class AnomalyTrainingProject
                 { "region", m.Region?.Name },
                 { "width", m.Width },
                 { "height", m.Height },
+                { "group", m.Kind == EAnomalyTrainingKind.Characters ? m.CharacterGroup : null },
             })
         );
         var samples = new JArray(
@@ -159,6 +160,11 @@ public static class AnomalyTrainingProject
             {
                 // 以保存的尺寸为准（可能在采集中改过），样本按原框恢复。
                 session.SetSize(model, w, h);
+            }
+
+            if (kind == EAnomalyTrainingKind.Characters && (string?)m["group"] is string group)
+            {
+                session.SetGroup(model, group);
             }
 
             models[name] = model;

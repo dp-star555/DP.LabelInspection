@@ -204,6 +204,27 @@ public sealed class AnomalyTrainingSession
         }
     }
 
+    /// <summary>
+    /// 设置逐字符模型的字符组：同一字体、字号的几行填相同的组共用样本，不同字体分开（默认每行一组）。
+    /// </summary>
+    /// <param name = "model">逐字符模型。</param>
+    /// <param name = "group">字符组名称，1–60字符，不含“/”。</param>
+    public void SetGroup(AnomalyTrainingModel model, string group)
+    {
+        if (model.Kind != EAnomalyTrainingKind.Characters)
+        {
+            throw new InvalidOperationException("只有逐字符模型有字符组。");
+        }
+
+        group = (group ?? "").Trim();
+        if (!AnomalyModelEntry.IsCharacterGroup(group))
+        {
+            throw new ArgumentException("字符组名称须为1–60字符且不含“/”。", nameof(group));
+        }
+
+        model.CharacterGroup = group;
+    }
+
     /// <summary>内容固定模型改为指定尺寸，全部样本按各自中心改为新尺寸（移入图内）。</summary>
     /// <param name = "model">内容固定模型。</param>
     /// <param name = "width">宽度（原图像素），至少8。</param>
@@ -446,7 +467,8 @@ public sealed class AnomalyTrainingSession
             {
                 if (s._include[i])
                 {
-                    counts[s._labels[i]] = counts.TryGetValue(s._labels[i], out int n) ? n + 1 : 1;
+                    string key = AnomalyModelEntry.CharacterKey(s.Model.CharacterGroup, s._labels[i]);
+                    counts[key] = counts.TryGetValue(key, out int n) ? n + 1 : 1;
                 }
             }
         }
@@ -572,7 +594,7 @@ public sealed class AnomalyTrainingSession
 
             var pin =
                 model.Kind == EAnomalyTrainingKind.Characters
-                    ? new AnomalySettings(libraryId, revision, perCharacter: true)
+                    ? new AnomalySettings(libraryId, revision, model.CharacterGroup, perCharacter: true)
                     : new AnomalySettings(libraryId, revision, model.Name == r.Name ? null : model.Name);
             result.Add(
                 r.WithAnomaly(pin)

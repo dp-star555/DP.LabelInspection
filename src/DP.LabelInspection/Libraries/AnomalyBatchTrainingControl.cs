@@ -77,6 +77,16 @@ public sealed class AnomalyBatchTrainingControl : UserControl
         _models.Columns.Add(
             new DataGridViewTextBoxColumn
             {
+                Name = "Group",
+                HeaderText = "字符组",
+                ToolTipText =
+                    "逐字符模型的字符组：同一字体、字号的几行可填相同组名共用样本；不同字体应分组。",
+                Width = 80,
+            }
+        );
+        _models.Columns.Add(
+            new DataGridViewTextBoxColumn
+            {
                 Name = "Count",
                 HeaderText = "样本",
                 ReadOnly = true,
@@ -96,7 +106,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
         _models.CellValueChanged += (_, e) => TryUi(() => KindChanged(e.RowIndex, e.ColumnIndex));
         _models.CurrentCellDirtyStateChanged += (_, _) =>
         {
-            if (_models.IsCurrentCellDirty)
+            if (_models.IsCurrentCellDirty && _models.CurrentCell is DataGridViewComboBoxCell)
             {
                 _models.CommitEdit(DataGridViewDataErrorContexts.Commit);
             }
@@ -136,7 +146,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
                 _characters.CommitEdit(DataGridViewDataErrorContexts.Commit);
             }
         };
-        _coverage.Columns.Add("字符", 45);
+        _coverage.Columns.Add("字符组/字符", 110);
         _coverage.Columns.Add("样本", 45);
         _coverage.Columns.Add("", 80);
 
@@ -207,7 +217,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
         modelPanel.Controls.Add(Caption("模型（选中后在图上框选样本）", DockStyle.Top));
         var coveragePanel = new Panel { Dock = DockStyle.Bottom, Height = 220 };
         coveragePanel.Controls.Add(_coverage);
-        coveragePanel.Controls.Add(Caption("逐字符样本数（少于3个标红）", DockStyle.Top));
+        coveragePanel.Controls.Add(Caption("各字符组的字符样本数（少于3个标红）", DockStyle.Top));
         right.Controls.Add(modelPanel);
         right.Controls.Add(coveragePanel);
 
@@ -557,12 +567,29 @@ public sealed class AnomalyBatchTrainingControl : UserControl
 
     private void KindChanged(int row, int column)
     {
-        if (_filling || row < 0 || _models.Columns[column].Name != "Kind")
+        if (_filling || row < 0 || !(_models.Rows[row].Tag is AnomalyTrainingModel model))
         {
             return;
         }
 
-        if (!(_models.Rows[row].Tag is AnomalyTrainingModel model))
+        if (_models.Columns[column].Name == "Group")
+        {
+            if (model.Kind == EAnomalyTrainingKind.Characters)
+            {
+                try
+                {
+                    _session.SetGroup(model, _models.Rows[row].Cells[column].Value as string ?? "");
+                }
+                finally
+                {
+                    BeginInvoke(new Action(RefreshAll));
+                }
+            }
+
+            return;
+        }
+
+        if (_models.Columns[column].Name != "Kind")
         {
             return;
         }
@@ -725,8 +752,16 @@ public sealed class AnomalyBatchTrainingControl : UserControl
                             )
                     : "";
                 note += model.Region == null ? "（独立）" : "";
-                int row = _models.Rows.Add(model.Name, KindNames[(int)model.Kind], samples.Count, note);
+                bool characters = model.Kind == EAnomalyTrainingKind.Characters;
+                int row = _models.Rows.Add(
+                    model.Name,
+                    KindNames[(int)model.Kind],
+                    characters ? model.CharacterGroup : "",
+                    samples.Count,
+                    note
+                );
                 _models.Rows[row].Tag = model;
+                _models.Rows[row].Cells["Group"].ReadOnly = !characters;
             }
         }
         finally

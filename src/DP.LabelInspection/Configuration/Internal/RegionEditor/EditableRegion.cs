@@ -103,7 +103,7 @@ internal static partial class RegionEditor
             Category("07 异常检测（方法B）"),
             DisplayName("模型键"),
             Description(
-                "库内模型的键，留空表示使用本ROI名称（训练时默认按ROI名称保存）。多个ROI内容完全相同时可指向同一模型；位置相关模型要求裁图尺寸与训练一致。"
+                "整ROI模式：库内模型的键，留空表示使用本ROI名称（训练时默认按ROI名称保存）。多个ROI内容完全相同时可指向同一模型；位置相关模型要求裁图尺寸与训练一致。逐字符模式：字符组名称（批量训练默认与文字行ROI同名），留空表示不分组的字符模型。"
             )
         ]
         public string? AnomalyModelKey { get; set; }
@@ -113,7 +113,7 @@ internal static partial class RegionEditor
             DisplayName("逐字符检查（仅文字）"),
             TypeConverter(typeof(ChineseBooleanConverter)),
             Description(
-                "否：整个ROI用一个模型，适合内容固定的区域。是：按文字分割逐字检查，每个字符用库中该字符的模型，适合序列号等内容可变的文字；需要OCR（或等格声明）确定字符身份，模型用“字符异常模型(B)”制作。库中缺少某字符的模型时该字判NG。逐字符模式不使用模型键。"
+                "否：整个ROI用一个模型，适合内容固定的区域。是：按文字分割逐字检查，每个字符用库中该字符的模型，适合序列号等内容可变的文字；需要OCR（或等格声明）确定字符身份，模型用“字符异常模型(B)”制作。库中（该字符组）缺少某字符的模型时该字判NG。“模型键”填字符组。"
             )
         ]
         public bool AnomalyPerCharacter { get; set; }
@@ -401,7 +401,7 @@ internal static partial class RegionEditor
             return new AnomalySettings(
                 AnomalyLibraryId!.Trim(),
                 AnomalyLibraryRevision.Value,
-                perCharacter || string.IsNullOrWhiteSpace(AnomalyModelKey) ? null : AnomalyModelKey,
+                string.IsNullOrWhiteSpace(AnomalyModelKey) ? null : AnomalyModelKey!.Trim(),
                 perCharacter
             );
         }
