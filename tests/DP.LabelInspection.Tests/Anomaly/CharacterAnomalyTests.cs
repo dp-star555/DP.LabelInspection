@@ -249,7 +249,7 @@ public sealed partial class CharacterAnomalyTests
 
     /// <summary>
     /// 字符组：不同组的同一字符各自成模型（键“组/字符”），逐字符检查按模型键选组；
-    /// 组不存在时列出库中现有字符组；结果中不再逐字输出“已检测”的信息行。
+    /// 组不存在时列出库中现有字符组；每个已检测字符仍有一行评分说明。
     /// </summary>
     [TestMethod]
     public void CharacterGroupsSelectModels()
@@ -276,7 +276,7 @@ public sealed partial class CharacterAnomalyTests
             "B1C3A2"
         );
         Assert.AreEqual(ERoiStageState.Passed, good.Execution!.Quality);
-        Assert.IsFalse(good.Findings.Any(f => f.Code == "patch_anomaly_scope"));
+        Assert.AreEqual(6, good.Findings.Count(f => f.Code == "patch_anomaly_scope"));
         StringAssert.Contains(good.Findings.Single(f => f.Code == "anomaly_summary").Message, "甲");
 
         var other = Run(

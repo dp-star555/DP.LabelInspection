@@ -248,10 +248,8 @@ public sealed class CharacterAnomalyDetector
                 RegionAnomalyDetector.DetectionOptions(model.Entry, model.Model),
                 token
             );
-            // 每字符的评分说明（patch_anomaly_scope）不逐条输出，整行汇总中已有各字符的阈值倍数，避免结果列表被OK说明淹没。
             var findings = result
-                .Findings.Where(f => f.Kind != EQualityFindingKind.Information)
-                .Select(f =>
+                .Findings.Select(f =>
                     f.Bounds is { } b
                         ? new QualityFinding(
                             f.Code,
