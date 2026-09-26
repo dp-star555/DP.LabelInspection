@@ -159,6 +159,23 @@ public sealed class InspectionRegion
         };
     }
 
+    /// <summary>复制ROI并替换原图范围，保留类型、规则、检测项目及异常模型绑定。</summary>
+    /// <param name = "bounds">新的原图像素范围。</param>
+    public InspectionRegion WithBounds(PixelRect bounds)
+    {
+        return new InspectionRegion(
+            Name,
+            Kind,
+            bounds,
+            SingleLine,
+            Kind == ERegionKind.Text || Kind == ERegionKind.Barcode ? Field : null,
+            Anomaly
+        )
+        {
+            Tasks = Tasks,
+        };
+    }
+
     /// <summary>固定版本异常模型绑定（方法B）；未绑定时为null。</summary>
     public AnomalySettings? Anomaly { get; }
 

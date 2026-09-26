@@ -12,7 +12,9 @@ namespace DP.LabelInspection;
 
 /// <summary>
 /// 异常模型库（质量方法B）的可嵌入管理器，与单字库一致按不可变版本管理：新建/导入/导出/归档，
-/// 用已对齐的良品图为选中ROI训练模型并发布新版本。宿主注入管理器与训练实现，控件不依赖具体存储或视觉库。
+/// 用良品图为选中ROI训练模型并发布新版本。宿主注入管理器与训练实现，控件不依赖具体存储或视觉库。
+/// 良品图显示在画布上：拖动ROI框只移动本图上的位置（用于对齐位置略有偏差的良品，训练前按此平移该图）；
+/// 拖动边/角或按住Shift重画会改变该ROI的尺寸（所有图共用，模型要求同一裁图尺寸），发布后宿主可把新框写回配方。
 /// </summary>
 public sealed partial class AnomalyLibraryControl : UserControl
 {
@@ -46,6 +48,23 @@ public sealed partial class AnomalyLibraryControl : UserControl
     };
     private readonly Label _goodInfo = new Label { AutoSize = true, Margin = new Padding(8, 7, 0, 0) };
     private readonly List<ImageFrame> _good = new List<ImageFrame>();
+    private readonly ListBox _goodList = new ListBox
+    {
+        Dock = DockStyle.Left,
+        Width = 150,
+        IntegralHeight = false,
+    };
+    private readonly ImageViewerControl _viewer = new ImageViewerControl { Dock = DockStyle.Fill };
+
+    /// <summary>各ROI训练用的框（配方坐标）；未改动时为配方中的框。</summary>
+    private readonly Dictionary<string, PixelRect> _boxes = new Dictionary<string, PixelRect>(
+        StringComparer.Ordinal
+    );
+
+    /// <summary>各良品图上各ROI相对训练框的平移（原图像素），用于对齐位置略有偏差的良品。</summary>
+    private readonly Dictionary<(ImageFrame Image, string Region), Point> _shifts =
+        new Dictionary<(ImageFrame, string), Point>();
+    private ImageFrame? _shown;
     private readonly List<Control> _busyDisabled = new List<Control>();
     private IAnomalyLibraryManager? _manager;
     private IAnomalyModelTrainer? _trainer;
@@ -141,10 +160,8 @@ public sealed partial class AnomalyLibraryControl : UserControl
                 foreach (string file in d.FileNames)
                 {
                     using var image = Image.FromFile(file);
-                    _good.Add(DrawingImageConverter.FromImage(image));
+                    AddGoodImage(DrawingImageConverter.FromImage(image), Path.GetFileName(file));
                 }
-
-                ShowGood();
             }
         );
         Add(
@@ -153,10 +170,25 @@ public sealed partial class AnomalyLibraryControl : UserControl
             () =>
             {
                 _good.Clear();
+                _goodList.Items.Clear();
+                _shifts.Clear();
+                _shown = null;
+                _viewer.SetImage(null);
                 ShowGood();
             }
         );
         train.Controls.Add(_goodInfo);
+        Add(
+            train,
+            "本图框复位",
+            () =>
+            {
+                var region = SelectedRegion ?? throw new InvalidOperationException("请在左侧选择ROI。");
+                var image = CurrentImage ?? throw new InvalidOperationException("请选择良品图。");
+                _shifts.Remove((image, region.Region.Name));
+                ShowImage();
+            }
+        );
         Add(train, "训练选中ROI并发布新版本", async () => await TrainAsync());
         Add(
             train,
@@ -180,10 +212,31 @@ public sealed partial class AnomalyLibraryControl : UserControl
                 _status.Text = $"已发布 r{revision}：删除 {keys.Length} 个模型；已绑定旧版本的配方不受影响。";
             }
         );
-        _busyDisabled.AddRange(new Control[] { top, train, _regions });
+        _busyDisabled.AddRange(new Control[] { top, train, _regions, _goodList, _viewer });
 
+        var canvas = new Panel { Dock = DockStyle.Fill };
+        canvas.Controls.Add(_viewer);
+        canvas.Controls.Add(_goodList);
+        canvas.Controls.Add(
+            new Label
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ForeColor = Color.FromArgb(80, 80, 80),
+                Text =
+                    "左侧选ROI、选良品图：拖动框内部只移动本图上的位置；拖动边/角或在框外拖动重画会改变该ROI的尺寸（所有图共用，发布后可写回配方）。",
+            }
+        );
+        var split = new SplitContainer
+        {
+            Dock = DockStyle.Fill,
+            Orientation = Orientation.Horizontal,
+            SplitterDistance = 360,
+        };
+        split.Panel1.Controls.Add(canvas);
+        split.Panel2.Controls.Add(_models);
         var middle = new Panel { Dock = DockStyle.Fill };
-        middle.Controls.Add(_models);
+        middle.Controls.Add(split);
         middle.Controls.Add(_regions);
         var status = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true };
         status.Controls.Add(_status);
@@ -199,6 +252,12 @@ public sealed partial class AnomalyLibraryControl : UserControl
                 ShowRevision();
             }
         };
+        _regions.SelectedIndexChanged += (_, _) => ShowImage();
+        _goodList.SelectedIndexChanged += (_, _) => ShowImage();
+        _viewer.EditRegions = true;
+        _viewer.DrawOutsideRegions = true;
+        _viewer.RegionEdited += (_, e) => TryUi(() => BoxChanged(e.Bounds));
+        _viewer.RegionDrawn += (_, e) => TryUi(() => BoxChanged(e.Bounds));
         ShowGood();
     }
 
@@ -207,6 +266,132 @@ public sealed partial class AnomalyLibraryControl : UserControl
     {
         get;
         private set;
+    }
+
+    /// <summary>在本窗口中改变了尺寸或位置的ROI及其训练框（配方坐标）；位置相关模型要求配方使用同一框，宿主应一并写回。</summary>
+    public IReadOnlyDictionary<string, PixelRect> ChangedBounds =>
+        _regions
+            .Items.Cast<RegionItem>()
+            .Where(i => _boxes.TryGetValue(i.Region.Name, out var b) && !b.Equals(i.Region.Bounds))
+            .ToDictionary(i => i.Region.Name, i => _boxes[i.Region.Name], StringComparer.Ordinal);
+
+    private RegionItem? SelectedRegion => _regions.SelectedItem as RegionItem;
+
+    private ImageFrame? CurrentImage =>
+        _goodList.SelectedIndex >= 0 && _goodList.SelectedIndex < _good.Count
+            ? _good[_goodList.SelectedIndex]
+            : null;
+
+    private PixelRect TrainingBox(InspectionRegion region)
+    {
+        return _boxes.TryGetValue(region.Name, out var box) ? box : region.Bounds;
+    }
+
+    /// <summary>该ROI在该良品图上的框：训练框加本图平移。</summary>
+    private PixelRect BoxOn(ImageFrame image, InspectionRegion region)
+    {
+        var box = TrainingBox(region);
+        var shift = _shifts.TryGetValue((image, region.Name), out var s) ? s : Point.Empty;
+        return new PixelRect(box.X + shift.X, box.Y + shift.Y, box.Width, box.Height);
+    }
+
+    /// <summary>
+    /// 画布上调整了框：尺寸不变视为只移动本图位置；尺寸变化视为重定该ROI的框（尺寸对所有图生效，训练框位置按本图平移反推）。
+    /// </summary>
+    private void BoxChanged(PixelRect bounds)
+    {
+        var region = (SelectedRegion ?? throw new InvalidOperationException("请先在左侧选择ROI。")).Region;
+        var image = CurrentImage ?? throw new InvalidOperationException("请先添加并选择良品图。");
+        if (!bounds.Fits(image) || bounds.Width < 8 || bounds.Height < 8)
+        {
+            throw new ArgumentException("框须在图像内且至少8×8像素。");
+        }
+
+        var box = TrainingBox(region);
+        var shift = _shifts.TryGetValue((image, region.Name), out var s) ? s : Point.Empty;
+        if (bounds.Width == box.Width && bounds.Height == box.Height)
+        {
+            _shifts[(image, region.Name)] = new Point(bounds.X - box.X, bounds.Y - box.Y);
+            _status.Text =
+                $"已移动本图上“{region.Name}”的框（相对训练框{bounds.X - box.X:+0;-0;0},{bounds.Y - box.Y:+0;-0;0}像素）。";
+        }
+        else
+        {
+            _boxes[region.Name] = new PixelRect(
+                bounds.X - shift.X,
+                bounds.Y - shift.Y,
+                bounds.Width,
+                bounds.Height
+            );
+            _status.Text =
+                $"“{region.Name}”的框改为{bounds.Width}×{bounds.Height}（所有良品图生效）；发布后需把新框写回配方，否则位置相关模型尺寸不符。";
+        }
+
+        ShowImage();
+    }
+
+    private void ShowImage()
+    {
+        var image = CurrentImage;
+        if (image == null)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(_shown, image))
+        {
+            _viewer.SetImage(image);
+            _shown = image;
+        }
+
+        var region = SelectedRegion?.Region;
+        _viewer.SetOverlays(
+            region == null
+                ? Array.Empty<InspectionRegion>()
+                : new[] { region.WithBounds(BoxOn(image, region)) },
+            Array.Empty<InspectionFinding>()
+        );
+        // 只有一个框：直接选中，控制点立即可拖。
+        _viewer.SelectedRegionIndex = region == null ? -1 : 0;
+    }
+
+    /// <summary>整图平移：结果(x, y)取原图(x + dx, y + dy)，越界按边缘像素延伸；用于把本图上的ROI内容移到训练框位置。</summary>
+    private static ImageFrame Translate(ImageFrame image, int dx, int dy)
+    {
+        if (dx == 0 && dy == 0)
+        {
+            return image;
+        }
+
+        int channels = image.Format == EImagePixelFormat.Gray8 ? 1 : 3,
+            w = image.Width,
+            h = image.Height;
+        var source = image.CopyPixels();
+        var output = new byte[source.Length];
+        for (int y = 0; y < h; y++)
+        {
+            int sy = Math.Min(h - 1, Math.Max(0, y + dy));
+            for (int x = 0; x < w; x++)
+            {
+                int sx = Math.Min(w - 1, Math.Max(0, x + dx));
+                Buffer.BlockCopy(source, (sy * w + sx) * channels, output, (y * w + x) * channels, channels);
+            }
+        }
+
+        return new ImageFrame(w, h, image.Format, output);
+    }
+
+    private void TryUi(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            MessageBox.Show(this, e.Message, "异常模型库操作未完成");
+            ShowImage();
+        }
     }
 
     /// <summary>连接宿主拥有的模型库管理器及可选训练实现（无训练实现时只能管理和导入导出）。</summary>
@@ -234,11 +419,14 @@ public sealed partial class AnomalyLibraryControl : UserControl
         }
     }
 
-    /// <summary>加入一张已与配方对齐的良品整图（例如当前载入的待检图）。</summary>
+    /// <summary>加入一张良品整图（例如当前载入的待检图）；位置与配方有偏差时可在画布上移动该图上的ROI框。</summary>
     /// <param name = "image">独立不可变整图。</param>
-    public void AddGoodImage(ImageFrame image)
+    /// <param name = "name">显示名称。</param>
+    public void AddGoodImage(ImageFrame image, string? name = null)
     {
         _good.Add(image ?? throw new ArgumentNullException(nameof(image)));
+        _goodList.Items.Add(name ?? "良品" + _good.Count);
+        _goodList.SelectedIndex = _goodList.Items.Count - 1;
         ShowGood();
     }
 
@@ -261,7 +449,10 @@ public sealed partial class AnomalyLibraryControl : UserControl
     {
         var head = Selected;
         var trainer = _trainer ?? throw new InvalidOperationException("宿主未提供训练实现。");
-        var regions = _regions.CheckedItems.Cast<RegionItem>().Select(i => i.Region).ToArray();
+        var regions = _regions
+            .CheckedItems.Cast<RegionItem>()
+            .Select(i => i.Region.WithBounds(TrainingBox(i.Region)))
+            .ToArray();
         if (regions.Length == 0)
         {
             throw new InvalidOperationException("请勾选要训练的ROI。");
@@ -274,7 +465,19 @@ public sealed partial class AnomalyLibraryControl : UserControl
 
         if (_good.Any(g => g.Width != _good[0].Width || g.Height != _good[0].Height))
         {
-            throw new InvalidOperationException("良品图尺寸不一致；须来自同一工位且已与配方对齐。");
+            throw new InvalidOperationException("良品图尺寸不一致；须来自同一工位。");
+        }
+
+        var outside = regions
+            .SelectMany(r => _good.Select((g, i) => (r, g, i)))
+            .Where(t => !BoxOn(t.g, t.r).Fits(t.g))
+            .Select(t => $"{t.r.Name}@第{t.i + 1}张")
+            .ToArray();
+        if (outside.Length > 0)
+        {
+            throw new InvalidOperationException(
+                "以下ROI框超出良品图，请在画布上调整：" + string.Join("、", outside)
+            );
         }
 
         if (head.Archived)
@@ -305,7 +508,12 @@ public sealed partial class AnomalyLibraryControl : UserControl
             foreach (var region in regions)
             {
                 _status.Text = $"正在训练 {region.Name}（{good.Length}张良品）…";
-                entries.Add(await Task.Run(() => trainer.Train(good, region)));
+                // 本图上移动过框的良品按平移量整体移动，使ROI内容落在训练框位置。
+                var aligned = good.Select(g =>
+                        _shifts.TryGetValue((g, region.Name), out var s) ? Translate(g, s.X, s.Y) : g
+                    )
+                    .ToArray();
+                entries.Add(await Task.Run(() => trainer.Train(aligned, region)));
             }
 
             int revision = head.Revision;

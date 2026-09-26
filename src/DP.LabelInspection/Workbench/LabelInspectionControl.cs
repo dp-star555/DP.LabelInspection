@@ -1238,16 +1238,35 @@ public sealed class LabelInspectionControl : UserControl
         if (_actual != null && (LastReport?.Verdict == EInspectionVerdict.Ok))
         {
             // 最近一次检测为OK的当前图可直接作为一张良品；其余良品图在窗口中添加。
-            editor.AddGoodImage(_actual);
+            editor.AddGoodImage(_actual, "当前图像");
         }
 
         form.Controls.Add(editor);
         form.ShowDialog(FindForm());
+        if (editor.LastPublished is not { } published)
+        {
+            return;
+        }
+
+        // 窗口中改过尺寸/位置的ROI须一并写回配方，否则位置相关模型的裁图尺寸与配方不符。
+        var changed = editor
+            .ChangedBounds.Where(p => published.Regions.Contains(p.Key))
+            .ToDictionary(p => p.Key, p => p.Value, StringComparer.Ordinal);
+        string boxes =
+            changed.Count == 0
+                ? ""
+                : "并把改过的ROI框写回配方（"
+                    + string.Join(
+                        "、",
+                        changed.Select(p =>
+                            $"{p.Key}→{p.Value.X},{p.Value.Y} {p.Value.Width}×{p.Value.Height}"
+                        )
+                    )
+                    + "）";
         if (
-            editor.LastPublished is { } published
-            && MessageBox.Show(
+            MessageBox.Show(
                 this,
-                $"已发布模型库版本 r{published.Revision}。是否把训练的ROI（{string.Join("、", published.Regions)}）绑定到该版本并启用B异常检测？",
+                $"已发布模型库版本 r{published.Revision}。是否把训练的ROI（{string.Join("、", published.Regions)}）绑定到该版本、启用B异常检测{boxes}？",
                 "绑定异常模型",
                 MessageBoxButtons.YesNo
             ) == DialogResult.Yes
@@ -1257,7 +1276,8 @@ public sealed class LabelInspectionControl : UserControl
                 _regions
                     .Select(r =>
                         published.Regions.Contains(r.Name)
-                            ? r.WithAnomaly(new AnomalySettings(published.LibraryId, published.Revision))
+                            ? (changed.TryGetValue(r.Name, out var box) ? r.WithBounds(box) : r)
+                                .WithAnomaly(new AnomalySettings(published.LibraryId, published.Revision))
                                 .WithTasks(
                                     new RoiInspectionTasks(r.Tasks.ReadData, r.Tasks.CheckQuality, true)
                                 )

@@ -45,6 +45,9 @@ FAISS没有官方.NET绑定，记忆库规模下OpenCV暴力匹配已足够；An
   重新训练发布新版本后，配方不会自动升级，需重新绑定。
 - **训练**：`IAnomalyModelTrainer`（运行时实现为`RegionAnomalyDetector`）用已与配方对齐的整张良品图为ROI训练，返回`AnomalyModelEntry`，再`PutAnomalyModel`发布。
   WinForms工作台“单字库”组中的“异常模型库(B)”：勾选ROI、添加良品图（最近一次检测为OK的当前图自动加入）、训练并发布，关闭时可一键把训练的ROI绑定到新版本并启用B。
+  良品图显示在画布上，所选ROI的框可直接编辑：拖动框内部只移动**本图**上的位置（良品位置略有偏差时对齐用，训练前按此平移该图）；
+  拖动边/角或在框外拖动重画会改变该ROI的**尺寸**（所有良品图共用，模型要求同一裁图尺寸）。改过尺寸或位置的ROI在绑定时一并写回配方，
+  否则位置相关模型会因尺寸不符（`anomaly_model_size_mismatch`）被阻断。“本图框复位”取消本图的移动。
 - **运行**：`OpenCvInspectionBackend(anomalyModels: …, anomalyDetectors: …)`。手工特征实现内置；CNN特征模型需宿主按特征来源提供`OpenCvCnnPatchAnomalyDetector`
   （演示程序：设置环境变量`DP_LABEL_ANOMALY_BACKBONE`为骨干网络ONNX路径，新训练的模型即用CNN特征）。
 - **报告**：`patch_anomaly`（NG，原图坐标）、`anomaly_summary`（OK说明）、`RegionInspectionResult.Anomaly`（模型、裁图范围、最大得分、阈值、热力图）；
@@ -72,7 +75,9 @@ FAISS没有官方.NET绑定，记忆库规模下OpenCV暴力匹配已足够；An
 分割不可靠时`anomaly_segmentation_failed`（未完成，NG）。热力图为各字符热力图映射回ROI后的合成图（128对应各字符自己的阈值），
 `RegionInspectionResult.Anomaly`中最大得分为最差字符的阈值倍数、阈值记为1。
 
-**制作界面**：WinForms工作台“字符异常模型(B)”，与单字库多图制库相同的流程——添加多张良品图、选择文字ROI（须横向单行），
+**制作界面**：WinForms工作台“字符异常模型(B)”，与单字库多图制库相同的流程——添加多张良品图、选择文字ROI（须横向单行）或直接在图上拖动画出文字行，
+每张图上的框可单独调整（拖动边/角、拖动框内移动、框外拖动重画；“当前框用于全部图像”“本图恢复配方位置”），改框后该图的旧样本自动清除；
+字符按行几何归一化，良品图不必与配方对齐；
 按OCR或确认文本提取字符候选，逐个核对身份（可改）、勾选作样本（切割需复核的行默认不勾选），右侧按字符统计样本数（少于3个标红），
 训练后作为一个新版本发布；关闭时可一键把这些文字ROI绑定到新版本、选择逐字符模式并启用B。本批未涉及的字符保留库中原模型。
 

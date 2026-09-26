@@ -220,6 +220,30 @@ public sealed class ImageViewerControl : Control
     [DefaultValue(true)]
     public bool AllowRegionDrawing { get; set; } = true;
 
+    /// <summary>
+    /// 编辑模式下在所有框之外拖动时直接画新框（不必按Shift），默认false（主工作台保持按Shift新建）。
+    /// 适合只编辑一个框的页面，例如异常模型制作页重画ROI。
+    /// </summary>
+    [DefaultValue(false)]
+    public bool DrawOutsideRegions { get; set; }
+
+    /// <summary>编辑模式下当前选中的叠加区域序号（显示八个控制点，可直接拖动调整），-1表示未选中。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public int SelectedRegionIndex
+    {
+        get => _selected;
+        set
+        {
+            if (value < -1 || value >= _regions.Count)
+            {
+                throw new ArgumentOutOfRangeException(nameof(value));
+            }
+
+            _selected = value;
+            Invalidate();
+        }
+    }
+
     /// <summary>将显示图像内的客户区点转换为原图整数像素边缘坐标。</summary>
     /// <param name = "point">客户区坐标，单位为屏幕像素。</param>
     public Point? ClientToImage(Point point)
@@ -589,14 +613,17 @@ public sealed class ImageViewerControl : Control
                     .First();
             }
 
-            if (_selected < 0)
+            if (_selected < 0 && !DrawOutsideRegions)
             {
                 Invalidate();
                 return;
             }
 
-            _editOriginal = _regions[_selected].Bounds;
-            _preview = _editOriginal;
+            if (_selected >= 0)
+            {
+                _editOriginal = _regions[_selected].Bounds;
+                _preview = _editOriginal;
+            }
         }
         else if (!forceNew)
         {
