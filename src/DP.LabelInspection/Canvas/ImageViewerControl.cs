@@ -239,10 +239,18 @@ public sealed class ImageViewerControl : Control
                 throw new ArgumentOutOfRangeException(nameof(value));
             }
 
-            _selected = value;
+            if (_selected != value)
+            {
+                _selected = value;
+                SelectedRegionChanged?.Invoke(this, EventArgs.Empty);
+            }
+
             Invalidate();
         }
     }
+
+    /// <summary>编辑模式下选中的叠加区域改变（点击选中、点空白取消或由宿主设置）。</summary>
+    public event EventHandler? SelectedRegionChanged;
 
     /// <summary>将显示图像内的客户区点转换为原图整数像素边缘坐标。</summary>
     /// <param name = "point">客户区坐标，单位为屏幕像素。</param>
@@ -605,12 +613,17 @@ public sealed class ImageViewerControl : Control
 
             if (_editHandle < 0)
             {
+                int before = _selected;
                 _selected = Enumerable
                     .Range(0, _regions.Count)
                     .Where(i => Contains(_regions[i].Bounds, point))
                     .OrderBy(i => (long)_regions[i].Bounds.Width * _regions[i].Bounds.Height)
                     .DefaultIfEmpty(-1)
                     .First();
+                if (_selected != before)
+                {
+                    SelectedRegionChanged?.Invoke(this, EventArgs.Empty);
+                }
             }
 
             if (_selected < 0 && !DrawOutsideRegions)

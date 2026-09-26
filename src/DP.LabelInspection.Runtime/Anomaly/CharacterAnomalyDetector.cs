@@ -36,7 +36,7 @@ public sealed class CharacterAnomalyDetector
     /// <summary>自动阈值相对良品留一法最大得分的倍数（1–5），默认1.5。</summary>
     public double ThresholdMargin { get; set; } = 1.5;
 
-    /// <summary>每个字符最多使用的训练样本数，超出时均匀抽取，默认16（检测耗时与样本数成正比）。</summary>
+    /// <summary>每个字符最多使用的训练样本数，超出时按形态多样性选取，默认16（检测耗时与样本数成正比）。</summary>
     public int MaximumSamples { get; set; } = 16;
 
     /// <summary>按字符汇总各行样本并训练，每个字符一个<see cref = "EAnomalyModelScope.Character"/>条目，按字符排序。</summary>
@@ -100,14 +100,8 @@ public sealed class CharacterAnomalyDetector
             {
                 token.ThrowIfCancellationRequested();
                 var all = group.ToArray();
-                var chosen =
-                    all.Length <= MaximumSamples
-                        ? all
-                        : Enumerable
-                            .Range(0, MaximumSamples)
-                            .Select(i => all[(int)((long)i * all.Length / MaximumSamples)])
-                            .ToArray();
-                int width = chosen.Max(s => CharacterCells.Width(s.cell.Width, s.line));
+                int width = all.Max(s => CharacterCells.Width(s.cell.Width, s.line));
+                var chosen = all.Length <= MaximumSamples ? all : Diverse(all, width);
                 var crops = new List<DP.Vision.IImageSource>();
                 try
                 {
@@ -310,6 +304,77 @@ public sealed class CharacterAnomalyDetector
             scores,
             anyHeat ? CvImages.Frame(heat) : null
         );
+    }
+
+    /// <summary>
+    /// 样本多于上限时按形态多样性选取（贪心最远点）：先取最接近其余样本的一个，再依次取与已选样本最不相似的。
+    /// 按顺序等间隔抽取会漏掉少数形态不同的良品（例如另一行字号略不同的同一字符），检测时这些良品会被误报；
+    /// 实拍标签上“WF675907”中的“0”即如此。超过400个样本时先等间隔抽到400个再选。
+    /// </summary>
+    private (char c, Mat gray, CharacterLine line, PixelRect cell)[] Diverse(
+        (char c, Mat gray, CharacterLine line, PixelRect cell)[] all,
+        int width
+    )
+    {
+        var pool =
+            all.Length <= 400
+                ? all
+                : Enumerable.Range(0, 400).Select(i => all[(int)((long)i * all.Length / 400)]).ToArray();
+        var vectors = pool.Select(s =>
+            {
+                using var cell = CharacterCells.Normalize(s.gray, s.line, s.cell, width);
+                using var small = new Mat();
+                // 缩到1/2比较整体形态，对细微噪声不敏感。
+                Cv2.Resize(
+                    cell.Image,
+                    small,
+                    new Size(width / 2, CharacterCells.CellHeight / 2),
+                    0,
+                    0,
+                    InterpolationFlags.Area
+                );
+                var bytes = new byte[small.Rows * small.Cols];
+                System.Runtime.InteropServices.Marshal.Copy(small.Data, bytes, 0, bytes.Length);
+                return bytes.Select(b => (float)b).ToArray();
+            })
+            .ToArray();
+        int n = vectors.Length;
+        double Distance(int i, int j)
+        {
+            double sum = 0;
+            var a = vectors[i];
+            var b = vectors[j];
+            for (int k = 0; k < a.Length; k++)
+            {
+                double t = a[k] - b[k];
+                sum += t * t;
+            }
+
+            return sum;
+        }
+
+        int first = Enumerable
+            .Range(0, n)
+            .OrderBy(i => Enumerable.Range(0, n).Sum(j => j == i ? 0 : Math.Sqrt(Distance(i, j))))
+            .First();
+        var selected = new List<int> { first };
+        var nearest = Enumerable.Range(0, n).Select(i => Distance(i, first)).ToArray();
+        while (selected.Count < MaximumSamples)
+        {
+            int next = Enumerable.Range(0, n).OrderByDescending(i => nearest[i]).First();
+            if (nearest[next] <= 0)
+            {
+                break;
+            }
+
+            selected.Add(next);
+            for (int i = 0; i < n; i++)
+            {
+                nearest[i] = Math.Min(nearest[i], Distance(i, next));
+            }
+        }
+
+        return selected.OrderBy(i => i).Select(i => pool[i]).ToArray();
     }
 
     /// <summary>

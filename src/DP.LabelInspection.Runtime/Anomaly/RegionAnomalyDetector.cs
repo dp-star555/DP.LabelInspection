@@ -184,6 +184,69 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
     }
 
     /// <inheritdoc/>
+    public AnomalyModelEntry TrainSamples(
+        IReadOnlyList<RegionAnomalySample> samples,
+        InspectionRegion region,
+        bool positionDependent,
+        string? key = null,
+        CancellationToken token = default
+    )
+    {
+        if (samples == null || samples.Count == 0 || region == null)
+        {
+            throw new ArgumentException("Samples and a region are required.");
+        }
+
+        var crops = samples.Select(s => CropFor(s.Image.Width, s.Image.Height, s.Bounds)).ToArray();
+        if (positionDependent && crops.Any(c => c.Width != crops[0].Width || c.Height != crops[0].Height))
+        {
+            throw new ArgumentException(
+                "位置相关模型的样本框须同尺寸，且四周距图像边缘至少"
+                    + Margin
+                    + "像素（样本："
+                    + region.Name
+                    + "）。"
+            );
+        }
+
+        var options = new PatchAnomalyOptions(localRadius: positionDependent ? 3 : (int?)null);
+        var images = new List<DP.Vision.IImageSource>();
+        try
+        {
+            for (int i = 0; i < samples.Count; i++)
+            {
+                images.Add(Bridge.ToVision(samples[i].Image.Crop(crops[i])));
+            }
+
+            var model = _algorithm.Train(images, options, token);
+            var bytes = model.ToBytes();
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            return new AnomalyModelEntry(
+                key ?? region.Name,
+                bytes,
+                BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant(),
+                model.FeatureSource,
+                crops[0].Width,
+                crops[0].Height,
+                model.Radius,
+                samples.Count,
+                model.Threshold,
+                Margin,
+                options.Stride,
+                options.MinimumArea,
+                model.Calibration
+            );
+        }
+        finally
+        {
+            foreach (var image in images)
+            {
+                image.Dispose();
+            }
+        }
+    }
+
+    /// <inheritdoc/>
     public IReadOnlyList<AnomalyModelEntry> TrainCharacters(
         IReadOnlyList<CharacterAnomalySample> lines,
         CancellationToken token = default

@@ -120,6 +120,7 @@
         "type": "Project",
         "dependencies": {
           "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
           "Newtonsoft.Json": "[13.0.3, )"
         }
       },
@@ -289,6 +290,7 @@
         "type": "Project",
         "dependencies": {
           "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
           "Newtonsoft.Json": "[13.0.3, )"
         }
       },
