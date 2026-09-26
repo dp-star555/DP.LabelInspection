@@ -78,8 +78,15 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
     };
     private readonly CheckBox _checkQuality = new CheckBox
     {
-        Content = "检查印刷质量",
+        Content = "A 规则质检",
         Margin = new Thickness(6),
+        ToolTip = "质量方法A：按ROI类型的单字比较/码印刷/固定与空白墨迹检查",
+    };
+    private readonly CheckBox _detectAnomaly = new CheckBox
+    {
+        Content = "B 异常检测",
+        Margin = new Thickness(6),
+        ToolTip = "质量方法B：良品训练的局部块异常检测，须绑定异常模型库版本；与A同时启用时任一NG即NG",
     };
     private readonly TextBox _guide = new TextBox
     {
@@ -160,6 +167,7 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
         tasksBar.Children.Add(_roiTasks);
         tasksBar.Children.Add(_readData);
         tasksBar.Children.Add(_checkQuality);
+        tasksBar.Children.Add(_detectAnomaly);
         tasksBar.Children.Add(
             new TextBlock { Text = "引导值/格位标签", VerticalAlignment = VerticalAlignment.Center }
         );
@@ -174,6 +182,7 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
 
             _readData.IsChecked = selected.Tasks.ReadData;
             _checkQuality.IsChecked = selected.Tasks.CheckQuality;
+            _detectAnomaly.IsChecked = selected.Tasks.DetectAnomaly;
             _guide.Text = selected.Field.Expected ?? "";
         };
         var applyTasks = new Button { Content = "应用到选中ROI", Margin = new Thickness(4) };
@@ -187,7 +196,8 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
                         name,
                         _readData.IsChecked == true,
                         _checkQuality.IsChecked == true,
-                        string.IsNullOrEmpty(_guide.Text) ? null : _guide.Text
+                        string.IsNullOrEmpty(_guide.Text) ? null : _guide.Text,
+                        _detectAnomaly.IsChecked == true
                     );
                 }
             }
@@ -318,7 +328,14 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
     /// <param name = "readData">是否启用实际数据读取项目。</param>
     /// <param name = "checkQuality">是否启用印刷质量项目。</param>
     /// <param name = "expected">可选独立预期引导值，不用它修正实际读数。</param>
-    public void ConfigureRoiTasks(string name, bool readData, bool checkQuality, string? expected)
+    /// <param name = "detectAnomaly">是否启用局部块异常检测（质量方法B），模型绑定保持不变。</param>
+    public void ConfigureRoiTasks(
+        string name,
+        bool readData,
+        bool checkQuality,
+        string? expected,
+        bool detectAnomaly = false
+    )
     {
         Idle();
         int index = _regions.FindIndex(r => r.Name == name);
@@ -347,9 +364,14 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
                     f.BarcodeType
                 )
                 : null;
-        _regions[index] = new InspectionRegion(r.Name, r.Kind, r.Bounds, r.SingleLine, field).WithTasks(
-            new RoiInspectionTasks(readData, checkQuality)
-        );
+        _regions[index] = new InspectionRegion(
+            r.Name,
+            r.Kind,
+            r.Bounds,
+            r.SingleLine,
+            field,
+            r.Anomaly
+        ).WithTasks(new RoiInspectionTasks(readData, checkQuality, detectAnomaly));
         _report = null;
         Render();
         _status.Text = "已更新ROI项目；缺能力在检测时直接判本ROI NG。";
@@ -591,7 +613,8 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
                     r.Bounds.Height
                 ),
                 r.SingleLine,
-                r.Kind == ERegionKind.Text || r.Kind == ERegionKind.Barcode ? r.Field : null
+                r.Kind == ERegionKind.Text || r.Kind == ERegionKind.Barcode ? r.Field : null,
+                r.Anomaly
             ).WithTasks(r.Tasks)
         );
         var findings =

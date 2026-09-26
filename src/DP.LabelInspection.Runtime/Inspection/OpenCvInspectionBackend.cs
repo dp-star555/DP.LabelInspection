@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -27,6 +28,8 @@ public sealed partial class OpenCvInspectionBackend
     private readonly RegionQualityAlgorithms _qualityAlgorithms;
     private readonly DP.Vision.Algorithms.ITextQualityInspector? _textQuality;
     private readonly DP.Vision.Algorithms.ICharacterMatcher _matcher;
+    private readonly IAnomalyLibraryRepository? _anomalyModels;
+    private readonly Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector> _anomalyDetectors;
 
     /// <summary>除非明确转移所有权，参考及算法均为借用。</summary>
     /// <param name = "recognizer">可选真实单行识别器。</param>
@@ -38,6 +41,10 @@ public sealed partial class OpenCvInspectionBackend
     /// <param name = "segmenter">可选物理分割器，null使用默认实现。</param>
     /// <param name = "comparer">可选独立单字比较器，null使用默认实现。</param>
     /// <param name = "barcodePrint">可选码印刷策略，null使用默认实现。</param>
+    /// <param name = "anomalyModels">可选固定版本异常模型库（方法B），仅借用。</param>
+    /// <param name = "anomalyDetectors">
+    /// 按特征来源提供的额外异常检测实现（例如CNN骨干网络，键为其FeatureSource），仅借用；手工特征实现始终内置。
+    /// </param>
     public OpenCvInspectionBackend(
         ITextLineRecognizer? recognizer = null,
         bool ownsRecognizer = false,
@@ -47,7 +54,9 @@ public sealed partial class OpenCvInspectionBackend
         bool ownsDetector = false,
         ICharacterSegmenter? segmenter = null,
         IGlyphComparer? comparer = null,
-        IBarcodePrintInspector? barcodePrint = null
+        IBarcodePrintInspector? barcodePrint = null,
+        IAnomalyLibraryRepository? anomalyModels = null,
+        IReadOnlyDictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>? anomalyDetectors = null
     )
         : this(
             new RegionQualityAlgorithms(
@@ -62,7 +71,9 @@ public sealed partial class OpenCvInspectionBackend
             ownsDetector,
             segmenter,
             comparer,
-            barcodePrint
+            barcodePrint,
+            anomalyModels: anomalyModels,
+            anomalyDetectors: anomalyDetectors
         ) { }
 
     /// <summary>分别选择固定、空白、文字、配对及码策略进行组装，注入实现由宿主拥有。</summary>
@@ -78,6 +89,8 @@ public sealed partial class OpenCvInspectionBackend
     /// <param name = "barcodePrint">可选码印刷策略，null使用默认实现。</param>
     /// <param name = "textQuality">可选整段文字质量替代策略，null使用默认组合。</param>
     /// <param name = "matcher">可选字符到参考配对策略，供默认文字组合使用。</param>
+    /// <param name = "anomalyModels">可选固定版本异常模型库（方法B），仅借用。</param>
+    /// <param name = "anomalyDetectors">按特征来源提供的额外异常检测实现，仅借用；手工特征实现始终内置。</param>
     public static OpenCvInspectionBackend WithQualityAlgorithms(
         RegionQualityAlgorithms qualityAlgorithms,
         ITextLineRecognizer? recognizer = null,
@@ -90,7 +103,9 @@ public sealed partial class OpenCvInspectionBackend
         IGlyphComparer? comparer = null,
         IBarcodePrintInspector? barcodePrint = null,
         DP.Vision.Algorithms.ITextQualityInspector? textQuality = null,
-        DP.Vision.Algorithms.ICharacterMatcher? matcher = null
+        DP.Vision.Algorithms.ICharacterMatcher? matcher = null,
+        IAnomalyLibraryRepository? anomalyModels = null,
+        IReadOnlyDictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>? anomalyDetectors = null
     )
     {
         return new OpenCvInspectionBackend(
@@ -105,7 +120,9 @@ public sealed partial class OpenCvInspectionBackend
             comparer,
             barcodePrint,
             textQuality,
-            matcher
+            matcher,
+            anomalyModels,
+            anomalyDetectors
         );
     }
 
@@ -121,10 +138,27 @@ public sealed partial class OpenCvInspectionBackend
         IGlyphComparer? comparer,
         IBarcodePrintInspector? barcodePrint,
         DP.Vision.Algorithms.ITextQualityInspector? textQuality = null,
-        DP.Vision.Algorithms.ICharacterMatcher? matcher = null
+        DP.Vision.Algorithms.ICharacterMatcher? matcher = null,
+        IAnomalyLibraryRepository? anomalyModels = null,
+        IReadOnlyDictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>? anomalyDetectors = null
     )
     {
         _textQuality = textQuality;
+        _anomalyModels = anomalyModels;
+        _anomalyDetectors = new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>(
+            StringComparer.Ordinal
+        )
+        {
+            [DP.Vision.Algorithms.PatchAnomalyModel.Handcrafted] =
+                new DP.Vision.OpenCv.OpenCvPatchAnomalyDetector(),
+        };
+        foreach (
+            var pair in anomalyDetectors
+                ?? new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>()
+        )
+        {
+            _anomalyDetectors[pair.Key] = pair.Value ?? throw new ArgumentException("Null anomaly detector.");
+        }
         _matcher = matcher ?? new DP.Vision.Algorithms.OrdinalCharacterMatcher();
         _qualityAlgorithms = qualityAlgorithms ?? throw new ArgumentNullException(nameof(qualityAlgorithms));
         _recognizer = recognizer;

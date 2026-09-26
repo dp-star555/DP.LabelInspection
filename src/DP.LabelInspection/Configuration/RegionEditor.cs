@@ -12,7 +12,8 @@ internal static partial class RegionEditor
 {
     internal static InspectionRegion[]? Edit(
         IEnumerable<InspectionRegion> regions,
-        IGlyphLibraryManager? manager
+        IGlyphLibraryManager? manager,
+        IAnomalyLibraryManager? anomalyManager = null
     )
     {
         using var form = new Form
@@ -85,6 +86,28 @@ internal static partial class RegionEditor
                 grid.Refresh();
             }
         };
+        var anomalyLibraries = new ComboBox { Width = 260, DropDownStyle = ComboBoxStyle.DropDownList };
+        if (anomalyManager != null)
+        {
+            foreach (var item in anomalyManager.ListAnomalyLibraries())
+            {
+                anomalyLibraries.Items.Add(item);
+            }
+        }
+
+        var bindAnomaly = new Button { Text = "绑定所选异常模型库/版本", AutoSize = true };
+        bindAnomaly.Click += (_, _) =>
+        {
+            if (
+                list.SelectedItem is EditableRegion r
+                && anomalyLibraries.SelectedItem is AnomalyLibraryInfo l
+            )
+            {
+                r.AnomalyLibraryId = l.Id;
+                r.AnomalyLibraryRevision = l.Revision;
+                grid.Refresh();
+            }
+        };
         var remove = new Button { Text = "删除选中ROI", AutoSize = true };
         remove.Click += (_, _) =>
         {
@@ -121,7 +144,9 @@ internal static partial class RegionEditor
             DialogResult = DialogResult.Cancel,
         };
         form.CancelButton = cancel;
-        buttons.Controls.AddRange(new Control[] { libraries, bind, remove, save, cancel });
+        buttons.Controls.AddRange(
+            new Control[] { libraries, bind, anomalyLibraries, bindAnomaly, remove, save, cancel }
+        );
         form.Controls.Add(grid);
         form.Controls.Add(list);
         form.Controls.Add(help);

@@ -15,15 +15,18 @@ public sealed class RegionAnomalyResult
     /// <param name = "threshold">本次阈值。</param>
     /// <param name = "findings">异常区域（NG，原图坐标）与说明（OK），内部复制。</param>
     /// <param name = "heatMap">与<paramref name = "crop"/>同尺寸的灰度热力图，128对应阈值。</param>
+    /// <param name = "completed">检测是否完整执行（模型与输入匹配）；未完成时发现中包含阻断原因。</param>
     public RegionAnomalyResult(
         string regionName,
         PixelRect crop,
         double maximumScore,
         double threshold,
         IEnumerable<InspectionFinding> findings,
-        ImageFrame? heatMap
+        ImageFrame? heatMap,
+        bool completed = true
     )
     {
+        Completed = completed;
         RegionName = regionName ?? throw new ArgumentNullException(nameof(regionName));
         Crop = crop;
         MaximumScore = maximumScore;
@@ -53,6 +56,9 @@ public sealed class RegionAnomalyResult
     /// <summary>灰度热力图（128=阈值），与<see cref = "Crop"/>同尺寸。</summary>
     public ImageFrame? HeatMap { get; }
 
-    /// <summary>没有异常区域时为true。</summary>
-    public bool Passed => Findings.All(f => f.Verdict != EInspectionVerdict.Ng);
+    /// <summary>检测是否完整执行。</summary>
+    public bool Completed { get; }
+
+    /// <summary>完整执行且没有异常区域时为true。</summary>
+    public bool Passed => Completed && Findings.All(f => f.Verdict != EInspectionVerdict.Ng);
 }

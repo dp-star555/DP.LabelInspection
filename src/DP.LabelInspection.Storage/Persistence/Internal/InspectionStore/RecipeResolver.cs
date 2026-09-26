@@ -28,7 +28,10 @@ public sealed partial class InspectionStore
                 member.DeclaringType == typeof(InspectionRegion)
                     && member.Name == nameof(InspectionRegion.Tasks)
                 || member.DeclaringType == typeof(RegionInspectionResult)
-                    && member.Name == nameof(RegionInspectionResult.Execution)
+                    && (
+                        member.Name == nameof(RegionInspectionResult.Execution)
+                        || member.Name == nameof(RegionInspectionResult.Anomaly)
+                    )
                 || member.DeclaringType == typeof(InspectionFinding)
                     && member.Name == nameof(InspectionFinding.IsExecutionBlocker)
             )

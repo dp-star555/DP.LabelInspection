@@ -38,7 +38,11 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
         };
         _json.Converters.Add(new FrameConverter(codec));
         _json.Converters.Add(new RectConverter());
+        AnomalyLibraries = new AnomalyLibraryStore(_root);
     }
+
+    /// <summary>同一根目录下的异常模型库（方法B），与字库一样按固定版本绑定。</summary>
+    public AnomalyLibraryStore AnomalyLibraries { get; }
 
     /// <summary>返回精确不可变版本，不替换为当前最新版本。</summary>
     /// <param name = "id">字库类别标识。</param>
@@ -506,6 +510,51 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
             }
 
             File.WriteAllText(Path.Combine(temp, "libraries.json"), snapshots.ToString(), Encoding.UTF8);
+            var anomalyModels = new JObject();
+            foreach (
+                var region in request.Recipe.Regions.Where(r => r.Anomaly != null && r.Tasks.DetectAnomaly)
+            )
+            {
+                // 只记录所用模型的标识与哈希，模型字节保留在不可变模型库中，避免每个任务复制数MB模型。
+                var pin = region.Anomaly!;
+                string key = pin.KeyFor(region.Name);
+                JToken? entry = null;
+                try
+                {
+                    entry = AnomalyLibraries
+                        .Read(pin.LibraryId, pin.LibraryRevision)["models"]
+                        ?[key]?.DeepClone();
+                }
+                catch (Exception error)
+                    when (error is IOException
+                        || error is InvalidDataException
+                        || error is UnauthorizedAccessException
+                    )
+                {
+                    entry = null;
+                }
+
+                anomalyModels[region.Name] = new JObject
+                {
+                    { "library", pin.LibraryId },
+                    { "revision", pin.LibraryRevision },
+                    { "key", key },
+                    {
+                        "model",
+                        entry
+                            ?? new JObject { { "status", "missing" } }
+                    },
+                };
+            }
+
+            if (anomalyModels.Count > 0)
+            {
+                File.WriteAllText(
+                    Path.Combine(temp, "anomaly-models.json"),
+                    anomalyModels.ToString(),
+                    Encoding.UTF8
+                );
+            }
             var hashes = new JObject();
             foreach (var file in Directory.GetFiles(temp))
             {
