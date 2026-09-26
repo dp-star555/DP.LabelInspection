@@ -183,7 +183,16 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         return TrainEntry(good, region, null, key, token);
     }
 
-    /// <summary>按库条目记录的元数据重建检测参数（块大小取自模型本身）。</summary>
+    /// <inheritdoc/>
+    public IReadOnlyList<AnomalyModelEntry> TrainCharacters(
+        IReadOnlyList<CharacterAnomalySample> lines,
+        CancellationToken token = default
+    )
+    {
+        return new CharacterAnomalyDetector(_algorithm).Train(lines, token);
+    }
+
+    /// <summary>按库条目记录的元数据重建检测参数（块大小取自模型本身，阈值取条目记录的阈值）。</summary>
     /// <param name = "entry">异常模型库条目。</param>
     /// <param name = "model">由条目字节解析的模型。</param>
     public static PatchAnomalyOptions DetectionOptions(AnomalyModelEntry entry, PatchAnomalyModel model)
@@ -196,6 +205,7 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         return new PatchAnomalyOptions(
             patchSize: model.PatchSize,
             stride: entry.Stride,
+            threshold: entry.Threshold,
             minimumArea: entry.MinimumArea,
             localRadius: model.Radius > 0 ? model.Radius : (int?)null
         );

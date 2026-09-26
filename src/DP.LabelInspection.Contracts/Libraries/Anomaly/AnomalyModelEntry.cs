@@ -25,6 +25,7 @@ public sealed class AnomalyModelEntry
     /// <param name = "stride">检测块采样步长。</param>
     /// <param name = "minimumArea">异常区域最小面积（原图平方像素）。</param>
     /// <param name = "calibration">阈值标定说明。</param>
+    /// <param name = "scope">适用范围：整个ROI或单个字符；字符模型的键必须是单个ASCII字母或数字。</param>
     public AnomalyModelEntry(
         string key,
         byte[] model,
@@ -38,9 +39,26 @@ public sealed class AnomalyModelEntry
         int margin,
         int stride,
         int minimumArea,
-        string calibration = ""
+        string calibration = "",
+        EAnomalyModelScope scope = EAnomalyModelScope.Region
     )
     {
+        if (!Enum.IsDefined(typeof(EAnomalyModelScope), scope))
+        {
+            throw new ArgumentOutOfRangeException(nameof(scope));
+        }
+
+        if (
+            scope == EAnomalyModelScope.Character
+            && (key == null || key.Length != 1 || !FieldSettings.IsAlphanumeric(key[0]))
+        )
+        {
+            throw new ArgumentException(
+                "Character models are keyed by one ASCII letter or digit.",
+                nameof(key)
+            );
+        }
+
         if (string.IsNullOrWhiteSpace(key) || key.Length > 100)
         {
             throw new ArgumentException("Model key required.", nameof(key));
@@ -99,7 +117,11 @@ public sealed class AnomalyModelEntry
         Stride = stride;
         MinimumArea = minimumArea;
         Calibration = calibration ?? "";
+        Scope = scope;
     }
+
+    /// <summary>适用范围：整个ROI或单个字符。</summary>
+    public EAnomalyModelScope Scope { get; }
 
     /// <summary>库内模型键。</summary>
     public string Key { get; }
@@ -163,20 +185,21 @@ public sealed class AnomalyModelEntry
             Margin,
             Stride,
             MinimumArea,
-            Calibration
+            Calibration,
+            Scope
         );
     }
 
     /// <summary>供用户阅读的摘要。</summary>
     public override string ToString()
     {
-        return Key
+        return (Scope == EAnomalyModelScope.Character ? "字符[" + Key + "]" : Key)
             + " · "
             + (FeatureSource.StartsWith("cnn", StringComparison.Ordinal) ? "CNN" : "手工")
             + (LocalRadius > 0 ? "/位置相关" : "/与位置无关")
             + " · "
             + TrainingImages
-            + "张良品 · "
+            + (Scope == EAnomalyModelScope.Character ? "个良品样本 · " : "张良品 · ")
             + Width
             + "×"
             + Height;

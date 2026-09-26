@@ -521,9 +521,16 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
                 JToken? entry = null;
                 try
                 {
-                    entry = AnomalyLibraries
-                        .Read(pin.LibraryId, pin.LibraryRevision)["models"]
-                        ?[key]?.DeepClone();
+                    var models =
+                        AnomalyLibraries.Read(pin.LibraryId, pin.LibraryRevision)["models"] as JObject;
+                    entry = pin.PerCharacter
+                        ? new JObject(
+                            (models ?? new JObject())
+                                .Properties()
+                                .Where(p => (int?)p.Value["scope"] == (int)EAnomalyModelScope.Character)
+                                .Select(p => new JProperty(p.Name, p.Value["sha256"]))
+                        )
+                        : models?[key]?.DeepClone();
                 }
                 catch (Exception error)
                     when (error is IOException
@@ -538,7 +545,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
                 {
                     { "library", pin.LibraryId },
                     { "revision", pin.LibraryRevision },
-                    { "key", key },
+                    { "key", pin.PerCharacter ? "per-character" : key },
                     {
                         "model",
                         entry

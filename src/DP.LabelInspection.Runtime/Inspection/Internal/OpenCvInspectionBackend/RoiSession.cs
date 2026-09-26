@@ -27,6 +27,8 @@ public sealed partial class OpenCvInspectionBackend
             string,
             (AnomalyModelEntry, A.PatchAnomalyModel, A.IPatchAnomalyDetector)
         >(StringComparer.Ordinal);
+        private readonly Dictionary<string, Dictionary<string, CharacterAnomalyModel>> _characterModels =
+            new Dictionary<string, Dictionary<string, CharacterAnomalyModel>>(StringComparer.Ordinal);
         private bool _located,
             _alignmentFailed,
             _disposed;
@@ -447,7 +449,21 @@ public sealed partial class OpenCvInspectionBackend
                 );
             }
 
+            if (pin.PerCharacter)
+            {
+                return ValidateCharacterModels(r, library, findings, Fail);
+            }
+
             string key = pin.KeyFor(r.Name);
+            if (library.Models.TryGetValue(key, out var scoped) && scoped.Scope != EAnomalyModelScope.Region)
+            {
+                Fail(
+                    "anomaly_model_scope_mismatch",
+                    $"模型[{key}]是字符模型；整ROI模式需要ROI模型，逐字符检查请在绑定中选择逐字符模式。"
+                );
+                return findings;
+            }
+
             if (!library.Models.TryGetValue(key, out var entry))
             {
                 Fail(
@@ -493,13 +509,238 @@ public sealed partial class OpenCvInspectionBackend
             return findings;
         }
 
+        /// <summary>逐字符模式需要OCR身份来分割并选择字符模型；显式等格用格位标签，不需要读取。</summary>
+        /// <param name = "r">当前ROI配置。</param>
+        public bool AnomalyNeedsReading(InspectionRegion r)
+        {
+            return r.Anomaly?.PerCharacter == true && r.Kind == ERegionKind.Text && !r.Field.EqualCells;
+        }
+
+        private IReadOnlyList<InspectionFinding> ValidateCharacterModels(
+            InspectionRegion r,
+            AnomalyLibrarySnapshot library,
+            List<InspectionFinding> findings,
+            Action<string, string> fail
+        )
+        {
+            var entries = library.Models.Values.Where(m => m.Scope == EAnomalyModelScope.Character).ToArray();
+            if (entries.Length == 0)
+            {
+                fail(
+                    "anomaly_model_missing",
+                    $"异常模型库 {library.Name} r{library.Revision} 中没有字符模型；请用“字符异常模型制作”训练并发布。"
+                );
+                return findings;
+            }
+
+            var unavailable = entries
+                .Select(e => e.FeatureSource)
+                .Distinct()
+                .Where(f => !_owner._anomalyDetectors.ContainsKey(f))
+                .ToArray();
+            if (unavailable.Length > 0)
+            {
+                fail(
+                    "anomaly_feature_unavailable",
+                    "字符模型使用特征来源"
+                        + string.Join("、", unavailable)
+                        + "，宿主未提供对应实现（如CNN骨干网络）。"
+                );
+                return findings;
+            }
+
+            var models = new Dictionary<string, CharacterAnomalyModel>(StringComparer.Ordinal);
+            foreach (var e in entries)
+            {
+                var model = A.PatchAnomalyModel.FromBytes(e.CopyModel());
+                if (model.FeatureSource != e.FeatureSource)
+                {
+                    throw new System.IO.InvalidDataException(
+                        "Anomaly model metadata does not match its bytes."
+                    );
+                }
+
+                models[e.Key] = new CharacterAnomalyModel(
+                    e,
+                    model,
+                    _owner._anomalyDetectors[e.FeatureSource]
+                );
+            }
+
+            if (r.Field.Expected != null)
+            {
+                var missing = r
+                    .Field.Expected.Where(FieldSettings.IsAlphanumeric)
+                    .Select(c => c.ToString())
+                    .Distinct()
+                    .Where(c => !models.ContainsKey(c))
+                    .ToArray();
+                if (missing.Length > 0)
+                {
+                    fail(
+                        "anomaly_character_model_missing",
+                        "已知必需字符缺少字符异常模型：" + string.Join("", missing)
+                    );
+                }
+            }
+
+            _characterModels[r.Name] = models;
+            return findings;
+        }
+
+        /// <summary>逐字符模式：复用方法A的分割（若有），否则按OCR读数或等格声明分割，逐字与字符模型比较。</summary>
+        private RoiQualityMeasurement InspectCharacters(
+            InspectionRegion r,
+            RegionInspectionResult evidence,
+            CancellationToken token
+        )
+        {
+            if (!_characterModels.TryGetValue(r.Name, out var models))
+            {
+                throw new InvalidOperationException(
+                    "Character anomaly models were not validated for this ROI."
+                );
+            }
+
+            var pin = r.Anomaly!;
+            var segmentation = evidence.Segmentation;
+            if (
+                segmentation == null
+                || segmentation.Status != "provisional" && segmentation.Status != "explicit_cells"
+            )
+            {
+                segmentation = r.Field.EqualCells
+                    ? _owner._segmenter.EqualCells(_request.Actual, r.Bounds, r.Field.Expected!)
+                    : _owner._segmenter.Segment(
+                        _request.Actual,
+                        r.Bounds,
+                        evidence.Recognition?.Text ?? "",
+                        token
+                    );
+            }
+
+            if (segmentation.Status != "provisional" && segmentation.Status != "explicit_cells")
+            {
+                return new RoiQualityMeasurement(
+                    new RegionInspectionResult(
+                        r.Name,
+                        new[]
+                        {
+                            new InspectionFinding(
+                                "anomaly_segmentation_failed",
+                                "B逐字符检查需要可靠的字符分割：" + segmentation.Reason,
+                                EInspectionVerdict.Ng,
+                                r.Bounds
+                            ).WithExecutionBlocker(true),
+                        }
+                    ),
+                    false
+                );
+            }
+
+            var result = new CharacterAnomalyDetector().Inspect(
+                _request.Actual,
+                segmentation.Characters,
+                r.Bounds,
+                c => models.TryGetValue(c, out var m) ? m : null,
+                token
+            );
+            var findings = result.Scores.SelectMany(s => s.Findings).ToList();
+            var compared = result.Scores.Where(s => s.Status == "compared").ToArray();
+            var worst = compared.OrderByDescending(s => s.Ratio).FirstOrDefault();
+            var failed = result.Scores.Where(s => !s.Passed).ToArray();
+            findings.Add(
+                new InspectionFinding(
+                    "anomaly_summary",
+                    $"B逐字符异常检测（{pin.LibraryId} r{pin.LibraryRevision}）：{result.Scores.Count}字中{compared.Length}字已检测"
+                        + (
+                            worst == null
+                                ? ""
+                                : $"，最大为字符[{worst.Character}]（第{worst.TokenIndex + 1}位）{worst.Ratio:F2}倍阈值"
+                        )
+                        + (
+                            failed.Length == 0
+                                ? "，全部通过。"
+                                : "；未通过："
+                                    + string.Join(
+                                        " ",
+                                        failed.Select(s =>
+                                            $"[{s.Character}]第{s.TokenIndex + 1}位"
+                                            + (
+                                                s.Status == "compared"
+                                                    ? $"{s.Ratio:F2}倍"
+                                                    : "（" + s.Status + "）"
+                                            )
+                                        )
+                                    )
+                                    + "。"
+                        )
+                        + "逐字（倍数）："
+                        + string.Join(
+                            " ",
+                            result.Scores.Select(s =>
+                                s.Character + (s.Status == "compared" ? s.Ratio.ToString("F2") : "-")
+                            )
+                        ),
+                    EInspectionVerdict.Ok,
+                    r.Bounds
+                )
+            );
+            var used = compared
+                .Select(s => models[s.Character].Entry)
+                .Distinct()
+                .OrderBy(e => e.Key)
+                .ToArray();
+            string combined;
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                combined = BitConverter
+                    .ToString(
+                        sha.ComputeHash(
+                            System.Text.Encoding.UTF8.GetBytes(
+                                string.Join(",", used.Select(e => e.Key + ":" + e.Sha256))
+                            )
+                        )
+                    )
+                    .Replace("-", "")
+                    .ToLowerInvariant();
+            }
+
+            return new RoiQualityMeasurement(
+                new RegionInspectionResult(r.Name, findings).WithAnomaly(
+                    new RegionAnomalyEvidence(
+                        pin.LibraryId,
+                        pin.LibraryRevision,
+                        "per-character",
+                        combined,
+                        string.Join(",", used.Select(e => e.FeatureSource).Distinct()),
+                        result.Crop,
+                        result.WorstRatio,
+                        1,
+                        result.HeatMap
+                    )
+                ),
+                result.Completed
+            );
+        }
+
         /// <summary>在已定位ROI上执行方法B，返回异常区域、得分摘要及热力图证据。</summary>
         /// <param name = "r">已定位的ROI。</param>
+        /// <param name = "evidence">本轮已有读取/分割证据，逐字符模式使用。</param>
         /// <param name = "token">协作式取消标记。</param>
-        public RoiQualityMeasurement InspectAnomaly(InspectionRegion r, CancellationToken token)
+        public RoiQualityMeasurement InspectAnomaly(
+            InspectionRegion r,
+            RegionInspectionResult evidence,
+            CancellationToken token
+        )
         {
             Alive();
             token.ThrowIfCancellationRequested();
+            if (r.Anomaly?.PerCharacter == true)
+            {
+                return InspectCharacters(r, evidence, token);
+            }
+
             if (!_anomaly.TryGetValue(r.Name, out var bound) || r.Anomaly == null)
             {
                 throw new InvalidOperationException("Anomaly model was not validated for this ROI.");
@@ -746,6 +987,7 @@ public sealed partial class OpenCvInspectionBackend
             _disposed = true;
             _libraries.Clear();
             _anomaly.Clear();
+            _characterModels.Clear();
         }
     }
 }

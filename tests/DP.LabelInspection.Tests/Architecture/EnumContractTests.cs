@@ -25,6 +25,7 @@ public sealed class EnumContractTests
         "None=0,Quality=1,FixedDifference=2,BlankSpots=4,TranslationAlignment=8,Ocr=16,CharacterSegmentation=32,GlyphComparison=64,BarcodeDecode=128,BarcodeStructure=256,Discovery=512"
     )]
     [DataRow(typeof(ERoiStageState), "NotRequested=0,NotExecuted=1,Passed=2,Failed=3")]
+    [DataRow(typeof(EAnomalyModelScope), "Region=0,Character=1")]
     public void NamesAndValuesRemainExplicit(Type type, string expected)
     {
         Assert.IsTrue(type.IsEnum && type.Name.StartsWith("E", StringComparison.Ordinal));

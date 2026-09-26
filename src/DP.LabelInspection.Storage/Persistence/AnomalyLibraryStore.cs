@@ -137,30 +137,67 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             throw new ArgumentNullException(nameof(model));
         }
 
+        return PutAnomalyModels(id, expectedRevision, new[] { model }, replaceExisting, provenanceJson);
+    }
+
+    /// <inheritdoc/>
+    public int PutAnomalyModels(
+        string id,
+        int expectedRevision,
+        IEnumerable<AnomalyModelEntry> models,
+        bool replaceExisting = false,
+        string? provenanceJson = null
+    )
+    {
+        var batch = (models ?? throw new ArgumentNullException(nameof(models))).ToArray();
+        if (
+            batch.Length == 0
+            || batch.Any(m => m == null)
+            || batch.Select(m => m.Key).Distinct(StringComparer.Ordinal).Count() != batch.Length
+        )
+        {
+            throw new ArgumentException("Provide uniquely keyed models.", nameof(models));
+        }
+
         var doc = Read(id, expectedRevision);
         if ((bool?)doc["archived"] == true)
         {
             throw new InvalidOperationException("Archived library cannot accept models.");
         }
 
-        var models = (JObject)doc["models"]!;
-        if (!replaceExisting && models[model.Key] != null)
+        var entries = (JObject)doc["models"]!;
+        foreach (var model in batch)
         {
-            throw new InvalidOperationException(
-                "Model already exists: " + model.Key + ". Explicit replacement confirmation required."
-            );
+            var existing = entries[model.Key] as JObject;
+            if (existing != null && !replaceExisting)
+            {
+                throw new InvalidOperationException(
+                    "Model already exists: " + model.Key + ". Explicit replacement confirmation required."
+                );
+            }
+
+            if (existing != null && ((int?)existing["scope"] ?? 0) != (int)model.Scope)
+            {
+                throw new InvalidOperationException(
+                    "Key " + model.Key + " already holds a model of another scope; use a separate library."
+                );
+            }
+
+            if (InspectionStore.Hash(model.CopyModel()) != model.Sha256)
+            {
+                throw new ArgumentException("Model hash mismatch: " + model.Key, nameof(models));
+            }
         }
 
-        var bytes = model.CopyModel();
-        if (InspectionStore.Hash(bytes) != model.Sha256)
+        var provenance = provenanceJson == null ? new JObject() : JObject.Parse(provenanceJson);
+        foreach (var model in batch)
         {
-            throw new ArgumentException("Model hash mismatch.", nameof(model));
+            WriteBlob(id, model.CopyModel(), model.Sha256);
+            var entry = Metadata(model);
+            entry["provenance"] = provenance.DeepClone();
+            entries[model.Key] = entry;
         }
 
-        WriteBlob(id, bytes, model.Sha256);
-        var entry = Metadata(model);
-        entry["provenance"] = provenanceJson == null ? new JObject() : JObject.Parse(provenanceJson);
-        models[model.Key] = entry;
         doc["revision"] = expectedRevision + 1;
         Publish(doc, expectedRevision);
         return expectedRevision + 1;
@@ -280,7 +317,8 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             (int)entry["margin"]!,
             (int)entry["stride"]!,
             (int)entry["minimum_area"]!,
-            (string?)entry["calibration"] ?? ""
+            (string?)entry["calibration"] ?? "",
+            (EAnomalyModelScope)((int?)entry["scope"] ?? 0)
         );
     }
 
@@ -300,6 +338,7 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             { "stride", model.Stride },
             { "minimum_area", model.MinimumArea },
             { "calibration", model.Calibration },
+            { "scope", (int)model.Scope },
         };
     }
 

@@ -366,6 +366,18 @@ public sealed class LabelInspectionControl : UserControl
             }
         );
         _tips.SetToolTip(anomaly, "质量方法B：用良品图为ROI训练局部块异常模型，按版本发布并绑定到ROI");
+        var characterAnomaly = library.AddButton(
+            "字符异常模型(B)",
+            () =>
+            {
+                EnsureIdle();
+                OpenCharacterAnomalyBuilder();
+            }
+        );
+        _tips.SetToolTip(
+            characterAnomaly,
+            "质量方法B逐字符模式：从多张良品图提取字符、核对身份，每个字符用多个样本训练模型，适合内容可变的文字"
+        );
         _idleOnly.Add(library);
 
         _clear.Click += (_, _) =>
@@ -1246,6 +1258,61 @@ public sealed class LabelInspectionControl : UserControl
                     .Select(r =>
                         published.Regions.Contains(r.Name)
                             ? r.WithAnomaly(new AnomalySettings(published.LibraryId, published.Revision))
+                                .WithTasks(
+                                    new RoiInspectionTasks(r.Tasks.ReadData, r.Tasks.CheckQuality, true)
+                                )
+                            : r
+                    )
+                    .ToArray()
+            );
+        }
+    }
+
+    private void OpenCharacterAnomalyBuilder()
+    {
+        if (_anomalyManager == null || _anomalyTrainer == null)
+        {
+            throw new InvalidOperationException("宿主尚未连接异常模型库管理器及训练实现。");
+        }
+
+        using var form = new Form
+        {
+            Text = "字符异常模型制作（质量方法B·逐字符）· 多图提取、每字多样本",
+            Width = 1200,
+            Height = 800,
+            StartPosition = FormStartPosition.CenterParent,
+        };
+        var builder = new CharacterAnomalyBuilderControl();
+        builder.AttachServices(_anomalyManager, _anomalyTrainer, _engine as IGlyphCandidateService);
+        builder.SetRegions(_regions);
+        if (_actual != null)
+        {
+            builder.AddImage(_actual, "当前图像");
+        }
+
+        form.Controls.Add(builder);
+        form.ShowDialog(FindForm());
+        if (
+            builder.LastPublished is { } published
+            && MessageBox.Show(
+                this,
+                $"已发布字符模型库版本 r{published.Revision}。是否把文字ROI（{string.Join("、", published.Regions)}）绑定到该版本、选择逐字符模式并启用B异常检测？",
+                "绑定字符异常模型",
+                MessageBoxButtons.YesNo
+            ) == DialogResult.Yes
+        )
+        {
+            SetRegions(
+                _regions
+                    .Select(r =>
+                        published.Regions.Contains(r.Name) && r.Kind == ERegionKind.Text
+                            ? r.WithAnomaly(
+                                    new AnomalySettings(
+                                        published.LibraryId,
+                                        published.Revision,
+                                        perCharacter: true
+                                    )
+                                )
                                 .WithTasks(
                                     new RoiInspectionTasks(r.Tasks.ReadData, r.Tasks.CheckQuality, true)
                                 )
