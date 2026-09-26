@@ -63,13 +63,15 @@ python -m venv .venv; .\.venv\Scripts\Activate.ps1
 pip install -r tools\DP.LabelInspection.AnomalyBenchmark\python\requirements.txt
 #    GPU可选，按 https://pytorch.org 选择对应的torch安装命令；首次运行anomalib会下载预训练骨干网络。
 
-# 2. 先用合成标签检查整条流程（约几分钟）：
+# 2. 先用合成标签检查整条流程（CPU上anomalib约15–20分钟，GPU上约1分钟；只查流程可加 -SkipAnomalib）：
 .\tools\DP.LabelInspection.AnomalyBenchmark\run.ps1 -Synthetic -Out D:\bench-synth
 
 # 3. 实拍标签：
 .\tools\DP.LabelInspection.AnomalyBenchmark\run.ps1 -Config D:\labels\bench.json -Out D:\bench-out
 ```
 
+anomalib在CPU上较慢（合成标签1288个字符：PatchCore约6分钟、PaDiM约11分钟，主要是PaDiM每次留一都要对每个特征位置求逆协方差），
+有GPU时会自动使用；也可 `-AnomalibArgs "--size 128"` 缩小输入（更快，特征更粗）。
 `-SkipAnomalib`、`-SkipHalcon` 跳过对应方法；`-AnomalibArgs "--size 128 --methods patchcore"` 传参数给anomalib脚本。
 HALCON部分需要环境变量 `HALCONROOT`（与仓库中其他HALCON工具相同，引用 `bin/dotnet35/halcondotnet.dll`）。
 
