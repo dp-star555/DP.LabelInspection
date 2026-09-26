@@ -194,7 +194,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     /// <param name = "expectedRevision">调用方基于的版本，过期修改会被拒绝。</param>
     /// <param name = "character">大小写敏感的独立字符标签。</param>
     /// <param name = "image">独立不可变参考图块。</param>
-    /// <param name = "binarization">二值化模式：otsu自动阈值或fixed固定阈值。</param>
+    /// <param name = "binarization">二值化模式：otsu自动阈值、fixed固定阈值或midpoint墨色/纸色中点阈值。</param>
     /// <param name = "provenanceJson">可选来源证据JSON。</param>
     public int PutGlyph(
         string id,
@@ -591,6 +591,82 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
             }.ToString()
         );
     }
+
+    /// <summary>
+    /// 追加单个ROI的人工判定，不替换算法判定，也不修改整任务反馈。
+    /// 用于标注算法在哪个ROI上误判，供样本导出和后续训练/评估使用。
+    /// </summary>
+    /// <param name = "jobId">已完成任务标识。</param>
+    /// <param name = "regionName">该任务配方中存在的ROI名称。</param>
+    /// <param name = "verdict">人工判定，只接受OK、NG或REVIEW。</param>
+    /// <param name = "comment">人工说明，最多4000字符。</param>
+    /// <param name = "author">反馈作者标识，最多200字符。</param>
+    public void AddRegionFeedback(
+        string jobId,
+        string regionName,
+        string verdict,
+        string comment,
+        string author
+    )
+    {
+        if (verdict != "OK" && verdict != "NG" && verdict != "REVIEW")
+        {
+            throw new ArgumentException("Invalid human verdict.");
+        }
+
+        if (comment.Length > 4000 || author.Length > 200)
+        {
+            throw new ArgumentException("Feedback too long.");
+        }
+
+        string root = JobPath(jobId);
+        if (!File.Exists(Path.Combine(root, "manifest.json")))
+        {
+            throw new DirectoryNotFoundException();
+        }
+
+        var recipe = DeserializeRecipe(File.ReadAllText(Path.Combine(root, "recipe.json")));
+        if (!recipe.Regions.Any(r => r.Name == regionName))
+        {
+            throw new ArgumentException("ROI not in the job's recipe.", nameof(regionName));
+        }
+
+        string dir = Path.Combine(root, "feedback");
+        Directory.CreateDirectory(dir);
+        WriteNew(
+            Path.Combine(dir, Guid.NewGuid().ToString("N") + ".json"),
+            new JObject
+            {
+                { "utc", DateTimeOffset.UtcNow.ToString("O") },
+                { "region", regionName },
+                { "verdict", verdict },
+                { "comment", comment },
+                { "author", author },
+            }.ToString()
+        );
+    }
+
+    /// <summary>已完成任务（含清单）的目录，按任务标识排序；供样本导出等只读工具使用。</summary>
+    internal IReadOnlyList<string> CompletedJobDirectories()
+    {
+        string root = Path.Combine(_root, "jobs");
+        if (!Directory.Exists(root))
+        {
+            return Array.Empty<string>();
+        }
+
+        return Directory
+            .GetDirectories(root)
+            .Where(p =>
+                Guid.TryParseExact(Path.GetFileName(p), "N", out _)
+                && File.Exists(Path.Combine(p, "manifest.json"))
+            )
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>注入的图像编解码器，供同一存储的只读工具解码保存的原图。</summary>
+    internal IImageCodec Codec => _codec;
 
     /// <summary>将已完成任务的不可变快照导出到新ZIP文件。</summary>
     /// <param name = "jobId">已完成任务标识，须存在完整清单。</param>

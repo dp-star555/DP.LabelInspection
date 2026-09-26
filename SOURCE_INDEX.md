@@ -6,6 +6,7 @@
 
 | 类型实现 | 源文件 |
 |---|---|
+| `AnomalyDemo` | [samples/DP.LabelInspection.Demo.WinForms/Runner/AnomalyDemo.cs](samples/DP.LabelInspection.Demo.WinForms/Runner/AnomalyDemo.cs) |
 | `UiInteractionProbe` | [samples/DP.LabelInspection.Demo.WinForms/Interaction/UiInteractionProbe.cs](samples/DP.LabelInspection.Demo.WinForms/Interaction/UiInteractionProbe.cs) |
 | `Program` | [samples/DP.LabelInspection.Demo.WinForms/Runner/Program.cs](samples/DP.LabelInspection.Demo.WinForms/Runner/Program.cs) |
 | `Program` | [samples/DP.LabelInspection.Demo.Wpf/Runner/Program.cs](samples/DP.LabelInspection.Demo.Wpf/Runner/Program.cs) |
@@ -90,6 +91,8 @@
 | `OpenCvQrPrintInspector` | [src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs](src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs) |
 | `ZxingBarcodeDecoder` | [src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs](src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs) |
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
+| `RegionAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs) |
+| `RegionAnomalyResult` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs) |
 | `OpenCvImageCodec` | [src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs](src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs) |
 | `OpenCvInspectionBackend.LegacyComparer` | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacyComparer.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacyComparer.cs) |
 | `OpenCvInspectionBackend.LegacySegmenter` | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacySegmenter.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacySegmenter.cs) |
@@ -108,6 +111,7 @@
 | `InspectionStore.FrameConverter` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/FrameConverter.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/FrameConverter.cs) |
 | `InspectionStore.RecipeResolver` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RecipeResolver.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RecipeResolver.cs) |
 | `InspectionStore.RectConverter` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RectConverter.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RectConverter.cs) |
+| `SampleExporter` | [src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs](src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs) |
 | `LabelInspectionControl` | [src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs](src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs) |
 | `WpfInspectionCompletedEventArgs` | [src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs](src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs) |
 | `CanvasGeometryLayer` | [src/DP.LabelInspection/Canvas/CanvasGeometryLayer.cs](src/DP.LabelInspection/Canvas/CanvasGeometryLayer.cs) |
@@ -141,6 +145,7 @@
 | `AlgorithmIsolationTests.QrProbe` | [tests/DP.LabelInspection.Tests/Architecture/TestDoubles/AlgorithmIsolationTests/QrProbe.cs](tests/DP.LabelInspection.Tests/Architecture/TestDoubles/AlgorithmIsolationTests/QrProbe.cs) |
 | `VisionAdapterTests` | [tests/DP.LabelInspection.Tests/Architecture/VisionAdapterTests.cs](tests/DP.LabelInspection.Tests/Architecture/VisionAdapterTests.cs) |
 | `BarcodeEvidenceGroupTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodeEvidenceGroupTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodeEvidenceGroupTests.cs) |
+| `RegionAnomalyTests` | [tests/DP.LabelInspection.Tests/Anomaly/RegionAnomalyTests.cs](tests/DP.LabelInspection.Tests/Anomaly/RegionAnomalyTests.cs) |
 | `CodeRepairTests` | [tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs](tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs) |
 | `BarcodePrintTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs) |
 | `BarcodeReadabilityTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs) |
@@ -160,6 +165,7 @@
 | `GlyphDraftSessionTests.Store` | [tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphDraftSessionTests/Store.cs](tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphDraftSessionTests/Store.cs) |
 | `GlyphQuickLibraryTests.GateBackend` | [tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/GateBackend.cs](tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/GateBackend.cs) |
 | `GlyphQuickLibraryTests.Store` | [tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/Store.cs](tests/DP.LabelInspection.Tests/Libraries/TestDoubles/GlyphQuickLibraryTests/Store.cs) |
+| `GlyphBinarizationTests` | [tests/DP.LabelInspection.Tests/Text/GlyphBinarizationTests.cs](tests/DP.LabelInspection.Tests/Text/GlyphBinarizationTests.cs) |
 | `IndependentTextQualityTests` | [tests/DP.LabelInspection.Tests/Text/IndependentTextQualityTests.cs](tests/DP.LabelInspection.Tests/Text/IndependentTextQualityTests.cs) |
 | `IndependentTextQualityTests.Strategy` | [tests/DP.LabelInspection.Tests/Text/TestDoubles/IndependentTextQualityTests/Strategy.cs](tests/DP.LabelInspection.Tests/Text/TestDoubles/IndependentTextQualityTests/Strategy.cs) |
 | `TextRecognitionTests.FakeRecognizer` | [tests/DP.LabelInspection.Tests/Text/TestDoubles/TextRecognitionTests/FakeRecognizer.cs](tests/DP.LabelInspection.Tests/Text/TestDoubles/TextRecognitionTests/FakeRecognizer.cs) |

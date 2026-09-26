@@ -347,6 +347,61 @@ public sealed partial class FullInspectionTests
         Assert.AreEqual(report.Verdict.ToString(), (string?)temp.Store.History().Single()["verdict"]);
     }
 
+    /// <summary>逐ROI样本导出：裁图、算法判定、缺陷框（裁图坐标）与ROI人工判定一一对应。</summary>
+    [TestMethod]
+    public void SamplesCarryRegionVerdictsAndDefectBoxes()
+    {
+        using var temp = new TempStore();
+        using var raw = new Mat(40, 60, MatType.CV_8UC1, Scalar.All(255));
+        Cv2.PutText(raw, "A", new Point(3, 31), HersheyFonts.HersheySimplex, 1, Scalar.All(0), 2);
+        var frame = Frame(raw);
+        using var backend = new OpenCvInspectionBackend();
+        using var engine = new InspectionEngine(backend);
+        var request = new InspectionRequest(
+            frame,
+            new InspectionRecipe(
+                "samples",
+                60,
+                40,
+                EInspectionMode.Free,
+                EAlignmentMode.AssumeAligned,
+                new[]
+                {
+                    new InspectionRegion("ink", ERegionKind.Blank, new PixelRect(0, 0, 30, 40)),
+                    new InspectionRegion("clean", ERegionKind.Blank, new PixelRect(30, 0, 30, 40)),
+                }
+            )
+        );
+        string id = temp.Store.SaveReport(request, engine.Inspect(request));
+        temp.Store.AddRegionFeedback(id, "ink", "OK", "operator released", "test");
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            temp.Store.AddRegionFeedback(id, "none", "OK", "", "test")
+        );
+
+        string output = Path.Combine(temp.Path, "samples");
+        Assert.AreEqual(2, new SampleExporter(temp.Store).Export(output, 4));
+        Assert.ThrowsExactly<IOException>(() => new SampleExporter(temp.Store).Export(output));
+        var lines = File.ReadAllLines(Path.Combine(output, "index.jsonl")).Select(JObject.Parse).ToArray();
+        var ink = lines.Single(l => (string?)l["region"] == "ink");
+        var clean = lines.Single(l => (string?)l["region"] == "clean");
+        Assert.AreEqual("NG", (string?)ink["algorithm"]);
+        Assert.AreEqual("OK", (string?)ink["humanRegion"]);
+        Assert.AreEqual("OK", (string?)ink["label"]);
+        var box = (JArray)((JArray)ink["defects"]!).First()["box"]!;
+        Assert.IsTrue((int)box[0] >= 0 && (int)box[0] + (int)box[2] <= 34, box.ToString());
+        Assert.AreEqual("OK", (string?)clean["algorithm"]);
+        Assert.AreEqual(JTokenType.Null, clean["label"]!.Type);
+        CollectionAssert.AreEqual(
+            new[] { 26, 0, 34, 40 },
+            ((JArray)clean["bounds"]!).Select(v => (int)v).ToArray()
+        );
+        Assert.IsTrue(File.Exists(Path.Combine(output, (string)ink["file"]!)));
+        Assert.AreEqual(
+            2,
+            (int)JObject.Parse(File.ReadAllText(Path.Combine(output, "manifest.json")))["samples"]!
+        );
+    }
+
     /// <summary>并发编辑不能覆盖已发布版本。</summary>
     [TestMethod]
     public void ConcurrentWritersPublishOnlyOneRevision()

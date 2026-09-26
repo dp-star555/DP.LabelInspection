@@ -25,7 +25,7 @@ public sealed class GlyphReference
             || image.Height < 4
             || image.Width > 512
             || image.Height > 512
-            || (binarization != "otsu" && binarization != "fixed")
+            || (binarization != "otsu" && binarization != "fixed" && binarization != "midpoint")
         )
         {
             throw new ArgumentException("Invalid glyph reference.");
