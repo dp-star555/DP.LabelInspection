@@ -110,6 +110,14 @@ internal static class Program
             store.AnomalyLibraries,
             cnn == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(cnn)
         );
+        control.AttachAnomalyTrainingProjects(
+            (session, path) => AnomalyTrainingProject.Save(session, path, codec),
+            (path, regions) =>
+            {
+                var session = AnomalyTrainingProject.Load(path, codec, regions, out var excluded);
+                return (session, excluded);
+            }
+        );
         InspectionEngine engine = new InspectionEngine(
             new OpenCvInspectionBackend(
                 libraries: store,

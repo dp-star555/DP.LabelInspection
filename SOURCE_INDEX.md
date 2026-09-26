@@ -69,6 +69,7 @@
 | `IAnomalyLibraryManager` | [src/DP.LabelInspection.Contracts/Libraries/Anomaly/IAnomalyLibraryManager.cs](src/DP.LabelInspection.Contracts/Libraries/Anomaly/IAnomalyLibraryManager.cs) |
 | `IAnomalyLibraryRepository` | [src/DP.LabelInspection.Contracts/Libraries/Anomaly/IAnomalyLibraryRepository.cs](src/DP.LabelInspection.Contracts/Libraries/Anomaly/IAnomalyLibraryRepository.cs) |
 | `IAnomalyModelTrainer` | [src/DP.LabelInspection.Contracts/Libraries/Anomaly/IAnomalyModelTrainer.cs](src/DP.LabelInspection.Contracts/Libraries/Anomaly/IAnomalyModelTrainer.cs) |
+| `RegionAnomalySample` | [src/DP.LabelInspection.Contracts/Libraries/Anomaly/RegionAnomalySample.cs](src/DP.LabelInspection.Contracts/Libraries/Anomaly/RegionAnomalySample.cs) |
 | `GlyphLibrarySnapshot` | [src/DP.LabelInspection.Contracts/Libraries/GlyphLibrarySnapshot.cs](src/DP.LabelInspection.Contracts/Libraries/GlyphLibrarySnapshot.cs) |
 | `GlyphReference` | [src/DP.LabelInspection.Contracts/Libraries/GlyphReference.cs](src/DP.LabelInspection.Contracts/Libraries/GlyphReference.cs) |
 | `IGlyphLibraryManager` | [src/DP.LabelInspection.Contracts/Libraries/IGlyphLibraryManager.cs](src/DP.LabelInspection.Contracts/Libraries/IGlyphLibraryManager.cs) |
@@ -91,6 +92,11 @@
 | `CharacterSegmentation` | [src/DP.LabelInspection.Contracts/Text/Segmentation/CharacterSegmentation.cs](src/DP.LabelInspection.Contracts/Text/Segmentation/CharacterSegmentation.cs) |
 | `ICharacterSegmenter` | [src/DP.LabelInspection.Contracts/Text/Segmentation/ICharacterSegmenter.cs](src/DP.LabelInspection.Contracts/Text/Segmentation/ICharacterSegmenter.cs) |
 | `IGlyphCandidateSegmenter` | [src/DP.LabelInspection.Contracts/Text/Segmentation/IGlyphCandidateSegmenter.cs](src/DP.LabelInspection.Contracts/Text/Segmentation/IGlyphCandidateSegmenter.cs) |
+| `AnomalyTrainingImage` | [src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingImage.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingImage.cs) |
+| `AnomalyTrainingModel` | [src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingModel.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingModel.cs) |
+| `AnomalyTrainingSample` | [src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSample.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSample.cs) |
+| `AnomalyTrainingSession` | [src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSession.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSession.cs) |
+| `EAnomalyTrainingKind` | [src/DP.LabelInspection.Core/Libraries/Anomaly/EAnomalyTrainingKind.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/EAnomalyTrainingKind.cs) |
 | `InspectionEngine` | [src/DP.LabelInspection.Core/Inspection/InspectionEngine.cs](src/DP.LabelInspection.Core/Inspection/InspectionEngine.cs) |
 | `RequiredAppearancePolicy` | [src/DP.LabelInspection.Core/Inspection/RequiredAppearancePolicy.cs](src/DP.LabelInspection.Core/Inspection/RequiredAppearancePolicy.cs) |
 | `RoiWorkflow` | [src/DP.LabelInspection.Core/Inspection/RoiWorkflow.cs](src/DP.LabelInspection.Core/Inspection/RoiWorkflow.cs) |
@@ -130,6 +136,7 @@
 | `InspectionStore.RecipeResolver` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RecipeResolver.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RecipeResolver.cs) |
 | `InspectionStore.RectConverter` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RectConverter.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/RectConverter.cs) |
 | `AnomalyLibraryStore` | [src/DP.LabelInspection.Storage/Persistence/AnomalyLibraryStore.cs](src/DP.LabelInspection.Storage/Persistence/AnomalyLibraryStore.cs) |
+| `AnomalyTrainingProject` | [src/DP.LabelInspection.Storage/Persistence/AnomalyTrainingProject.cs](src/DP.LabelInspection.Storage/Persistence/AnomalyTrainingProject.cs) |
 | `SampleExporter` | [src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs](src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs) |
 | `LabelInspectionControl` | [src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs](src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs) |
 | `WpfInspectionCompletedEventArgs` | [src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs](src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs) |
@@ -151,9 +158,7 @@
 | `GlyphLibraryControl` | [src/DP.LabelInspection/Libraries/GlyphLibraryControl.cs](src/DP.LabelInspection/Libraries/GlyphLibraryControl.cs) |
 | `AnomalyLibraryControl` | [src/DP.LabelInspection/Libraries/AnomalyLibraryControl.cs](src/DP.LabelInspection/Libraries/AnomalyLibraryControl.cs) |
 | `AnomalyLibraryControl.RegionItem` | [src/DP.LabelInspection/Libraries/Internal/AnomalyLibraryControl/RegionItem.cs](src/DP.LabelInspection/Libraries/Internal/AnomalyLibraryControl/RegionItem.cs) |
-| `CharacterAnomalyBuilderControl` | [src/DP.LabelInspection/Libraries/CharacterAnomalyBuilderControl.cs](src/DP.LabelInspection/Libraries/CharacterAnomalyBuilderControl.cs) |
-| `CharacterAnomalyBuilderControl.LineCandidate` | [src/DP.LabelInspection/Libraries/Internal/CharacterAnomalyBuilderControl/LineCandidate.cs](src/DP.LabelInspection/Libraries/Internal/CharacterAnomalyBuilderControl/LineCandidate.cs) |
-| `CharacterAnomalyBuilderControl.RegionChoice` | [src/DP.LabelInspection/Libraries/Internal/CharacterAnomalyBuilderControl/RegionChoice.cs](src/DP.LabelInspection/Libraries/Internal/CharacterAnomalyBuilderControl/RegionChoice.cs) |
+| `AnomalyBatchTrainingControl` | [src/DP.LabelInspection/Libraries/AnomalyBatchTrainingControl.cs](src/DP.LabelInspection/Libraries/AnomalyBatchTrainingControl.cs) |
 | `UiText` | [src/DP.LabelInspection/Localization/UiText.cs](src/DP.LabelInspection/Localization/UiText.cs) |
 | `InspectionCompletedEventArgs` | [src/DP.LabelInspection/Workbench/InspectionCompletedEventArgs.cs](src/DP.LabelInspection/Workbench/InspectionCompletedEventArgs.cs) |
 | `LabelInspectionControl` | [src/DP.LabelInspection/Workbench/LabelInspectionControl.cs](src/DP.LabelInspection/Workbench/LabelInspectionControl.cs) |
@@ -173,6 +178,8 @@
 | `AnomalyLibraryTests` | [tests/DP.LabelInspection.Tests/Anomaly/AnomalyLibraryTests.cs](tests/DP.LabelInspection.Tests/Anomaly/AnomalyLibraryTests.cs) |
 | `CharacterAnomalyTests` | [tests/DP.LabelInspection.Tests/Anomaly/CharacterAnomalyTests.cs](tests/DP.LabelInspection.Tests/Anomaly/CharacterAnomalyTests.cs) |
 | `CharacterAnomalyTests.ScriptedRecognizer` | [tests/DP.LabelInspection.Tests/Anomaly/TestDoubles/CharacterAnomalyTests/ScriptedRecognizer.cs](tests/DP.LabelInspection.Tests/Anomaly/TestDoubles/CharacterAnomalyTests/ScriptedRecognizer.cs) |
+| `AnomalyTrainingSessionTests` | [tests/DP.LabelInspection.Tests/Anomaly/AnomalyTrainingSessionTests.cs](tests/DP.LabelInspection.Tests/Anomaly/AnomalyTrainingSessionTests.cs) |
+| `AnomalyTrainingSessionTests.Candidates` | [tests/DP.LabelInspection.Tests/Anomaly/TestDoubles/AnomalyTrainingSessionTests/Candidates.cs](tests/DP.LabelInspection.Tests/Anomaly/TestDoubles/AnomalyTrainingSessionTests/Candidates.cs) |
 | `CodeRepairTests` | [tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs](tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs) |
 | `BarcodePrintTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs) |
 | `BarcodeReadabilityTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs) |

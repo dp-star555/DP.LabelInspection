@@ -24,6 +24,22 @@
       },
       "dp.labelinspection.contracts": {
         "type": "Project"
+      },
+      "dp.labelinspection.core": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.vision": {
+        "type": "Project"
+      },
+      "dp.vision.algorithms": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision": "[0.1.0-preview.2, )"
+        }
       }
     }
   }

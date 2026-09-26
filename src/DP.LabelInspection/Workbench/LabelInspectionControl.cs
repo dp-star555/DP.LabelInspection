@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using DP.LabelInspection.Contracts;
+using DP.LabelInspection.Core;
 
 namespace DP.LabelInspection;
 
@@ -365,18 +366,18 @@ public sealed class LabelInspectionControl : UserControl
                 OpenAnomalyLibrary();
             }
         );
-        _tips.SetToolTip(anomaly, "质量方法B：用良品图为ROI训练局部块异常模型，按版本发布并绑定到ROI");
-        var characterAnomaly = library.AddButton(
-            "字符异常模型(B)",
+        _tips.SetToolTip(anomaly, "质量方法B：管理异常模型库（版本、导入导出、归档），也可按ROI快速训练");
+        var batch = library.AddButton(
+            "批量训练(B)",
             () =>
             {
                 EnsureIdle();
-                OpenCharacterAnomalyBuilder();
+                OpenBatchTraining();
             }
         );
         _tips.SetToolTip(
-            characterAnomaly,
-            "质量方法B逐字符模式：从多张良品图提取字符、核对身份，每个字符用多个样本训练模型，适合内容可变的文字"
+            batch,
+            "质量方法B：多张良品图、每图框多个样本，整ROI与逐字符模型一次训练并作为一个版本发布，可保存采集下次继续"
         );
         _idleOnly.Add(library);
 
@@ -1288,58 +1289,109 @@ public sealed class LabelInspectionControl : UserControl
         }
     }
 
-    private void OpenCharacterAnomalyBuilder()
+    private AnomalyBatchTrainingControl? _batch;
+    private Action<AnomalyTrainingSession, string>? _saveTraining;
+    private Func<
+        string,
+        IReadOnlyList<InspectionRegion>,
+        (AnomalyTrainingSession, IReadOnlyDictionary<AnomalyTrainingSample, int[]>)
+    >? _loadTraining;
+
+    /// <summary>连接批量训练采集的保存与打开（宿主用存储实现，参数为会话/文件路径及当前配方ROI）。</summary>
+    /// <param name = "save">保存采集。</param>
+    /// <param name = "load">打开采集，返回会话及各逐字符样本保存时取消的字符序号。</param>
+    public void AttachAnomalyTrainingProjects(
+        Action<AnomalyTrainingSession, string> save,
+        Func<
+            string,
+            IReadOnlyList<InspectionRegion>,
+            (AnomalyTrainingSession, IReadOnlyDictionary<AnomalyTrainingSample, int[]>)
+        > load
+    )
+    {
+        _saveTraining = save ?? throw new ArgumentNullException(nameof(save));
+        _loadTraining = load ?? throw new ArgumentNullException(nameof(load));
+    }
+
+    private void OpenBatchTraining()
     {
         if (_anomalyManager == null || _anomalyTrainer == null)
         {
             throw new InvalidOperationException("宿主尚未连接异常模型库管理器及训练实现。");
         }
 
-        using var form = new Form
+        // 训练页在本控件生命周期内保留，关闭窗口不丢失已载入的图和框。
+        if (_batch == null)
         {
-            Text = "字符异常模型制作（质量方法B·逐字符）· 多图提取、每字多样本",
-            Width = 1200,
-            Height = 800,
-            StartPosition = FormStartPosition.CenterParent,
-        };
-        var builder = new CharacterAnomalyBuilderControl();
-        builder.AttachServices(_anomalyManager, _anomalyTrainer, _engine as IGlyphCandidateService);
-        builder.SetRegions(_regions);
-        if (_actual != null)
-        {
-            builder.AddImage(_actual, "当前图像");
+            _batch = new AnomalyBatchTrainingControl();
+            _batch.AttachServices(_anomalyManager, _anomalyTrainer, _engine as IGlyphCandidateService);
+            if (_actual != null)
+            {
+                _batch.AddImage(_actual, "当前图像");
+            }
         }
 
-        form.Controls.Add(builder);
-        form.ShowDialog(FindForm());
+        if (_saveTraining != null && _loadTraining != null)
+        {
+            var load = _loadTraining;
+            _batch.SaveProjectHandler = _saveTraining;
+            _batch.LoadProjectHandler = path => load(path, _regions.ToArray());
+        }
+
+        _batch.SetRecipe(_regions);
+        var before = _batch.LastPublished;
+        using (
+            var form = new Form
+            {
+                Text = "异常模型批量训练（质量方法B）· 多图多框、一次训练",
+                Width = 1400,
+                Height = 900,
+                StartPosition = FormStartPosition.CenterParent,
+            }
+        )
+        {
+            form.Controls.Add(_batch);
+            try
+            {
+                form.ShowDialog(FindForm());
+            }
+            finally
+            {
+                form.Controls.Remove(_batch);
+            }
+        }
+
+        if (_batch.LastPublished is not { } published || Equals(published, before))
+        {
+            return;
+        }
+
+        var bound = _batch.Session.Bindings(published.LibraryId, published.Revision);
+        if (bound.Count == 0)
+        {
+            return;
+        }
+
+        var resized = bound
+            .Where(b => !_regions.Single(r => r.Name == b.Name).Bounds.Equals(b.Bounds))
+            .Select(b => $"{b.Name}→{b.Bounds.Width}×{b.Bounds.Height}")
+            .ToArray();
         if (
-            builder.LastPublished is { } published
-            && MessageBox.Show(
+            MessageBox.Show(
                 this,
-                $"已发布字符模型库版本 r{published.Revision}。是否把文字ROI（{string.Join("、", published.Regions)}）绑定到该版本、选择逐字符模式并启用B异常检测？",
-                "绑定字符异常模型",
+                $"已发布模型库版本 r{published.Revision}。是否把以下配方ROI绑定到该版本并启用B异常检测：{string.Join("、", bound.Select(b => b.Name))}？"
+                    + (
+                        resized.Length == 0
+                            ? ""
+                            : $"\r\n内容固定模型的尺寸与配方不同，将按中心改为模型尺寸：{string.Join("、", resized)}"
+                    ),
+                "绑定异常模型",
                 MessageBoxButtons.YesNo
             ) == DialogResult.Yes
         )
         {
-            SetRegions(
-                _regions
-                    .Select(r =>
-                        published.Regions.Contains(r.Name) && r.Kind == ERegionKind.Text
-                            ? r.WithAnomaly(
-                                    new AnomalySettings(
-                                        published.LibraryId,
-                                        published.Revision,
-                                        perCharacter: true
-                                    )
-                                )
-                                .WithTasks(
-                                    new RoiInspectionTasks(r.Tasks.ReadData, r.Tasks.CheckQuality, true)
-                                )
-                            : r
-                    )
-                    .ToArray()
-            );
+            var byName = bound.ToDictionary(b => b.Name, StringComparer.Ordinal);
+            SetRegions(_regions.Select(r => byName.TryGetValue(r.Name, out var b) ? b : r).ToArray());
         }
     }
 
