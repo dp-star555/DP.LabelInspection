@@ -18,6 +18,10 @@ internal static partial class RegionEditor
         {
             ReadData = r.Tasks.ReadData;
             CheckQuality = r.Tasks.CheckQuality;
+            DetectAnomaly = r.Tasks.DetectAnomaly;
+            AnomalyLibraryId = r.Anomaly?.LibraryId;
+            AnomalyLibraryRevision = r.Anomaly?.LibraryRevision;
+            AnomalyModelKey = r.Anomaly?.ModelKey;
             Name = r.Name;
             Kind = r.Kind;
             X = r.Bounds.X;
@@ -58,13 +62,50 @@ internal static partial class RegionEditor
 
         [
             Category("00 检测项目"),
-            DisplayName("检查印刷质量"),
+            DisplayName("A 规则质检（按类型）"),
             TypeConverter(typeof(ChineseBooleanConverter)),
             Description(
-                "选择则必须具备对应类型的质检能力及参考；缺条件直接本ROI NG。未选择不执行质量专用分割/配对/比较。读数正确不代表质量合格；当前ROI失败不影响后续ROI继续。此项是唯一质量项目开关，不再另设条码印刷开关。"
+                "质量方法A：文字按单字库逐字比较，条码按条/空隙或QR模块检查，固定内容与整图参考比较，空白区查污点。选择则必须具备对应类型的质检能力及参考；缺条件直接本ROI NG。未选择不执行质量专用分割/配对/比较。读数正确不代表质量合格；当前ROI失败不影响后续ROI继续。与B可单独或同时启用，同时启用时任一NG即NG。"
             )
         ]
         public bool CheckQuality { get; set; }
+
+        [
+            Category("00 检测项目"),
+            DisplayName("B 局部异常检测（良品模型）"),
+            TypeConverter(typeof(ChineseBooleanConverter)),
+            Description(
+                "质量方法B：只用良品训练的局部块异常检测，适用于文字、条码、固定内容和空白区，不需要OCR或字库。需在“07 异常检测”绑定异常模型库的固定版本，库中须有该ROI的模型（默认按ROI名称）；缺模型、版本不可用或ROI尺寸已变（位置相关模型）时本ROI NG。与A可单独或同时启用，同时启用时任一NG即NG；A应付不了的情况可用B兜底。"
+            )
+        ]
+        public bool DetectAnomaly { get; set; }
+
+        [
+            Category("07 异常检测（方法B）"),
+            DisplayName("异常模型库ID"),
+            Description(
+                "异常模型库标识，不是显示名称。建议通过下方模型库下拉框和“绑定所选异常模型库/版本”设置。ID与版本必须同时指定；清除绑定时两者都清空。"
+            )
+        ]
+        public string? AnomalyLibraryId { get; set; }
+
+        [
+            Category("07 异常检测（方法B）"),
+            DisplayName("异常模型库版本（修订号）"),
+            Description(
+                "大于等于1的整数，固定使用该修订。重新训练或替换模型会发布新修订，不会自动升级此ROI；需重新绑定。"
+            )
+        ]
+        public int? AnomalyLibraryRevision { get; set; }
+
+        [
+            Category("07 异常检测（方法B）"),
+            DisplayName("模型键"),
+            Description(
+                "库内模型的键，留空表示使用本ROI名称（训练时默认按ROI名称保存）。多个ROI内容完全相同时可指向同一模型；位置相关模型要求裁图尺寸与训练一致。"
+            )
+        ]
+        public string? AnomalyModelKey { get; set; }
 
         [
             Category("01 区域位置与类型"),
@@ -328,8 +369,28 @@ internal static partial class RegionEditor
                         ),
                         BarcodeType
                     )
-                    : null
-            ).WithTasks(new RoiInspectionTasks(ReadData, CheckQuality));
+                    : null,
+                Anomaly()
+            ).WithTasks(new RoiInspectionTasks(ReadData, CheckQuality, DetectAnomaly));
+        }
+
+        private AnomalySettings? Anomaly()
+        {
+            if (Kind == ERegionKind.Ignore || string.IsNullOrWhiteSpace(AnomalyLibraryId))
+            {
+                return null;
+            }
+
+            if (AnomalyLibraryRevision == null)
+            {
+                throw new ArgumentException(Name + "：异常模型库ID与版本必须同时指定。");
+            }
+
+            return new AnomalySettings(
+                AnomalyLibraryId!.Trim(),
+                AnomalyLibraryRevision.Value,
+                string.IsNullOrWhiteSpace(AnomalyModelKey) ? null : AnomalyModelKey
+            );
         }
 
         private static string? Empty(string? value)

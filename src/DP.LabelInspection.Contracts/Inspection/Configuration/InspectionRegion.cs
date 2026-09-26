@@ -14,12 +14,14 @@ public sealed class InspectionRegion
     /// <param name = "bounds">原图像素范围。</param>
     /// <param name = "singleLine">是否明确声明水平单行，不是自动检测的多行文本。</param>
     /// <param name = "field">可选内容规则及固定版本的字符类别。</param>
+    /// <param name = "anomaly">可选固定版本异常模型绑定（方法B），适用于除忽略区外的所有类型。</param>
     public InspectionRegion(
         string name,
         ERegionKind kind,
         PixelRect bounds,
         bool singleLine = false,
-        FieldSettings? field = null
+        FieldSettings? field = null,
+        AnomalySettings? anomaly = null
     )
     {
         if (string.IsNullOrWhiteSpace(name) || name.Length > 100)
@@ -52,8 +54,14 @@ public sealed class InspectionRegion
             throw new ArgumentException("Equal cells require text.");
         }
 
+        if (anomaly != null && kind == ERegionKind.Ignore)
+        {
+            throw new ArgumentException("Ignore regions take no anomaly model.", nameof(anomaly));
+        }
+
         Name = name;
         Kind = kind;
+        Anomaly = anomaly;
         Bounds = bounds;
         SingleLine = singleLine;
         Field = field ?? new FieldSettings();
@@ -121,12 +129,33 @@ public sealed class InspectionRegion
             Kind,
             Bounds,
             SingleLine,
-            Kind == ERegionKind.Text || Kind == ERegionKind.Barcode ? Field : null
+            Kind == ERegionKind.Text || Kind == ERegionKind.Barcode ? Field : null,
+            Anomaly
         )
         {
             Tasks = tasks ?? throw new ArgumentNullException(nameof(tasks)),
         };
     }
+
+    /// <summary>复制ROI并替换异常模型绑定（方法B），保留检测项目及其余配置。</summary>
+    /// <param name = "anomaly">新的固定版本绑定；null表示解除绑定。</param>
+    public InspectionRegion WithAnomaly(AnomalySettings? anomaly)
+    {
+        return new InspectionRegion(
+            Name,
+            Kind,
+            Bounds,
+            SingleLine,
+            Kind == ERegionKind.Text || Kind == ERegionKind.Barcode ? Field : null,
+            anomaly
+        )
+        {
+            Tasks = Tasks,
+        };
+    }
+
+    /// <summary>固定版本异常模型绑定（方法B）；未绑定时为null。</summary>
+    public AnomalySettings? Anomaly { get; }
 
     /// <summary>不可变字段规则及固定版本的字库绑定。</summary>
     public FieldSettings Field { get; private set; }

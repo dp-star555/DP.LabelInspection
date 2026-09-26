@@ -92,8 +92,31 @@ internal static class Program
         };
         var control = new LabelInspectionControl { Dock = DockStyle.Fill };
         control.AttachLibraryManager(store);
+        // 方法B（局部块异常检测）：默认手工特征；设置DP_LABEL_ANOMALY_BACKBONE为ONNX骨干网络路径时改用CNN特征训练，
+        // 两种特征的已有模型都可检测。
+        string? backbone = Environment.GetEnvironmentVariable("DP_LABEL_ANOMALY_BACKBONE");
+        using var cnn = string.IsNullOrEmpty(backbone)
+            ? null
+            : new DP.Vision.OpenCv.OpenCvCnnPatchAnomalyDetector(backbone!);
+        var anomalyDetectors = new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>(
+            StringComparer.Ordinal
+        );
+        if (cnn != null)
+        {
+            anomalyDetectors[cnn.FeatureSource] = cnn;
+        }
+
+        control.AttachAnomalyLibraryManager(
+            store.AnomalyLibraries,
+            cnn == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(cnn)
+        );
         InspectionEngine engine = new InspectionEngine(
-            new OpenCvInspectionBackend(libraries: store, barcode: new ZxingBarcodeDecoder()),
+            new OpenCvInspectionBackend(
+                libraries: store,
+                barcode: new ZxingBarcodeDecoder(),
+                anomalyModels: store.AnomalyLibraries,
+                anomalyDetectors: anomalyDetectors
+            ),
             true
         );
         control.AttachEngine(engine);
@@ -143,7 +166,9 @@ internal static class Program
                     store,
                     new ZxingBarcodeDecoder(),
                     detector,
-                    true
+                    true,
+                    anomalyModels: store.AnomalyLibraries,
+                    anomalyDetectors: anomalyDetectors
                 ),
                 true
             );

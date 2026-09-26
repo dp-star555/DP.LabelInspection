@@ -75,6 +75,8 @@ public sealed class LabelInspectionControl : UserControl
         Margin = new Padding(8, 7, 0, 0),
     };
     private IGlyphLibraryManager? _libraryManager;
+    private IAnomalyLibraryManager? _anomalyManager;
+    private IAnomalyModelTrainer? _anomalyTrainer;
     private InspectionOptions _options = new InspectionOptions();
     private IReadOnlyList<FieldBinding> _bindings = Array.Empty<FieldBinding>();
     private TaskDataSnapshot? _taskData;
@@ -216,7 +218,7 @@ public sealed class LabelInspectionControl : UserControl
             () =>
             {
                 EnsureIdle();
-                var edited = RegionEditor.Edit(_regions, _libraryManager);
+                var edited = RegionEditor.Edit(_regions, _libraryManager, _anomalyManager);
                 if (edited != null)
                 {
                     SetRegions(edited);
@@ -355,6 +357,15 @@ public sealed class LabelInspectionControl : UserControl
             }
         );
         _tips.SetToolTip(quick, "从多张图像的字符候选制作单字库新版本");
+        var anomaly = library.AddButton(
+            "异常模型库(B)",
+            () =>
+            {
+                EnsureIdle();
+                OpenAnomalyLibrary();
+            }
+        );
+        _tips.SetToolTip(anomaly, "质量方法B：用良品图为ROI训练局部块异常模型，按版本发布并绑定到ROI");
         _idleOnly.Add(library);
 
         _clear.Click += (_, _) =>
@@ -455,7 +466,8 @@ public sealed class LabelInspectionControl : UserControl
                 old.Kind,
                 new PixelRect(x, y, e.Bounds.Width, e.Bounds.Height),
                 old.SingleLine,
-                old.Kind == ERegionKind.Text || old.Kind == ERegionKind.Barcode ? old.Field : null
+                old.Kind == ERegionKind.Text || old.Kind == ERegionKind.Barcode ? old.Field : null,
+                old.Anomaly
             ).WithTasks(old.Tasks);
             RefreshRegions();
             _status.Message = "ROI已修改；旧检测结果已清除，请重新检测。";
@@ -757,6 +769,19 @@ public sealed class LabelInspectionControl : UserControl
         _libraryManager = manager ?? throw new ArgumentNullException(nameof(manager));
     }
 
+    /// <summary>连接异常模型库（质量方法B）的管理及训练，引擎使用的模型库仍由宿主配置。</summary>
+    /// <param name = "manager">宿主拥有的异常模型库管理器。</param>
+    /// <param name = "trainer">宿主拥有的训练实现；null时只能管理、导入导出。</param>
+    public void AttachAnomalyLibraryManager(
+        IAnomalyLibraryManager manager,
+        IAnomalyModelTrainer? trainer = null
+    )
+    {
+        EnsureIdle();
+        _anomalyManager = manager ?? throw new ArgumentNullException(nameof(manager));
+        _anomalyTrainer = trainer;
+    }
+
     /// <summary>捕获当前不可变输入及配置，供持久化或无界面使用。</summary>
     public InspectionRequest CreateRequest()
     {
@@ -926,7 +951,8 @@ public sealed class LabelInspectionControl : UserControl
                         r.Bounds.Height
                     ),
                     r.SingleLine,
-                    r.Kind == ERegionKind.Text || r.Kind == ERegionKind.Barcode ? r.Field : null
+                    r.Kind == ERegionKind.Text || r.Kind == ERegionKind.Barcode ? r.Field : null,
+                    r.Anomaly
                 ).WithTasks(r.Tasks)
             )
             .ToArray();
@@ -1178,6 +1204,56 @@ public sealed class LabelInspectionControl : UserControl
 
         form.Controls.Add(editor);
         form.ShowDialog(FindForm());
+    }
+
+    private void OpenAnomalyLibrary()
+    {
+        if (_anomalyManager == null)
+        {
+            throw new InvalidOperationException("宿主尚未连接异常模型库管理器。");
+        }
+
+        using var form = new Form
+        {
+            Text = "异常模型库（质量方法B）· 良品训练、按版本绑定",
+            Width = 1080,
+            Height = 700,
+            StartPosition = FormStartPosition.CenterParent,
+        };
+        var editor = new AnomalyLibraryControl();
+        editor.AttachManager(_anomalyManager, _anomalyTrainer);
+        editor.SetRegions(_regions);
+        if (_actual != null && (LastReport?.Verdict == EInspectionVerdict.Ok))
+        {
+            // 最近一次检测为OK的当前图可直接作为一张良品；其余良品图在窗口中添加。
+            editor.AddGoodImage(_actual);
+        }
+
+        form.Controls.Add(editor);
+        form.ShowDialog(FindForm());
+        if (
+            editor.LastPublished is { } published
+            && MessageBox.Show(
+                this,
+                $"已发布模型库版本 r{published.Revision}。是否把训练的ROI（{string.Join("、", published.Regions)}）绑定到该版本并启用B异常检测？",
+                "绑定异常模型",
+                MessageBoxButtons.YesNo
+            ) == DialogResult.Yes
+        )
+        {
+            SetRegions(
+                _regions
+                    .Select(r =>
+                        published.Regions.Contains(r.Name)
+                            ? r.WithAnomaly(new AnomalySettings(published.LibraryId, published.Revision))
+                                .WithTasks(
+                                    new RoiInspectionTasks(r.Tasks.ReadData, r.Tasks.CheckQuality, true)
+                                )
+                            : r
+                    )
+                    .ToArray()
+            );
+        }
     }
 
     private static void AddAction(Control parent, string text, Action action)

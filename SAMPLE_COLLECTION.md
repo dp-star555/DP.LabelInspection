@@ -31,7 +31,8 @@
 
 ## 方案B接入点
 
-模型实现作为现有可替换接口的另一种实现接入，不改配方、流程和报告：
+局部块异常检测已作为质量方法B接入配方与流程（ROI的B开关+固定版本异常模型库，见`ANOMALY_DETECTION.md`）；样本集中的良品裁图可直接用于训练和阈值验收。
+其他训练式模型可作为现有可替换接口的另一种实现接入，不改配方、流程和报告：
 
 - 文字质量：`DP.Vision.Algorithms.ITextQualityInspector`（`OpenCvInspectionBackend`构造参数`textQuality`）；已有不依赖分割/字库的整段质量策略测试（`IndependentTextQualityTests`）。
 - 条码/QR质量：`IBarcodeQualityInspector`。

@@ -12,7 +12,7 @@ namespace DP.LabelInspection.Runtime;
 /// 按ROI使用局部块异常检测（PatchCore式，仅良品训练）：从整张良品图裁取ROI训练模型，检测时输出原图坐标的异常区域。
 /// 图像须已与配方对齐（固定相机或调用方先做定位）；ROI四周多取少量像素，避免笔画贴边被截断。
 /// </summary>
-public sealed class RegionAnomalyDetector
+public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
 {
     private readonly IPatchAnomalyDetector _algorithm;
 
@@ -122,21 +122,105 @@ public sealed class RegionAnomalyDetector
             result.MaximumScore,
             result.Threshold,
             findings,
-            result.HeatMap == null ? null : Bridge.ToLabel(result.HeatMap)
+            result.HeatMap == null ? null : Bridge.ToLabel(result.HeatMap),
+            result.Status == EAlgorithmStatus.Completed
         );
+    }
+
+    /// <summary>
+    /// 训练并打包为异常模型库条目（方法B），记录特征来源、裁图尺寸、边距、检测步长等元数据，
+    /// 供<see cref = "IAnomalyLibraryManager.PutAnomalyModel"/>发布为新的不可变版本。
+    /// </summary>
+    /// <param name = "good">已与配方对齐的整张良品图，至少1张。</param>
+    /// <param name = "region">要训练的ROI（配方坐标）。</param>
+    /// <param name = "options">训练参数；null时按<see cref = "DefaultOptions"/>选择。</param>
+    /// <param name = "key">模型键；null时使用ROI名称。</param>
+    /// <param name = "token">协作式取消标记。</param>
+    public AnomalyModelEntry TrainEntry(
+        IReadOnlyList<ImageFrame> good,
+        InspectionRegion region,
+        PatchAnomalyOptions? options = null,
+        string? key = null,
+        CancellationToken token = default
+    )
+    {
+        if (good == null || good.Count == 0 || region == null)
+        {
+            throw new ArgumentException("Good images and a region are required.");
+        }
+
+        options ??= DefaultOptions(region);
+        var crop = Crop(good[0], region);
+        var model = Train(good, region, options, token);
+        var bytes = model.ToBytes();
+        using var sha = System.Security.Cryptography.SHA256.Create();
+        string hash = BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "").ToLowerInvariant();
+        return new AnomalyModelEntry(
+            key ?? region.Name,
+            bytes,
+            hash,
+            model.FeatureSource,
+            crop.Width,
+            crop.Height,
+            model.Radius,
+            good.Count,
+            model.Threshold,
+            Margin,
+            options.Stride,
+            options.MinimumArea,
+            model.Calibration
+        );
+    }
+
+    /// <inheritdoc/>
+    AnomalyModelEntry IAnomalyModelTrainer.Train(
+        IReadOnlyList<ImageFrame> good,
+        InspectionRegion region,
+        string? key,
+        CancellationToken token
+    )
+    {
+        return TrainEntry(good, region, null, key, token);
+    }
+
+    /// <summary>按库条目记录的元数据重建检测参数（块大小取自模型本身）。</summary>
+    /// <param name = "entry">异常模型库条目。</param>
+    /// <param name = "model">由条目字节解析的模型。</param>
+    public static PatchAnomalyOptions DetectionOptions(AnomalyModelEntry entry, PatchAnomalyModel model)
+    {
+        if (entry == null || model == null)
+        {
+            throw new ArgumentNullException(entry == null ? nameof(entry) : nameof(model));
+        }
+
+        return new PatchAnomalyOptions(
+            patchSize: model.PatchSize,
+            stride: entry.Stride,
+            minimumArea: entry.MinimumArea,
+            localRadius: model.Radius > 0 ? model.Radius : (int?)null
+        );
+    }
+
+    /// <summary>ROI在指定尺寸原图上的实际裁取范围（ROI加四周边距，裁到图内）。</summary>
+    /// <param name = "width">原图宽度。</param>
+    /// <param name = "height">原图高度。</param>
+    /// <param name = "bounds">ROI原图范围。</param>
+    public PixelRect CropFor(int width, int height, PixelRect bounds)
+    {
+        int x0 = Math.Max(0, bounds.X - Margin),
+            y0 = Math.Max(0, bounds.Y - Margin),
+            x1 = Math.Min(width, bounds.X + bounds.Width + Margin),
+            y1 = Math.Min(height, bounds.Y + bounds.Height + Margin);
+        if (x1 - x0 < 8 || y1 - y0 < 8)
+        {
+            throw new ArgumentException("ROI outside image or too small.", nameof(bounds));
+        }
+
+        return new PixelRect(x0, y0, x1 - x0, y1 - y0);
     }
 
     private PixelRect Crop(ImageFrame image, InspectionRegion region)
     {
-        int x0 = Math.Max(0, region.Bounds.X - Margin),
-            y0 = Math.Max(0, region.Bounds.Y - Margin),
-            x1 = Math.Min(image.Width, region.Bounds.X + region.Bounds.Width + Margin),
-            y1 = Math.Min(image.Height, region.Bounds.Y + region.Bounds.Height + Margin);
-        if (x1 - x0 < 8 || y1 - y0 < 8)
-        {
-            throw new ArgumentException("ROI outside image or too small.", nameof(region));
-        }
-
-        return new PixelRect(x0, y0, x1 - x0, y1 - y0);
+        return CropFor(image.Width, image.Height, region.Bounds);
     }
 }

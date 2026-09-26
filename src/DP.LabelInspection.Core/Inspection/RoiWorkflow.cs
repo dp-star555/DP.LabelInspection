@@ -67,7 +67,9 @@ internal static class RoiWorkflow
                 return saved;
             }
 
+            // 质量判断的两种方法彼此独立、可任选：A为按类型的规则质检，B为局部块异常检测；同时启用时任一NG即NG。
             bool quality = config.Tasks.CheckQuality;
+            bool anomaly = config.Tasks.DetectAnomaly;
             bool data = config.Tasks.ReadData;
             var bindings = request.Recipe.Bindings.Where(b => b.Target == config.Name).ToArray();
             bool comparison =
@@ -84,9 +86,10 @@ internal static class RoiWorkflow
             var pre = ERoiStageState.NotExecuted;
             var reading = read ? ERoiStageState.NotExecuted : ERoiStageState.NotRequested;
             var compare = comparison ? ERoiStageState.NotExecuted : ERoiStageState.NotRequested;
-            var inspect = quality ? ERoiStageState.NotExecuted : ERoiStageState.NotRequested;
+            var inspect = quality || anomaly ? ERoiStageState.NotExecuted : ERoiStageState.NotRequested;
             var findings = new List<InspectionFinding>();
             var evidence = new RegionInspectionResult(config.Name, Array.Empty<InspectionFinding>());
+            RegionAnomalyEvidence? anomalyEvidence = null;
             var region = config;
             string phase = "prerequisites";
             RegionInspectionResult Finish()
@@ -98,7 +101,9 @@ internal static class RoiWorkflow
                     evidence.Segmentation,
                     evidence.Glyphs,
                     evidence.Barcodes
-                ).WithExecution(new RoiExecution(pre, reading, compare, inspect));
+                )
+                    .WithAnomaly(anomalyEvidence)
+                    .WithExecution(new RoiExecution(pre, reading, compare, inspect));
             }
 
             void Fail(string code, string message)
@@ -117,9 +122,9 @@ internal static class RoiWorkflow
             {
                 read = data || quality && session.QualityNeedsReading(config);
                 reading = read ? ERoiStageState.NotExecuted : ERoiStageState.NotRequested;
-                if (!data && !quality)
+                if (!data && !quality && !anomaly)
                 {
-                    Fail("no_roi_tasks", "该检测ROI没有选择数据或质量项目。");
+                    Fail("no_roi_tasks", "该检测ROI没有选择数据或质量（A规则质检/B异常检测）项目。");
                 }
 
                 if ((config.Kind == ERegionKind.Fixed || config.Kind == ERegionKind.Blank) && data)
@@ -151,6 +156,18 @@ internal static class RoiWorkflow
                 }
 
                 findings.AddRange(session.Validate(config, read, quality, token).Select(NgUnlessInfo));
+                if (anomaly)
+                {
+                    if (session is IRoiAnomalySession b)
+                    {
+                        findings.AddRange(b.ValidateAnomaly(config, token).Select(NgUnlessInfo));
+                    }
+                    else
+                    {
+                        Fail("anomaly_unavailable", "选择了局部块异常检测（方法B），但检测后台不支持。");
+                    }
+                }
+
                 if (findings.Any(f => f.Verdict == EInspectionVerdict.Ng))
                 {
                     pre = ERoiStageState.Failed;
@@ -313,6 +330,7 @@ internal static class RoiWorkflow
                     }
                 }
 
+                bool completed = true;
                 if (quality)
                 {
                     phase = "quality";
@@ -328,6 +346,7 @@ internal static class RoiWorkflow
                         evidence.Barcodes.Count > 0 ? evidence.Barcodes : returned.Barcodes
                     );
                     findings.AddRange(evidence.Findings.Select(NgUnlessInfo));
+                    completed &= measured.Completed;
                     if (!measured.Completed)
                     {
                         Fail(
@@ -335,9 +354,27 @@ internal static class RoiWorkflow
                             "选中的印刷质量检查未完整执行；查看阻断原因，不将其伪装成局部缺陷。"
                         );
                     }
+                }
 
+                if (anomaly)
+                {
+                    // 方法B不依赖读取，也不因方法A已发现缺陷而跳过，便于对照两种方法的证据。
+                    phase = "quality";
+                    var measured = ((IRoiAnomalySession)session).InspectAnomaly(region, token);
+                    EnsureName(measured.Evidence, config.Name);
+                    anomalyEvidence = measured.Evidence.Anomaly;
+                    findings.AddRange(measured.Evidence.Findings.Select(NgUnlessInfo));
+                    completed &= measured.Completed;
+                    if (!measured.Completed)
+                    {
+                        Fail("anomaly_incomplete", "选中的局部块异常检测（方法B）未完整执行；查看阻断原因。");
+                    }
+                }
+
+                if (quality || anomaly)
+                {
                     inspect =
-                        measured.Completed && !findings.Any(f => f.Verdict == EInspectionVerdict.Ng)
+                        completed && !findings.Any(f => f.Verdict == EInspectionVerdict.Ng)
                             ? ERoiStageState.Passed
                             : ERoiStageState.Failed;
                     if (inspect == ERoiStageState.Passed)
@@ -345,7 +382,13 @@ internal static class RoiWorkflow
                         findings.Add(
                             new InspectionFinding(
                                 "quality_pass",
-                                "本ROI所选印刷质量检查已完整通过。",
+                                "本ROI所选质量检查（"
+                                    + (
+                                        quality && anomaly ? "A规则质检+B异常检测"
+                                        : quality ? "A规则质检"
+                                        : "B异常检测"
+                                    )
+                                    + "）已完整通过。",
                                 EInspectionVerdict.Ok,
                                 region.Bounds
                             )

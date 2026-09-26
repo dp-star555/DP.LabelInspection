@@ -12,13 +12,20 @@ namespace DP.LabelInspection.Runtime;
 
 public sealed partial class OpenCvInspectionBackend
 {
-    private sealed class RoiSession : IRoiInspectionSession
+    private sealed class RoiSession : IRoiInspectionSession, IRoiAnomalySession
     {
         private readonly OpenCvInspectionBackend _owner;
         private readonly InspectionRequest _request;
         private readonly Dictionary<string, GlyphLibrarySnapshot> _libraries = new Dictionary<
             string,
             GlyphLibrarySnapshot
+        >(StringComparer.Ordinal);
+        private readonly Dictionary<
+            string,
+            (AnomalyModelEntry Entry, A.PatchAnomalyModel Model, A.IPatchAnomalyDetector Detector)
+        > _anomaly = new Dictionary<
+            string,
+            (AnomalyModelEntry, A.PatchAnomalyModel, A.IPatchAnomalyDetector)
         >(StringComparer.Ordinal);
         private bool _located,
             _alignmentFailed,
@@ -248,7 +255,8 @@ public sealed partial class OpenCvInspectionBackend
                 r.Kind,
                 new PixelRect((int)x, (int)y, r.Bounds.Width, r.Bounds.Height),
                 r.SingleLine,
-                r.Kind == ERegionKind.Text || r.Kind == ERegionKind.Barcode ? r.Field : null
+                r.Kind == ERegionKind.Text || r.Kind == ERegionKind.Barcode ? r.Field : null,
+                r.Anomaly
             ).WithTasks(r.Tasks);
         }
 
@@ -385,6 +393,154 @@ public sealed partial class OpenCvInspectionBackend
             return new RoiQualityMeasurement(
                 new RegionInspectionResult(r.Name, output),
                 measured.Status == A.EAlgorithmStatus.Completed
+            );
+        }
+
+        /// <summary>检查方法B的模型绑定、固定版本、模型键、特征实现及位置相关模型的裁图尺寸，并缓存解析后的模型。</summary>
+        /// <param name = "r">当前ROI配置（配方坐标）。</param>
+        /// <param name = "token">协作式取消标记。</param>
+        public IReadOnlyList<InspectionFinding> ValidateAnomaly(InspectionRegion r, CancellationToken token)
+        {
+            Alive();
+            token.ThrowIfCancellationRequested();
+            var findings = new List<InspectionFinding>();
+            void Fail(string code, string reason)
+            {
+                findings.Add(new InspectionFinding(code, reason, EInspectionVerdict.Ng, r.Bounds));
+            }
+
+            var pin = r.Anomaly;
+            if (pin == null)
+            {
+                Fail("anomaly_model_unbound", "选择了B异常检测，但ROI未绑定异常模型库。");
+                return findings;
+            }
+
+            if (_owner._anomalyModels == null)
+            {
+                Fail("anomaly_repository_unavailable", "没有可用的异常模型库提供者。");
+                return findings;
+            }
+
+            AnomalyLibrarySnapshot library;
+            try
+            {
+                library = _owner._anomalyModels.LoadAnomalyLibrary(pin.LibraryId, pin.LibraryRevision);
+            }
+            catch (Exception error)
+                when (error is System.IO.IOException
+                    || error is System.IO.InvalidDataException
+                    || error is UnauthorizedAccessException
+                )
+            {
+                Fail(
+                    "anomaly_model_missing",
+                    $"异常模型库 {pin.LibraryId} r{pin.LibraryRevision} 无法读取：{error.Message}"
+                );
+                return findings;
+            }
+
+            if (library.Id != pin.LibraryId || library.Revision != pin.LibraryRevision)
+            {
+                throw new InvalidOperationException(
+                    "Anomaly model provider substituted the pinned revision."
+                );
+            }
+
+            string key = pin.KeyFor(r.Name);
+            if (!library.Models.TryGetValue(key, out var entry))
+            {
+                Fail(
+                    "anomaly_model_missing",
+                    $"异常模型库 {library.Name} r{library.Revision} 中没有模型[{key}]；请为该ROI训练并发布模型。"
+                );
+                return findings;
+            }
+
+            if (!_owner._anomalyDetectors.TryGetValue(entry.FeatureSource, out var detector))
+            {
+                Fail(
+                    "anomaly_feature_unavailable",
+                    $"模型[{key}]使用特征来源{entry.FeatureSource}，宿主未提供对应实现（如CNN骨干网络）。"
+                );
+                return findings;
+            }
+
+            var model = A.PatchAnomalyModel.FromBytes(entry.CopyModel());
+            if (model.FeatureSource != entry.FeatureSource)
+            {
+                throw new System.IO.InvalidDataException("Anomaly model metadata does not match its bytes.");
+            }
+
+            if (entry.LocalRadius > 0 && r.Bounds.Fits(_request.Actual))
+            {
+                var crop = new RegionAnomalyDetector(detector) { Margin = entry.Margin }.CropFor(
+                    _request.Actual.Width,
+                    _request.Actual.Height,
+                    r.Bounds
+                );
+                if (crop.Width != entry.Width || crop.Height != entry.Height)
+                {
+                    Fail(
+                        "anomaly_model_size_mismatch",
+                        $"位置相关模型[{key}]按{entry.Width}×{entry.Height}裁图训练，当前ROI裁图为{crop.Width}×{crop.Height}；ROI已改变，需重新训练。"
+                    );
+                    return findings;
+                }
+            }
+
+            _anomaly[r.Name] = (entry, model, detector);
+            return findings;
+        }
+
+        /// <summary>在已定位ROI上执行方法B，返回异常区域、得分摘要及热力图证据。</summary>
+        /// <param name = "r">已定位的ROI。</param>
+        /// <param name = "token">协作式取消标记。</param>
+        public RoiQualityMeasurement InspectAnomaly(InspectionRegion r, CancellationToken token)
+        {
+            Alive();
+            token.ThrowIfCancellationRequested();
+            if (!_anomaly.TryGetValue(r.Name, out var bound) || r.Anomaly == null)
+            {
+                throw new InvalidOperationException("Anomaly model was not validated for this ROI.");
+            }
+
+            var (entry, model, detector) = bound;
+            var result = new RegionAnomalyDetector(detector) { Margin = entry.Margin }.Inspect(
+                _request.Actual,
+                r,
+                model,
+                RegionAnomalyDetector.DetectionOptions(entry, model),
+                token
+            );
+            var findings = result.Findings.ToList();
+            int anomalies = findings.Count(f => f.Verdict == EInspectionVerdict.Ng && f.Bounds.HasValue);
+            findings.Add(
+                new InspectionFinding(
+                    "anomaly_summary",
+                    $"B异常检测：模型[{entry.Key}]（{r.Anomaly.LibraryId} r{r.Anomaly.LibraryRevision}，"
+                        + (entry.FeatureSource == A.PatchAnomalyModel.Handcrafted ? "手工特征" : "CNN特征")
+                        + (entry.LocalRadius > 0 ? $"，位置相关±{entry.LocalRadius}px" : "，与位置无关")
+                        + $"，{entry.TrainingImages}张良品）；最大得分{result.MaximumScore:F3}，阈值{result.Threshold:F3}（{result.Ratio:F2}倍），异常区域{anomalies}处。",
+                    EInspectionVerdict.Ok,
+                    r.Bounds
+                )
+            );
+            return new RoiQualityMeasurement(
+                new RegionInspectionResult(r.Name, findings).WithAnomaly(
+                    new RegionAnomalyEvidence(
+                        r.Anomaly.LibraryId,
+                        r.Anomaly.LibraryRevision,
+                        entry.Key,
+                        entry.Sha256,
+                        entry.FeatureSource,
+                        result.Crop,
+                        result.MaximumScore,
+                        result.Threshold,
+                        result.HeatMap
+                    )
+                ),
+                result.Completed
             );
         }
 
@@ -589,6 +745,7 @@ public sealed partial class OpenCvInspectionBackend
         {
             _disposed = true;
             _libraries.Clear();
+            _anomaly.Clear();
         }
     }
 }

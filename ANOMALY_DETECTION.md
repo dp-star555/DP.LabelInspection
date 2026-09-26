@@ -1,6 +1,7 @@
 # 局部块异常检测（PatchCore式，仅用良品训练）
 
-传统规则（分割+单字比较、条码/QR边缘带检查）之外的补充检查：只用良品训练，不需要缺陷样本，也不需要字库。
+质量方法B：与方法A（按类型的规则质检：分割+单字比较、条码/QR边缘带检查、固定/空白墨迹比较）并列，可单独或同时启用，同时启用时任一NG即NG。
+只用良品训练，不需要缺陷样本，也不需要OCR或字库，适用于文字、条码、固定和空白ROI。
 实现为手工特征的PatchCore式方法（无深度学习运行库依赖）；特征提取可替换，以后可换成CNN特征（方案B）。
 
 ## 原理
@@ -28,6 +29,25 @@
 其他开源组件的取舍：ImageNet预训练骨干（torchvision/timm）需要从Hugging Face/PyTorch下载权重（当前环境不可达，现场可自行导出同样两输出的ONNX使用）；
 ONNX Runtime可替代OpenCV DNN，但会增加原生依赖，而OpenCV DNN与ONNX Runtime对本骨干网络的输出最大相差2×10⁻⁵；
 FAISS没有官方.NET绑定，记忆库规模下OpenCV暴力匹配已足够；Anomalib为Python训练框架，不直接用于.NET运行时。
+
+## 接入配方：异常模型库与ROI绑定
+
+与单字库相同的管理方式：
+
+- **模型库**（`IAnomalyLibraryManager`，本地实现`AnomalyLibraryStore`，`InspectionStore.AnomalyLibraries`与字库共用存储根目录）：
+  新建、导入/导出（导出文档内嵌模型字节）、归档/恢复；每次添加/替换/删除模型都发布新的不可变版本，按调用方基于的版本拒绝过期编辑。
+  版本文档`anomaly-libraries/<id>/revisions/<n>.json`只记录元数据（特征来源、模式、裁图尺寸、边距、步长、最小面积、阈值、良品数、标定说明、来源），
+  模型字节按SHA-256保存为`models/<sha>.bin`，多个版本共享；读取时校验哈希。
+- **ROI绑定**：`InspectionRegion.Anomaly = AnomalySettings(模型库ID, 固定版本, 模型键)`，模型键缺省为ROI名称；`Tasks.DetectAnomaly`为B开关，`Tasks.CheckQuality`为A开关。
+  重新训练发布新版本后，配方不会自动升级，需重新绑定。
+- **训练**：`IAnomalyModelTrainer`（运行时实现为`RegionAnomalyDetector`）用已与配方对齐的整张良品图为ROI训练，返回`AnomalyModelEntry`，再`PutAnomalyModel`发布。
+  WinForms工作台“单字库”组中的“异常模型库(B)”：勾选ROI、添加良品图（最近一次检测为OK的当前图自动加入）、训练并发布，关闭时可一键把训练的ROI绑定到新版本并启用B。
+- **运行**：`OpenCvInspectionBackend(anomalyModels: …, anomalyDetectors: …)`。手工特征实现内置；CNN特征模型需宿主按特征来源提供`OpenCvCnnPatchAnomalyDetector`
+  （演示程序：设置环境变量`DP_LABEL_ANOMALY_BACKBONE`为骨干网络ONNX路径，新训练的模型即用CNN特征）。
+- **报告**：`patch_anomaly`（NG，原图坐标）、`anomaly_summary`（OK说明）、`RegionInspectionResult.Anomaly`（模型、裁图范围、最大得分、阈值、热力图）；
+  保存任务时`anomaly-models.json`记录所用模型的库、版本、键和哈希。
+- **前提失败（本ROI NG）**：`anomaly_model_unbound`未绑定、`anomaly_repository_unavailable`宿主未提供模型库、`anomaly_model_missing`版本或模型键不存在、
+  `anomaly_feature_unavailable`缺少对应特征实现、`anomaly_model_size_mismatch`位置相关模型的裁图尺寸与训练不一致（ROI已改变，需重新训练）。
 
 ## 演示
 
@@ -79,4 +99,4 @@ CNN特征误报更少、速度更快，并检出了手工特征漏掉的“A”�
 - 图像须与训练时对齐；位置相关模式要求ROI尺寸与训练一致，ROI改动后需重新训练。
 - ROI四周要留余量，内容贴边被截断会产生异常。
 - 与训练良品成像条件（焦距、曝光、分辨率）差异大时会整体升高得分，需要用新条件的良品重新训练。
-- 目前为独立演示与SDK能力，尚未接入配方ROI的质量项目和报告；接入方式见`SAMPLE_COLLECTION.md`中的方案B接入点。
+- 模板模式下B在定位（整图平移）后的ROI上检测；自由模式要求图像与训练时对齐（固定相机/工位）。

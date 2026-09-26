@@ -61,6 +61,22 @@ public sealed class RegionInspectionResult
         return new RegionInspectionResult(RegionName, Findings, Recognition, Segmentation, Glyphs, Barcodes)
         {
             Execution = execution ?? throw new ArgumentNullException(nameof(execution)),
+            Anomaly = Anomaly,
+        };
+    }
+
+    /// <summary>局部块异常检测（方法B）的得分与热力图证据；未执行方法B时为null。</summary>
+    public RegionAnomalyEvidence? Anomaly { get; private set; }
+
+    /// <summary>附带方法B得分证据发布新结果，保留其余证据及执行记录。</summary>
+    /// <param name = "anomaly">方法B得分证据；null表示没有。</param>
+    /// <returns>新区域结果。</returns>
+    public RegionInspectionResult WithAnomaly(RegionAnomalyEvidence? anomaly)
+    {
+        return new RegionInspectionResult(RegionName, Findings, Recognition, Segmentation, Glyphs, Barcodes)
+        {
+            Execution = Execution,
+            Anomaly = anomaly,
         };
     }
 
