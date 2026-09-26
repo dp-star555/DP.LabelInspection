@@ -466,9 +466,26 @@ public sealed partial class OpenCvInspectionBackend
 
             if (!library.Models.TryGetValue(key, out var entry))
             {
+                var characters = library
+                    .Models.Values.Where(m => m.Scope == EAnomalyModelScope.Character)
+                    .Select(m => m.Key)
+                    .OrderBy(k => k, StringComparer.Ordinal)
+                    .ToArray();
+                var regions = library
+                    .Models.Values.Where(m => m.Scope == EAnomalyModelScope.Region)
+                    .Select(m => m.Key)
+                    .ToArray();
+                string hint =
+                    r.Kind == ERegionKind.Text && characters.Length > 0
+                        ? $"库中是字符模型（{string.Join("", characters)}）：文字行请在ROI编辑中把“逐字符检查”设为是。"
+                    : regions.Length > 0
+                        ? "库中现有整ROI模型："
+                            + string.Join("、", regions)
+                            + "；请为本ROI训练，或在ROI编辑中填写对应的模型键。"
+                    : "库中还没有整ROI模型；请在“批量训练(B)”中为本ROI训练并发布。";
                 Fail(
                     "anomaly_model_missing",
-                    $"异常模型库 {library.Name} r{library.Revision} 中没有模型[{key}]；请为该ROI训练并发布模型。"
+                    $"异常模型库 {library.Name} r{library.Revision} 中没有模型[{key}]。" + hint
                 );
                 return findings;
             }

@@ -99,14 +99,58 @@ internal static partial class RegionEditor
         bindAnomaly.Click += (_, _) =>
         {
             if (
-                list.SelectedItem is EditableRegion r
-                && anomalyLibraries.SelectedItem is AnomalyLibraryInfo l
+                !(list.SelectedItem is EditableRegion r)
+                || !(anomalyLibraries.SelectedItem is AnomalyLibraryInfo l)
+                || anomalyManager == null
             )
             {
-                r.AnomalyLibraryId = l.Id;
-                r.AnomalyLibraryRevision = l.Revision;
-                grid.Refresh();
+                return;
             }
+
+            r.AnomalyLibraryId = l.Id;
+            r.AnomalyLibraryRevision = l.Revision;
+            // 按库中实际内容选择模式：有本ROI的整ROI模型用整ROI；文字ROI且库中是字符模型则选逐字符；都没有时立即提示。
+            var models = anomalyManager.LoadAnomalyLibrary(l.Id, l.Revision).Models;
+            string key = string.IsNullOrWhiteSpace(r.AnomalyModelKey) ? r.Name : r.AnomalyModelKey!;
+            bool whole = models.TryGetValue(key, out var own) && own.Scope == EAnomalyModelScope.Region;
+            var characters = models
+                .Values.Where(m => m.Scope == EAnomalyModelScope.Character)
+                .Select(m => m.Key)
+                .OrderBy(k => k, StringComparer.Ordinal)
+                .ToArray();
+            string note;
+            if (whole)
+            {
+                r.AnomalyPerCharacter = false;
+                note = $"已绑定 {l.Name} r{l.Revision}：整ROI模型[{key}]。";
+            }
+            else if (r.Kind == ERegionKind.Text && characters.Length > 0)
+            {
+                r.AnomalyPerCharacter = true;
+                r.AnomalyModelKey = null;
+                note =
+                    $"已绑定 {l.Name} r{l.Revision}：库中是字符模型（{string.Join("", characters)}），已自动选择“逐字符检查”（需要OCR）。";
+            }
+            else
+            {
+                var regions = models
+                    .Values.Where(m => m.Scope == EAnomalyModelScope.Region)
+                    .Select(m => m.Key)
+                    .ToArray();
+                note =
+                    $"注意：{l.Name} r{l.Revision} 中没有模型[{key}]，检测时本ROI的B会判NG。"
+                    + (
+                        regions.Length == 0
+                            ? "库中没有整ROI模型。"
+                            : "库中现有整ROI模型：" + string.Join("、", regions) + "（可在“模型键”中填写）。"
+                    )
+                    + (characters.Length > 0 ? "字符模型只能用于文字ROI的逐字符检查。" : "")
+                    + "请先在“批量训练(B)”中为本ROI训练并发布。";
+                MessageBox.Show(form, note, "异常模型库中没有此ROI的模型");
+            }
+
+            help.Text = note;
+            grid.Refresh();
         };
         var remove = new Button { Text = "删除选中ROI", AutoSize = true };
         remove.Click += (_, _) =>

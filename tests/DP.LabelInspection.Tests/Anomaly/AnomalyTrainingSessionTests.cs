@@ -180,6 +180,32 @@ public sealed partial class AnomalyTrainingSessionTests
         Assert.IsTrue(bad.Findings.Any(f => f.Code == "patch_anomaly" || f.Verdict == EInspectionVerdict.Ng));
     }
 
+    /// <summary>
+    /// 训练页保留期间配方变化：新画的ROI自动加入模型列表，已有模型关联到最新ROI配置，配方删除的ROI模型转为独立模型；
+    /// 人工删除的模型不再自动加回，但手动“从配方导入”可以加回。
+    /// </summary>
+    [TestMethod]
+    public void SyncRecipeFollowsRecipeChanges()
+    {
+        var session = new AnomalyTrainingSession();
+        var logo = new InspectionRegion("标志", ERegionKind.Fixed, new PixelRect(25, 15, 80, 50));
+        var old = new InspectionRegion("旧码", ERegionKind.Barcode, new PixelRect(292, 12, 116, 76));
+        session.SyncRecipe(new[] { logo, old });
+        Assert.AreEqual(2, session.Models.Count);
+
+        var moved = logo.WithBounds(new PixelRect(30, 15, 80, 50));
+        var line = new InspectionRegion("ROI-4", ERegionKind.Text, TextLine, true);
+        var added = session.SyncRecipe(new[] { moved, line });
+        Assert.AreEqual("ROI-4", added.Single().Name);
+        Assert.AreEqual(EAnomalyTrainingKind.Characters, added.Single().Kind);
+        Assert.AreSame(moved, session.Models.Single(m => m.Name == "标志").Region);
+        Assert.IsNull(session.Models.Single(m => m.Name == "旧码").Region);
+
+        session.RemoveModel(session.Models.Single(m => m.Name == "ROI-4"));
+        Assert.AreEqual(0, session.SyncRecipe(new[] { moved, line }).Count);
+        Assert.AreEqual(1, session.ImportRecipe(new[] { moved, line }).Count);
+    }
+
     /// <summary>采集可保存后再打开：图像（无路径的另存为PNG）、模型尺寸、样本框、逐字符确认文本与取消的字符都恢复。</summary>
     [TestMethod]
     public async Task ProjectRoundTrips()

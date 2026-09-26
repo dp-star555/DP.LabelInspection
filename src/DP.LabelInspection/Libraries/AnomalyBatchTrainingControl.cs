@@ -184,9 +184,10 @@ public sealed class AnomalyBatchTrainingControl : UserControl
             "从配方导入",
             () =>
             {
-                var added = _session.ImportRecipe(_recipe);
+                // 手动导入：也重新加入之前删除过的ROI模型。
+                var added = _session.SyncRecipe(_recipe).Concat(_session.ImportRecipe(_recipe)).ToArray();
                 RefreshAll();
-                _status.Text = $"从配方导入{added.Count}个模型（忽略区跳过，已有同名模型跳过）。";
+                _status.Text = $"从配方导入{added.Length}个模型（忽略区跳过，已有同名模型跳过）。";
             }
         );
         Button(
@@ -326,17 +327,21 @@ public sealed class AnomalyBatchTrainingControl : UserControl
         Reload();
     }
 
-    /// <summary>设置当前配方的ROI；会话还没有模型时自动为各ROI建同名模型（可删除或改训练方式）。</summary>
+    /// <summary>
+    /// 设置当前配方的ROI（每次打开训练页时调用）：新增的ROI自动建同名模型，已有模型关联到最新的ROI配置；
+    /// 人工删除过的模型不再自动添加。
+    /// </summary>
     /// <param name = "regions">配方ROI。</param>
     public void SetRecipe(IEnumerable<InspectionRegion> regions)
     {
         _recipe = (regions ?? throw new ArgumentNullException(nameof(regions))).ToArray();
-        if (_session.Models.Count == 0)
-        {
-            _session.ImportRecipe(_recipe);
-        }
-
+        var added = _session.SyncRecipe(_recipe);
         RefreshAll();
+        if (added.Count > 0 && _session.Samples.Count > 0)
+        {
+            _status.Text =
+                "配方中新增的ROI已加入模型列表：" + string.Join("、", added.Select(m => m.Name)) + "。";
+        }
     }
 
     /// <summary>加入一张良品图。</summary>

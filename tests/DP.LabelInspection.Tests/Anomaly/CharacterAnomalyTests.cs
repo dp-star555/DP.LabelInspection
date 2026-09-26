@@ -236,6 +236,12 @@ public sealed partial class CharacterAnomalyTests
             "D"
         );
 
+        // 文字行绑定到字符模型库但没选逐字符：提示改为逐字符检查，而不是只说缺模型。
+        var whole = Run(temp.Store, Text(new AnomalySettings(id, revision)), image, "B1D3A2");
+        var hint = whole.Findings.Single(f => f.Code == "anomaly_model_missing").Message;
+        StringAssert.Contains(hint, "逐字符检查");
+        StringAssert.Contains(hint, "123ABC");
+
         string empty = models.CreateAnomalyLibrary("空库");
         var none = Run(temp.Store, Text(new AnomalySettings(empty, 1, perCharacter: true)), image, "B1D3A2");
         StringAssert.Contains(string.Join(",", none.Findings.Select(f => f.Code)), "anomaly_model_missing");

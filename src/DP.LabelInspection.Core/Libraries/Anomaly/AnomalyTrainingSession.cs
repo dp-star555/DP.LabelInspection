@@ -23,6 +23,7 @@ public sealed class AnomalyTrainingSession
     private readonly List<AnomalyTrainingModel> _models = new List<AnomalyTrainingModel>();
     private readonly List<AnomalyTrainingSample> _samples = new List<AnomalyTrainingSample>();
     private readonly Dictionary<ImageFrame, byte[]> _gray = new Dictionary<ImageFrame, byte[]>();
+    private readonly HashSet<string> _dismissed = new HashSet<string>(StringComparer.Ordinal);
 
     /// <summary>内容固定模型样本自动对齐的搜索半径（原图像素），0–64，默认16；0表示不对齐。</summary>
     public int SnapRadius { get; set; } = 16;
@@ -120,10 +121,49 @@ public sealed class AnomalyTrainingSession
         return added.AsReadOnly();
     }
 
-    /// <summary>移除模型及其全部样本框。</summary>
+    /// <summary>
+    /// 与当前配方同步（每次打开训练页时调用）：配方中新增的ROI各建同名模型（人工删除过的同名模型不再自动添加），
+    /// 已有模型关联到配方中同名ROI的最新配置（框的位置/尺寸可能已改）；配方中已删除的ROI，其模型保留为独立模型。
+    /// </summary>
+    /// <param name = "regions">当前配方ROI。</param>
+    /// <returns>新建的模型。</returns>
+    public IReadOnlyList<AnomalyTrainingModel> SyncRecipe(IEnumerable<InspectionRegion> regions)
+    {
+        var current = (regions ?? throw new ArgumentNullException(nameof(regions)))
+            .Where(r => r.Kind != ERegionKind.Ignore)
+            .ToArray();
+        var byName = current.ToDictionary(r => r.Name, StringComparer.Ordinal);
+        foreach (var model in _models)
+        {
+            if (byName.TryGetValue(model.Name, out var region))
+            {
+                bool compatible =
+                    model.Kind != EAnomalyTrainingKind.Characters || region.Kind == ERegionKind.Text;
+                model.Region = compatible ? region : null;
+                if (compatible && model.Kind == EAnomalyTrainingKind.FixedContent && model.Width == null)
+                {
+                    model.Width = region.Bounds.Width;
+                    model.Height = region.Bounds.Height;
+                }
+            }
+            else if (model.Region != null)
+            {
+                model.Region = null;
+            }
+        }
+
+        return ImportRecipe(current.Where(r => !_dismissed.Contains(r.Name)));
+    }
+
+    /// <summary>移除模型及其全部样本框；对应配方ROI的模型之后同步配方时不再自动添加。</summary>
     /// <param name = "model">要移除的模型。</param>
     public void RemoveModel(AnomalyTrainingModel model)
     {
+        if (model.Region != null)
+        {
+            _dismissed.Add(model.Name);
+        }
+
         _samples.RemoveAll(s => s.Model == model);
         _models.Remove(model);
     }
