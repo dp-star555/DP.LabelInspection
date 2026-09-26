@@ -9,8 +9,16 @@ public sealed class AnomalySettings
     /// <summary>创建固定版本绑定。</summary>
     /// <param name = "libraryId">异常模型库标识。</param>
     /// <param name = "libraryRevision">精确不可变版本号，至少1。</param>
-    /// <param name = "modelKey">库内模型键；为null时使用ROI名称。</param>
-    public AnomalySettings(string libraryId, int libraryRevision, string? modelKey = null)
+    /// <param name = "modelKey">库内模型键；为null时使用ROI名称。逐字符模式不使用。</param>
+    /// <param name = "perCharacter">
+    /// 逐字符模式：按文字质量的分割结果逐字检查，每个字符使用库中同名的字符模型（适合内容可变的文字）；仅文字ROI可用。
+    /// </param>
+    public AnomalySettings(
+        string libraryId,
+        int libraryRevision,
+        string? modelKey = null,
+        bool perCharacter = false
+    )
     {
         if (
             string.IsNullOrWhiteSpace(libraryId)
@@ -35,10 +43,19 @@ public sealed class AnomalySettings
             throw new ArgumentException("Invalid model key.", nameof(modelKey));
         }
 
+        if (perCharacter && modelKey != null)
+        {
+            throw new ArgumentException("Per-character mode takes no model key.", nameof(modelKey));
+        }
+
         LibraryId = libraryId;
         LibraryRevision = libraryRevision;
         ModelKey = modelKey;
+        PerCharacter = perCharacter;
     }
+
+    /// <summary>逐字符模式：每个分割出的字符使用库中该字符的模型。</summary>
+    public bool PerCharacter { get; }
 
     /// <summary>异常模型库标识。</summary>
     public string LibraryId { get; }

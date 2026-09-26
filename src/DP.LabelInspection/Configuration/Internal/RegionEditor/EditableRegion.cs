@@ -22,6 +22,7 @@ internal static partial class RegionEditor
             AnomalyLibraryId = r.Anomaly?.LibraryId;
             AnomalyLibraryRevision = r.Anomaly?.LibraryRevision;
             AnomalyModelKey = r.Anomaly?.ModelKey;
+            AnomalyPerCharacter = r.Anomaly?.PerCharacter ?? false;
             Name = r.Name;
             Kind = r.Kind;
             X = r.Bounds.X;
@@ -106,6 +107,16 @@ internal static partial class RegionEditor
             )
         ]
         public string? AnomalyModelKey { get; set; }
+
+        [
+            Category("07 异常检测（方法B）"),
+            DisplayName("逐字符检查（仅文字）"),
+            TypeConverter(typeof(ChineseBooleanConverter)),
+            Description(
+                "否：整个ROI用一个模型，适合内容固定的区域。是：按文字分割逐字检查，每个字符用库中该字符的模型，适合序列号等内容可变的文字；需要OCR（或等格声明）确定字符身份，模型用“字符异常模型(B)”制作。库中缺少某字符的模型时该字判NG。逐字符模式不使用模型键。"
+            )
+        ]
+        public bool AnomalyPerCharacter { get; set; }
 
         [
             Category("01 区域位置与类型"),
@@ -386,10 +397,12 @@ internal static partial class RegionEditor
                 throw new ArgumentException(Name + "：异常模型库ID与版本必须同时指定。");
             }
 
+            bool perCharacter = AnomalyPerCharacter && Kind == ERegionKind.Text;
             return new AnomalySettings(
                 AnomalyLibraryId!.Trim(),
                 AnomalyLibraryRevision.Value,
-                string.IsNullOrWhiteSpace(AnomalyModelKey) ? null : AnomalyModelKey
+                perCharacter || string.IsNullOrWhiteSpace(AnomalyModelKey) ? null : AnomalyModelKey,
+                perCharacter
             );
         }
 

@@ -9,6 +9,10 @@ namespace DP.LabelInspection.Contracts;
 /// </summary>
 public interface IRoiAnomalySession
 {
+    /// <summary>方法B是否需要实际读取（逐字符模式需要OCR身份来分割和选择字符模型）。</summary>
+    /// <param name = "region">当前ROI配置。</param>
+    bool AnomalyNeedsReading(InspectionRegion region);
+
     /// <summary>检查模型绑定、固定版本、模型键及特征实现是否可用，不执行检测。</summary>
     /// <param name = "region">待检查的ROI配置。</param>
     /// <param name = "token">协作式取消标记。</param>
@@ -17,7 +21,12 @@ public interface IRoiAnomalySession
 
     /// <summary>在已定位ROI上执行异常检测，返回异常区域、得分摘要及热力图证据。</summary>
     /// <param name = "region">已定位的ROI。</param>
+    /// <param name = "evidence">本轮已有证据（读取结果；方法A执行过时含分割），逐字符模式优先复用其中的分割。</param>
     /// <param name = "token">协作式取消标记。</param>
     /// <returns>带明确完成状态的测量；证据中的<see cref = "RegionInspectionResult.Anomaly"/>保存得分与热力图。</returns>
-    RoiQualityMeasurement InspectAnomaly(InspectionRegion region, CancellationToken token);
+    RoiQualityMeasurement InspectAnomaly(
+        InspectionRegion region,
+        RegionInspectionResult evidence,
+        CancellationToken token
+    );
 }

@@ -30,6 +30,20 @@ public interface IAnomalyLibraryManager : IAnomalyLibraryRepository
         string? provenanceJson = null
     );
 
+    /// <summary>一次添加或替换多个模型（例如一批字符模型），只发布一个新版本并返回新版本号。</summary>
+    /// <param name = "id">模型库标识。</param>
+    /// <param name = "expectedRevision">调用方基于的版本，过期修改会被拒绝。</param>
+    /// <param name = "models">模型条目，键须唯一。</param>
+    /// <param name = "replaceExisting">同键已存在时是否替换；false时拒绝整批。</param>
+    /// <param name = "provenanceJson">可选来源证据JSON，记录到每个模型。</param>
+    int PutAnomalyModels(
+        string id,
+        int expectedRevision,
+        IEnumerable<AnomalyModelEntry> models,
+        bool replaceExisting = false,
+        string? provenanceJson = null
+    );
+
     /// <summary>移除一个模型，发布新版本并返回新版本号。</summary>
     /// <param name = "id">模型库标识。</param>
     /// <param name = "expectedRevision">调用方基于的版本。</param>

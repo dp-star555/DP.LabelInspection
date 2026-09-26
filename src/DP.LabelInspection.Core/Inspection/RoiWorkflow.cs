@@ -120,7 +120,10 @@ internal static class RoiWorkflow
 
             try
             {
-                read = data || quality && session.QualityNeedsReading(config);
+                read =
+                    data
+                    || quality && session.QualityNeedsReading(config)
+                    || anomaly && session is IRoiAnomalySession needs && needs.AnomalyNeedsReading(config);
                 reading = read ? ERoiStageState.NotExecuted : ERoiStageState.NotRequested;
                 if (!data && !quality && !anomaly)
                 {
@@ -360,7 +363,7 @@ internal static class RoiWorkflow
                 {
                     // 方法B不依赖读取，也不因方法A已发现缺陷而跳过，便于对照两种方法的证据。
                     phase = "quality";
-                    var measured = ((IRoiAnomalySession)session).InspectAnomaly(region, token);
+                    var measured = ((IRoiAnomalySession)session).InspectAnomaly(region, evidence, token);
                     EnsureName(measured.Evidence, config.Name);
                     anomalyEvidence = measured.Evidence.Anomaly;
                     findings.AddRange(measured.Evidence.Findings.Select(NgUnlessInfo));

@@ -59,6 +59,11 @@ public sealed class InspectionRegion
             throw new ArgumentException("Ignore regions take no anomaly model.", nameof(anomaly));
         }
 
+        if (anomaly?.PerCharacter == true && kind != ERegionKind.Text)
+        {
+            throw new ArgumentException("Per-character anomaly models require text.", nameof(anomaly));
+        }
+
         Name = name;
         Kind = kind;
         Anomaly = anomaly;
