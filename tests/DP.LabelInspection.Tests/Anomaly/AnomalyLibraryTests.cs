@@ -183,6 +183,31 @@ public sealed class AnomalyLibraryTests
         Assert.IsNull(old.Anomaly);
     }
 
+    /// <summary>改框（异常模型页调整ROI后写回配方）只替换范围，保留类型、规则、检测项目和模型绑定。</summary>
+    [TestMethod]
+    public void WithBoundsKeepsEverythingElse()
+    {
+        var pin = new AnomalySettings("anomaly-x", 3);
+        var text = new InspectionRegion(
+            "t",
+            ERegionKind.Text,
+            Box,
+            true,
+            new FieldSettings(expected: "AB12"),
+            pin
+        ).WithTasks(new RoiInspectionTasks(true, false, true));
+        var moved = text.WithBounds(new PixelRect(31, 22, 140, 44));
+        Assert.AreEqual(new PixelRect(31, 22, 140, 44), moved.Bounds);
+        Assert.AreEqual("AB12", moved.Field.Expected);
+        Assert.IsTrue(
+            moved.SingleLine && moved.Tasks.ReadData && moved.Tasks.DetectAnomaly && !moved.Tasks.CheckQuality
+        );
+        Assert.AreSame(pin, moved.Anomaly);
+        var fixedRegion = Fixed(true, true, pin).WithBounds(new PixelRect(0, 0, 10, 10));
+        Assert.AreEqual(ERegionKind.Fixed, fixedRegion.Kind);
+        Assert.IsTrue(fixedRegion.Tasks.CheckQuality && fixedRegion.Tasks.DetectAnomaly);
+    }
+
     /// <summary>只启用B：良品通过并给出得分摘要和热力图；缺口NG，框落在ROI内；方法A未执行。</summary>
     [TestMethod]
     public void AnomalyOnlyJudgesQuality()

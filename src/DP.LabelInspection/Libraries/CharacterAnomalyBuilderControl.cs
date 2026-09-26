@@ -53,6 +53,20 @@ public sealed partial class CharacterAnomalyBuilderControl : UserControl
     };
     private readonly List<(ImageFrame Image, string Name)> _sources = new List<(ImageFrame, string)>();
     private readonly List<LineCandidate> _lines = new List<LineCandidate>();
+
+    /// <summary>
+    /// 每张图上各文字ROI的框（原图坐标）；没有记录时使用配方位置。逐字符模型按行几何归一化，与框在图上的位置无关，
+    /// 因此良品图不必与配方对齐，框只需在每张图上完整框住这一行文字。
+    /// </summary>
+    private readonly Dictionary<(ImageFrame Image, string Region), PixelRect> _boxes =
+        new Dictionary<(ImageFrame, string), PixelRect>();
+    private readonly Label _hint = new Label
+    {
+        AutoSize = true,
+        Margin = new Padding(8, 7, 0, 0),
+        ForeColor = Color.FromArgb(80, 80, 80),
+        Text = "拖动框的边/角调整、拖动框内部移动，在框外拖动重新画框；框只影响本图的样本提取。",
+    };
     private readonly List<Control> _busyDisabled = new List<Control>();
     private IAnomalyLibraryManager? _manager;
     private IAnomalyModelTrainer? _trainer;
@@ -176,6 +190,38 @@ public sealed partial class CharacterAnomalyBuilderControl : UserControl
             }
         );
         extract.Controls.Add(_confirmed);
+        Add(
+            extract,
+            "当前框用于全部图像",
+            () =>
+            {
+                var region = SelectedRegion ?? throw new InvalidOperationException("请先选择或画出文字ROI。");
+                var image = CurrentImage ?? throw new InvalidOperationException("请选择图像。");
+                var box = BoxFor(image, region);
+                foreach (var (other, _) in _sources)
+                {
+                    SetBox(other, region, box, quiet: true);
+                }
+
+                ShowImage();
+                _status.Text = "已把当前框用于全部图像；受影响图像的旧样本已清除，请重新提取。";
+            }
+        );
+        Add(
+            extract,
+            "本图恢复配方位置",
+            () =>
+            {
+                var region = SelectedRegion ?? throw new InvalidOperationException("请先选择文字ROI。");
+                var image = CurrentImage ?? throw new InvalidOperationException("请选择图像。");
+                if (region.AdHoc)
+                {
+                    throw new InvalidOperationException("手画的文字行没有配方位置。");
+                }
+
+                SetBox(image, region, region.Region.Bounds);
+            }
+        );
         Add(extract, "提取所选图像", async () => await ExtractAsync(selectedOnly: true));
         Add(extract, "提取全部图像", async () => await ExtractAsync(selectedOnly: false));
         Add(
@@ -188,30 +234,118 @@ public sealed partial class CharacterAnomalyBuilderControl : UserControl
             }
         );
 
+        extract.Controls.Add(_hint);
         var bottom = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true };
         Add(bottom, "训练并发布新版本", async () => await TrainAsync());
         bottom.Controls.Add(_status);
         _busyDisabled.AddRange(new Control[] { top, extract, bottom, _samples });
 
-        var left = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 180 };
-        left.Panel1.Controls.Add(_images);
-        var middle = new SplitContainer
-        {
-            Dock = DockStyle.Fill,
-            Orientation = Orientation.Horizontal,
-            SplitterDistance = 300,
-        };
-        middle.Panel1.Controls.Add(_viewer);
-        middle.Panel2.Controls.Add(_samples);
-        var right = new SplitContainer { Dock = DockStyle.Fill, SplitterDistance = 700 };
-        right.Panel1.Controls.Add(middle);
-        right.Panel2.Controls.Add(_coverage);
-        left.Panel2.Controls.Add(right);
+        // 固定宽度的停靠布局（SplitContainer的分隔位置在控件尚无实际尺寸时设置会失效，画布被挤成一条）。
+        _images.Dock = DockStyle.Left;
+        _images.Width = 170;
+        _coverage.Dock = DockStyle.Right;
+        _coverage.Width = 230;
+        _samples.Dock = DockStyle.Bottom;
+        _samples.Height = 250;
+        var center = new Panel { Dock = DockStyle.Fill };
+        center.Controls.Add(_viewer);
+        center.Controls.Add(_samples);
+        var left = new Panel { Dock = DockStyle.Fill };
+        left.Controls.Add(center);
+        left.Controls.Add(_coverage);
+        left.Controls.Add(_images);
         Controls.Add(left);
         Controls.Add(extract);
         Controls.Add(top);
         Controls.Add(bottom);
         _images.SelectedIndexChanged += (_, _) => ShowImage();
+        _regions.SelectedIndexChanged += (_, _) => ShowImage();
+        _viewer.EditRegions = true;
+        _viewer.DrawOutsideRegions = true;
+        _viewer.RegionEdited += (_, e) => TryUi(() => BoxChanged(e.Bounds));
+        _viewer.RegionDrawn += (_, e) => TryUi(() => BoxChanged(e.Bounds));
+    }
+
+    private RegionChoice? SelectedRegion => _regions.SelectedItem as RegionChoice;
+
+    private ImageFrame? CurrentImage =>
+        _images.SelectedIndex >= 0 && _images.SelectedIndex < _sources.Count
+            ? _sources[_images.SelectedIndex].Image
+            : null;
+
+    /// <summary>该图上该文字ROI的框：手动调整过的用调整后的，否则用配方位置。</summary>
+    private PixelRect BoxFor(ImageFrame image, RegionChoice region)
+    {
+        return _boxes.TryGetValue((image, region.Name), out var box) ? box : region.Region.Bounds;
+    }
+
+    /// <summary>在画布上调整或重画了框：没有文字ROI时新建一个手画文字行，否则更新所选ROI在当前图上的框。</summary>
+    private void BoxChanged(PixelRect bounds)
+    {
+        if (Busy)
+        {
+            return;
+        }
+
+        var image = CurrentImage ?? throw new InvalidOperationException("请先添加并选择图像。");
+        var region = SelectedRegion;
+        if (region == null)
+        {
+            int n = 1;
+            while (_regions.Items.Cast<RegionChoice>().Any(r => r.Name == "文字行" + n))
+            {
+                n++;
+            }
+
+            region = new RegionChoice(
+                new InspectionRegion("文字行" + n, ERegionKind.Text, bounds, singleLine: true),
+                adHoc: true
+            );
+            _regions.Items.Add(region);
+            _regions.SelectedItem = region;
+        }
+
+        SetBox(image, region, bounds);
+    }
+
+    private void SetBox(ImageFrame image, RegionChoice region, PixelRect bounds, bool quiet = false)
+    {
+        if (!bounds.Fits(image) || bounds.Width < 8 || bounds.Height < 8)
+        {
+            throw new ArgumentException("框须在图像内且至少8×8像素。");
+        }
+
+        bool changed = !BoxFor(image, region).Equals(bounds);
+        _boxes[(image, region.Name)] = bounds;
+        if (changed)
+        {
+            // 框变了，按旧框提取的样本已不对应，清除后需重新提取。
+            _lines.RemoveAll(l => ReferenceEquals(l.Image, image) && l.Region == region.Name);
+            RefreshSamples();
+        }
+
+        if (!quiet)
+        {
+            ShowImage();
+            _status.Text = changed
+                ? $"已调整本图“{region.Name}”的框（{bounds.Width}×{bounds.Height}）；本图此ROI的旧样本已清除，请重新提取。"
+                : "框未变化。";
+        }
+    }
+
+    private bool Busy => UseWaitCursor;
+
+    private void TryUi(Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception e)
+        {
+            MessageBox.Show(this, e.Message, "字符异常模型制作未完成");
+            ShowImage();
+        }
     }
 
     /// <summary>最近一次发布的模型库、版本及参与制作的文字ROI名称；宿主可据此把ROI绑定为逐字符模式。</summary>
@@ -278,8 +412,8 @@ public sealed partial class CharacterAnomalyBuilderControl : UserControl
             _candidates
             ?? throw new InvalidOperationException("宿主未提供字符候选提取服务（需要检测引擎）。");
         var region =
-            (_regions.SelectedItem as RegionChoice)?.Region
-            ?? throw new InvalidOperationException("请选择文字ROI（须为横向单行）。");
+            SelectedRegion
+            ?? throw new InvalidOperationException("请选择文字ROI，或在图上拖动画出文字行（须为横向单行）。");
         var targets = selectedOnly
             ? _images.SelectedIndex < 0
                 ? throw new InvalidOperationException("请选择图像。")
@@ -299,13 +433,14 @@ public sealed partial class CharacterAnomalyBuilderControl : UserControl
             foreach (var (image, name) in targets)
             {
                 _status.Text = $"正在提取 {name} / {region.Name}…";
-                if (!region.Bounds.Fits(image))
+                var box = BoxFor(image, region);
+                if (!box.Fits(image))
                 {
-                    problems.Add(name + "：ROI超出图像");
+                    problems.Add(name + "：框超出图像，请在该图上重新画框");
                     continue;
                 }
 
-                var result = await service.ExtractGlyphCandidatesAsync(image, region.Bounds, confirmed);
+                var result = await service.ExtractGlyphCandidatesAsync(image, box, confirmed);
                 var segmentation = result.Segmentation;
                 if (segmentation.Characters.Count == 0)
                 {
@@ -377,7 +512,17 @@ public sealed partial class CharacterAnomalyBuilderControl : UserControl
                 DateTimeOffset.UtcNow
             );
             int revision = Manager.PutAnomalyModels(head.Id, head.Revision, entries, true, provenance);
-            LastPublished = (head.Id, revision, _lines.Select(l => l.Region).Distinct().ToArray());
+            // 手画的文字行不在配方中，只发布模型，不参与绑定。
+            var recipeRegions = _regions
+                .Items.Cast<RegionChoice>()
+                .Where(r => !r.AdHoc)
+                .Select(r => r.Name)
+                .ToHashSet(StringComparer.Ordinal);
+            LastPublished = (
+                head.Id,
+                revision,
+                _lines.Select(l => l.Region).Distinct().Where(recipeRegions.Contains).ToArray()
+            );
             Reload(head.Id);
             _status.Text =
                 $"已发布 {head.Name} r{revision}：{entries.Count}个字符模型（{string.Join("", entries.Select(e => e.Key))}）。"
@@ -495,21 +640,45 @@ public sealed partial class CharacterAnomalyBuilderControl : UserControl
 
     private void ShowImage()
     {
-        if (_images.SelectedIndex < 0 || _images.SelectedIndex >= _sources.Count)
+        var image = CurrentImage;
+        if (image == null)
         {
             return;
         }
 
-        var image = _sources[_images.SelectedIndex].Image;
-        _viewer.SetImage(image);
+        var region = SelectedRegion;
+        if (!ReferenceEquals(_shown, image))
+        {
+            _viewer.SetImage(image);
+            _shown = image;
+        }
+
+        // 只显示所选文字ROI在本图上的框（编辑序号固定为0）；没有文字ROI时直接拖动即可画出文字行。
+        _viewer.EditRegions = region != null;
         _viewer.SetOverlays(
-            _regions.Items.Cast<RegionChoice>().Select(r => r.Region).ToArray(),
+            region == null
+                ? Array.Empty<InspectionRegion>()
+                : new[]
+                {
+                    new InspectionRegion(
+                        region.Name,
+                        ERegionKind.Text,
+                        BoxFor(image, region),
+                        singleLine: true
+                    ),
+                },
             Array.Empty<InspectionFinding>()
         );
         _viewer.SetCharacters(
-            _lines.Where(l => ReferenceEquals(l.Image, image)).SelectMany(l => l.Characters)
+            _lines
+                .Where(l => ReferenceEquals(l.Image, image) && (region == null || l.Region == region.Name))
+                .SelectMany(l => l.Characters)
         );
+        // 只有一个框：直接选中，控制点立即可拖。
+        _viewer.SelectedRegionIndex = region == null ? -1 : 0;
     }
+
+    private ImageFrame? _shown;
 
     private IAnomalyLibraryManager Manager =>
         _manager ?? throw new InvalidOperationException("未连接异常模型库管理器。");
