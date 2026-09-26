@@ -60,36 +60,7 @@ public sealed class CharacterAnomalyDetector
         var grays = new Dictionary<ImageFrame, Mat>();
         try
         {
-            var samples = new List<(string key, Mat gray, CharacterLine line, PixelRect cell)>();
-            foreach (var sample in lines)
-            {
-                token.ThrowIfCancellationRequested();
-                if (!grays.TryGetValue(sample.Image, out var gray))
-                {
-                    gray = grays[sample.Image] = Gray(sample.Image);
-                }
-
-                var line = CharacterCells.Measure(gray, sample.Characters);
-                if (line == null)
-                {
-                    continue;
-                }
-
-                for (int i = 0; i < sample.Characters.Count; i++)
-                {
-                    var c = sample.Characters[i];
-                    if (
-                        !sample.Excluded.Contains(i)
-                        && c.Character.Length == 1
-                        && FieldSettings.IsAlphanumeric(c.Character[0])
-                    )
-                    {
-                        samples.Add(
-                            (AnomalyModelEntry.CharacterKey(sample.Group, c.Character), gray, line, c.Bounds)
-                        );
-                    }
-                }
-            }
+            var samples = Collect(lines, grays, token).Select(s => (s.key, s.gray, s.line, s.cell)).ToList();
 
             if (samples.Count == 0)
             {
@@ -152,6 +123,117 @@ public sealed class CharacterAnomalyDetector
                 g.Dispose();
             }
         }
+    }
+
+    /// <summary>
+    /// 按训练时的方式归一化字符单元，供与其他异常检测算法在相同输入上对比：每个键的单元宽度由训练样本决定（与<see cref = "Train"/>一致），
+    /// 其他样本按同一宽度归一化；训练样本中没有的键不输出。不做样本数上限选取。
+    /// </summary>
+    /// <param name = "training">训练行样本。</param>
+    /// <param name = "others">其他（测试）行样本，序号接在训练样本之后。</param>
+    /// <param name = "token">协作式取消标记。</param>
+    public IReadOnlyList<CharacterAnomalyCell> NormalizeCells(
+        IReadOnlyList<CharacterAnomalySample> training,
+        IReadOnlyList<CharacterAnomalySample> others,
+        CancellationToken token = default
+    )
+    {
+        if (training == null || others == null)
+        {
+            throw new ArgumentNullException(training == null ? nameof(training) : nameof(others));
+        }
+
+        var grays = new Dictionary<ImageFrame, Mat>();
+        try
+        {
+            var all = Collect(training.Concat(others).ToArray(), grays, token);
+            var widths = all.Where(s => s.sample < training.Count)
+                .GroupBy(s => s.key)
+                .ToDictionary(g => g.Key, g => g.Max(s => CharacterCells.Width(s.cell.Width, s.line)));
+            var cells = new List<CharacterAnomalyCell>();
+            foreach (var s in all)
+            {
+                token.ThrowIfCancellationRequested();
+                if (widths.TryGetValue(s.key, out int width))
+                {
+                    using var cell = CharacterCells.Normalize(s.gray, s.line, s.cell, width);
+                    cells.Add(
+                        new CharacterAnomalyCell(
+                            s.sample,
+                            s.index,
+                            s.key,
+                            s.sample < training.Count,
+                            CvImages.Frame(cell.Image)
+                        )
+                    );
+                }
+            }
+
+            return cells.AsReadOnly();
+        }
+        finally
+        {
+            foreach (var g in grays.Values)
+            {
+                g.Dispose();
+            }
+        }
+    }
+
+    /// <summary>收集可测量行中未取消的字母/数字字符（灰度图按图像缓存到<paramref name = "grays"/>，由调用方释放）。</summary>
+    private static List<(
+        int sample,
+        int index,
+        string key,
+        Mat gray,
+        CharacterLine line,
+        PixelRect cell
+    )> Collect(
+        IReadOnlyList<CharacterAnomalySample> lines,
+        Dictionary<ImageFrame, Mat> grays,
+        CancellationToken token
+    )
+    {
+        var samples = new List<(int, int, string, Mat, CharacterLine, PixelRect)>();
+        for (int n = 0; n < lines.Count; n++)
+        {
+            var sample = lines[n];
+            token.ThrowIfCancellationRequested();
+            if (!grays.TryGetValue(sample.Image, out var gray))
+            {
+                gray = grays[sample.Image] = Gray(sample.Image);
+            }
+
+            var line = CharacterCells.Measure(gray, sample.Characters);
+            if (line == null)
+            {
+                continue;
+            }
+
+            for (int i = 0; i < sample.Characters.Count; i++)
+            {
+                var c = sample.Characters[i];
+                if (
+                    !sample.Excluded.Contains(i)
+                    && c.Character.Length == 1
+                    && FieldSettings.IsAlphanumeric(c.Character[0])
+                )
+                {
+                    samples.Add(
+                        (
+                            n,
+                            i,
+                            AnomalyModelEntry.CharacterKey(sample.Group, c.Character),
+                            gray,
+                            line,
+                            c.Bounds
+                        )
+                    );
+                }
+            }
+        }
+
+        return samples;
     }
 
     /// <summary>检测一行：逐个字母/数字字符与其模型比较，异常区域以原图坐标报告。</summary>

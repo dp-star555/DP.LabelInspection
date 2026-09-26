@@ -109,6 +109,7 @@
 | `ZxingBarcodeDecoder` | [src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs](src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs) |
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
 | `RegionAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs) |
+| `CharacterAnomalyCell` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyCell.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyCell.cs) |
 | `CharacterAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyDetector.cs) |
 | `CharacterAnomalyModel` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyModel.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyModel.cs) |
 | `CharacterAnomalyResult` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyResult.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyResult.cs) |
@@ -212,6 +213,18 @@
 | `FieldBindingTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/FieldBindingTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/FieldBindingTests/Backend.cs) |
 | `RequiredAppearanceTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RequiredAppearanceTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RequiredAppearanceTests/Backend.cs) |
 | `RoiWorkflowTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/Backend.cs) |
+| `BenchmarkConfig` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkConfig.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkConfig.cs) |
+| `BenchmarkExporter` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkExporter.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkExporter.cs) |
+| `BenchmarkImage` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkImage.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkImage.cs) |
+| `BenchmarkLine` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkLine.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkLine.cs) |
+| `Csv` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/Csv.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/Csv.cs) |
+| `LabelAligner` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/LabelAligner.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/LabelAligner.cs) |
+| `LoadedImage` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/LoadedImage.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/LoadedImage.cs) |
+| `LoadedLine` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/LoadedLine.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/LoadedLine.cs) |
+| `Program` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/Program.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/Program.cs) |
+| `SyntheticLabels` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/SyntheticLabels.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/SyntheticLabels.cs) |
+| `Program` | [tools/DP.LabelInspection.AnomalyBenchmark.Halcon/Runner/Program.cs](tools/DP.LabelInspection.AnomalyBenchmark.Halcon/Runner/Program.cs) |
+| `VariationModel` | [tools/DP.LabelInspection.AnomalyBenchmark.Halcon/Runner/VariationModel.cs](tools/DP.LabelInspection.AnomalyBenchmark.Halcon/Runner/VariationModel.cs) |
 | `Program` | [tools/DP.LabelInspection.BarcodeRegression/Runner/Program.cs](tools/DP.LabelInspection.BarcodeRegression/Runner/Program.cs) |
 | `CanvasGeometryLayer` | [tools/DP.LabelInspection.CanvasBenchmark/Baseline/CanvasGeometryLayer.cs](tools/DP.LabelInspection.CanvasBenchmark/Baseline/CanvasGeometryLayer.cs) |
 | `FindingSelectedEventArgs` | [tools/DP.LabelInspection.CanvasBenchmark/Baseline/FindingSelectedEventArgs.cs](tools/DP.LabelInspection.CanvasBenchmark/Baseline/FindingSelectedEventArgs.cs) |

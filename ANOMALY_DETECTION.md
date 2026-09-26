@@ -170,6 +170,16 @@ DP.LabelInspection.Demo.WinForms.exe --anomaly-demo 配方.json 良品目录 待
 
 CNN特征误报更少、速度更快，并检出了手工特征漏掉的“A”空洞；但漏检标签6中“WF675907”的斑驳“9”。两者互补，可按ROI选择或同时运行取并集。
 
+## 与其他方法对比评估
+
+`tools/DP.LabelInspection.AnomalyBenchmark`（见其README）在同一批归一化字符图上比较方法B、变差模型（numpy与HALCON）、
+anomalib的PatchCore与PaDiM：导出器按方法B训练时的方式切出字符（`CharacterAnomalyDetector.NormalizeCells`），
+各方法都输出测试得分与**按整张图留一**的训练得分，`compare.py`用同一规则统一标定阈值并出报告（误报、检出、AUROC、字符图）。
+
+已知问题（评估中发现）：方法B当前按单个字符图留一标定阈值。同一行中重复的字符（如“3P1100B”的两个“0”、两个“1”）来自同一次印刷，
+留出一个时另一个仍在训练中，留一得分接近0，模型自身阈值被压得过紧；检测时靠组中位数下限兜住（实拍中这些字符的阈值正是下限值）。
+合成标签上模型自身阈值会让224个良品字符中64个误报，加下限后为0。应改为按来源图留一（需要DP.Vision训练接口传入样本来源）。
+
 ## 兼容性检查（三轮）
 
 1. **框架/构建**：DP.Vision.OpenCv与DP.LabelInspection.Runtime在net48与net8.0-windows下0警告编译；同一程序在Mono（.NET Framework 4.8）与.NET 8上运行，

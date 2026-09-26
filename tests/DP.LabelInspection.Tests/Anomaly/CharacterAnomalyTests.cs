@@ -292,4 +292,35 @@ public sealed partial class CharacterAnomalyTests
             new AnomalySettings(id, revision, "a/b", perCharacter: true)
         );
     }
+
+    /// <summary>对比评估用的归一化单元：同键同尺寸、与训练一致；训练中没有的字符不输出。</summary>
+    [TestMethod]
+    public void NormalizesCellsLikeTraining()
+    {
+        var training = Lines("甲");
+        var segmentation = new CharacterSegmenter().Segment(Label("B1D3A2", 1), Line, "B1D3A2");
+        var test = new CharacterAnomalySample(Label("B1D3A2", 1), segmentation.Characters, group: "甲");
+        var cells = new CharacterAnomalyDetector().NormalizeCells(training, new[] { test });
+        Assert.AreEqual(30, cells.Count(c => c.Training));
+        var tested = cells.Where(c => !c.Training).ToArray();
+        CollectionAssert.AreEqual(
+            new[] { "甲/B", "甲/1", "甲/3", "甲/A", "甲/2" },
+            tested.Select(c => c.Key).ToArray()
+        );
+        Assert.IsTrue(tested.All(c => c.Sample == 5));
+        foreach (var group in cells.GroupBy(c => c.Key))
+        {
+            Assert.AreEqual(
+                1,
+                group.Select(c => (c.Image.Width, c.Image.Height)).Distinct().Count(),
+                group.Key
+            );
+        }
+
+        var entries = new RegionAnomalyDetector().TrainCharacters(training);
+        Assert.AreEqual(
+            entries.Single(e => e.Key == "甲/B").Width,
+            cells.First(c => c.Key == "甲/B").Image.Width
+        );
+    }
 }
