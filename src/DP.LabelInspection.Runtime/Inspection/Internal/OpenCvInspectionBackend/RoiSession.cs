@@ -685,7 +685,12 @@ public sealed partial class OpenCvInspectionBackend
                 new InspectionFinding(
                     "anomaly_summary",
                     $"B逐字符异常检测（{pin.LibraryId} r{pin.LibraryRevision}"
-                        + (pin.ModelKey == null ? "" : $"，字符组[{pin.ModelKey}]")
+                        + (
+                            pin.ModelKey == null
+                                ? "，未分组：字符组功能之前训练的模型，各行字体合在一起，同一字符的阈值偏高、易漏检，"
+                                    + "请在“批量训练(B)”中重新训练发布并一键绑定"
+                                : $"，字符组[{pin.ModelKey}]"
+                        )
                         + $"）：{result.Scores.Count}字中{compared.Length}字已检测"
                         + (
                             worst == null

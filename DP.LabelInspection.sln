@@ -51,6 +51,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DP.Vision.OnnxDetection", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DP.Vision.UI", "..\DP.Vision\src\DP.Vision.UI\DP.Vision.UI.csproj", "{FE747157-41B1-45BD-BC5E-DA169ADCCA1C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DP.LabelInspection.AnomalyBenchmark", "tools\DP.LabelInspection.AnomalyBenchmark\DP.LabelInspection.AnomalyBenchmark.csproj", "{B0BC37A6-297E-44CF-B460-6C8A15B47099}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -301,6 +303,18 @@ Global
 		{FE747157-41B1-45BD-BC5E-DA169ADCCA1C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{FE747157-41B1-45BD-BC5E-DA169ADCCA1C}.Release|x86.ActiveCfg = Release|Any CPU
 		{FE747157-41B1-45BD-BC5E-DA169ADCCA1C}.Release|x86.Build.0 = Release|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Debug|x64.Build.0 = Debug|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Debug|x86.Build.0 = Debug|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Release|x64.ActiveCfg = Release|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Release|x64.Build.0 = Release|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Release|x86.ActiveCfg = Release|Any CPU
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -319,5 +333,6 @@ Global
 		{295C5C22-85C2-42FF-8273-B8418D9A97D3} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{CC6D363A-DDAB-4ED9-9653-69CA03FEB99E} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{E2550739-E067-454D-ABAF-1939F12EC896} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{B0BC37A6-297E-44CF-B460-6C8A15B47099} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal
