@@ -6,6 +6,7 @@
 
 | 类型实现 | 源文件 |
 |---|---|
+| `AnomalyDemo` | [samples/DP.LabelInspection.Demo.WinForms/Runner/AnomalyDemo.cs](samples/DP.LabelInspection.Demo.WinForms/Runner/AnomalyDemo.cs) |
 | `UiInteractionProbe` | [samples/DP.LabelInspection.Demo.WinForms/Interaction/UiInteractionProbe.cs](samples/DP.LabelInspection.Demo.WinForms/Interaction/UiInteractionProbe.cs) |
 | `Program` | [samples/DP.LabelInspection.Demo.WinForms/Runner/Program.cs](samples/DP.LabelInspection.Demo.WinForms/Runner/Program.cs) |
 | `Program` | [samples/DP.LabelInspection.Demo.Wpf/Runner/Program.cs](samples/DP.LabelInspection.Demo.Wpf/Runner/Program.cs) |
@@ -90,6 +91,8 @@
 | `OpenCvQrPrintInspector` | [src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs](src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs) |
 | `ZxingBarcodeDecoder` | [src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs](src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs) |
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
+| `RegionAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs) |
+| `RegionAnomalyResult` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs) |
 | `OpenCvImageCodec` | [src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs](src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs) |
 | `OpenCvInspectionBackend.LegacyComparer` | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacyComparer.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacyComparer.cs) |
 | `OpenCvInspectionBackend.LegacySegmenter` | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacySegmenter.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/LegacySegmenter.cs) |
@@ -142,6 +145,7 @@
 | `AlgorithmIsolationTests.QrProbe` | [tests/DP.LabelInspection.Tests/Architecture/TestDoubles/AlgorithmIsolationTests/QrProbe.cs](tests/DP.LabelInspection.Tests/Architecture/TestDoubles/AlgorithmIsolationTests/QrProbe.cs) |
 | `VisionAdapterTests` | [tests/DP.LabelInspection.Tests/Architecture/VisionAdapterTests.cs](tests/DP.LabelInspection.Tests/Architecture/VisionAdapterTests.cs) |
 | `BarcodeEvidenceGroupTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodeEvidenceGroupTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodeEvidenceGroupTests.cs) |
+| `RegionAnomalyTests` | [tests/DP.LabelInspection.Tests/Anomaly/RegionAnomalyTests.cs](tests/DP.LabelInspection.Tests/Anomaly/RegionAnomalyTests.cs) |
 | `CodeRepairTests` | [tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs](tests/DP.LabelInspection.Tests/Codes/CodeRepairTests.cs) |
 | `BarcodePrintTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodePrintTests.cs) |
 | `BarcodeReadabilityTests` | [tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs](tests/DP.LabelInspection.Tests/Codes/BarcodeReadabilityTests.cs) |

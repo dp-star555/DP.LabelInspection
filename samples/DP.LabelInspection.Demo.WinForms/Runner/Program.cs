@@ -40,6 +40,27 @@ internal static class Program
             return;
         }
 
+        if ((args.Length == 5 || args.Length == 6) && args[0] == "--anomaly-demo")
+        {
+            try
+            {
+                Environment.ExitCode = AnomalyDemo.Run(
+                    args[1],
+                    args[2],
+                    args[3],
+                    args[4],
+                    args.Length == 6 ? args[5] : null
+                );
+            }
+            catch (Exception error)
+            {
+                Console.Error.WriteLine(error);
+                Environment.ExitCode = 1;
+            }
+
+            return;
+        }
+
         bool smoke = args.Length == 2 && (args[0] == "--smoke" || args[0] == "--smoke-auto");
         string? assets = FindAssets();
         var codec = new OpenCvImageCodec();
