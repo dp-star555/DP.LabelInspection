@@ -48,13 +48,10 @@ public sealed class AnomalyModelEntry
             throw new ArgumentOutOfRangeException(nameof(scope));
         }
 
-        if (
-            scope == EAnomalyModelScope.Character
-            && (key == null || key.Length != 1 || !FieldSettings.IsAlphanumeric(key[0]))
-        )
+        if (scope == EAnomalyModelScope.Character && !IsCharacterKey(key))
         {
             throw new ArgumentException(
-                "Character models are keyed by one ASCII letter or digit.",
+                "Character models are keyed by one ASCII letter or digit, optionally prefixed by \"group/\".",
                 nameof(key)
             );
         }
@@ -122,6 +119,48 @@ public sealed class AnomalyModelEntry
 
     /// <summary>适用范围：整个ROI或单个字符。</summary>
     public EAnomalyModelScope Scope { get; }
+
+    /// <summary>字符模型对应的字符（键的最后一个字符）；整ROI模型为null。</summary>
+    public string? Character => Scope == EAnomalyModelScope.Character ? Key.Substring(Key.Length - 1) : null;
+
+    /// <summary>
+    /// 字符模型所属的字符组（键“组/字符”中的组，通常为文字ROI名称或同一字体的几行共用的名称）；未分组的字符模型为null，整ROI模型为null。
+    /// 不同字体、字号的行分组训练，阈值按本组样本标定，不被其他字体的同一字符抬高。
+    /// </summary>
+    public string? Group =>
+        Scope == EAnomalyModelScope.Character && Key.Length > 1 ? Key.Substring(0, Key.Length - 2) : null;
+
+    /// <summary>字符模型的键：“字符”或“组/字符”。</summary>
+    /// <param name = "group">字符组；null表示不分组。</param>
+    /// <param name = "character">单个ASCII字母或数字。</param>
+    public static string CharacterKey(string? group, string character)
+    {
+        string key = group == null ? character : group + "/" + character;
+        if (!IsCharacterKey(key))
+        {
+            throw new ArgumentException("Invalid character group or character.");
+        }
+
+        return key;
+    }
+
+    /// <summary>字符组名称是否可用：1–60字符，不含“/”。</summary>
+    /// <param name = "group">字符组名称。</param>
+    public static bool IsCharacterGroup(string? group)
+    {
+        return !string.IsNullOrWhiteSpace(group) && group!.Length <= 60 && group.IndexOf('/') < 0;
+    }
+
+    private static bool IsCharacterKey(string? key)
+    {
+        if (key == null || key.Length == 0 || !FieldSettings.IsAlphanumeric(key[key.Length - 1]))
+        {
+            return false;
+        }
+
+        return key.Length == 1
+            || key[key.Length - 2] == '/' && IsCharacterGroup(key.Substring(0, key.Length - 2));
+    }
 
     /// <summary>库内模型键。</summary>
     public string Key { get; }

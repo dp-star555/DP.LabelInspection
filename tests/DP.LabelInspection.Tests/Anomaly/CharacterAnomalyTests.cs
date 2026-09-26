@@ -55,7 +55,7 @@ public sealed partial class CharacterAnomalyTests
 
     private static readonly string[] Good = { "A1B2C3", "3C2B1A", "B3A1C2", "2A3C1B", "C1A2B3" };
 
-    private static CharacterAnomalySample[] Lines()
+    private static CharacterAnomalySample[] Lines(string? group = null)
     {
         var segmenter = new CharacterSegmenter();
         return Good.Select(
@@ -64,7 +64,7 @@ public sealed partial class CharacterAnomalyTests
                     var image = Label(text, i);
                     var segmentation = segmenter.Segment(image, Line, text);
                     Assert.AreEqual("provisional", segmentation.Status, segmentation.Reason);
-                    return new CharacterAnomalySample(image, segmentation.Characters);
+                    return new CharacterAnomalySample(image, segmentation.Characters, group: group);
                 }
             )
             .ToArray();
@@ -236,8 +236,60 @@ public sealed partial class CharacterAnomalyTests
             "D"
         );
 
+        // 文字行绑定到字符模型库但没选逐字符：提示改为逐字符检查，而不是只说缺模型。
+        var whole = Run(temp.Store, Text(new AnomalySettings(id, revision)), image, "B1D3A2");
+        var hint = whole.Findings.Single(f => f.Code == "anomaly_model_missing").Message;
+        StringAssert.Contains(hint, "逐字符检查");
+        StringAssert.Contains(hint, "123ABC");
+
         string empty = models.CreateAnomalyLibrary("空库");
         var none = Run(temp.Store, Text(new AnomalySettings(empty, 1, perCharacter: true)), image, "B1D3A2");
         StringAssert.Contains(string.Join(",", none.Findings.Select(f => f.Code)), "anomaly_model_missing");
+    }
+
+    /// <summary>
+    /// 字符组：不同组的同一字符各自成模型（键“组/字符”），逐字符检查按模型键选组；
+    /// 组不存在时列出库中现有字符组；结果中不再逐字输出“已检测”的信息行。
+    /// </summary>
+    [TestMethod]
+    public void CharacterGroupsSelectModels()
+    {
+        using var temp = new Temp();
+        var models = temp.Store.AnomalyLibraries;
+        string id = models.CreateAnomalyLibrary("分组");
+        var detector = new RegionAnomalyDetector();
+        var entries = detector
+            .TrainCharacters(Lines("甲"))
+            .Concat(detector.TrainCharacters(Lines("乙")))
+            .ToArray();
+        CollectionAssert.Contains(entries.Select(e => e.Key).ToArray(), "乙/A");
+        Assert.AreEqual("甲", entries[0].Group);
+        Assert.AreEqual("1", entries[0].Character);
+        int revision = models.PutAnomalyModels(id, 1, entries);
+        Assert.AreEqual(12, models.LoadAnomalyLibrary(id, revision).Models.Count);
+
+        var image = Label("B1C3A2", 1);
+        var good = Run(
+            temp.Store,
+            Text(new AnomalySettings(id, revision, "甲", perCharacter: true)),
+            image,
+            "B1C3A2"
+        );
+        Assert.AreEqual(ERoiStageState.Passed, good.Execution!.Quality);
+        Assert.IsFalse(good.Findings.Any(f => f.Code == "patch_anomaly_scope"));
+        StringAssert.Contains(good.Findings.Single(f => f.Code == "anomaly_summary").Message, "甲");
+
+        var other = Run(
+            temp.Store,
+            Text(new AnomalySettings(id, revision, "丙", perCharacter: true)),
+            image,
+            "B1C3A2"
+        );
+        string missing = other.Findings.Single(f => f.Code == "anomaly_model_missing").Message;
+        StringAssert.Contains(missing, "甲");
+        StringAssert.Contains(missing, "乙");
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            new AnomalySettings(id, revision, "a/b", perCharacter: true)
+        );
     }
 }

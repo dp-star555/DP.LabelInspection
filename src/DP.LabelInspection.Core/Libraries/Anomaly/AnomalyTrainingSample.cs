@@ -69,7 +69,8 @@ public sealed class AnomalyTrainingSample
             Image.Image,
             characters,
             Enumerable.Range(0, _include.Length).Where(i => !_include[i]),
-            Image.Name + " / " + Model.Name
+            Image.Name + " / " + Model.Name,
+            Model.CharacterGroup
         );
     }
 }

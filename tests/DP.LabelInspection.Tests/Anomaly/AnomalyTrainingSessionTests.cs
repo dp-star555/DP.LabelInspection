@@ -124,11 +124,11 @@ public sealed partial class AnomalyTrainingSessionTests
         var line = session.Samples.First(s => s.Model.Kind == EAnomalyTrainingKind.Characters);
         session.SetInclude(line, 0, false);
         session.SetLabel(line, 1, line.Labels[1]);
-        Assert.AreEqual(3, session.CharacterCoverage().Single(c => c.Key == "A").Value);
+        Assert.AreEqual(3, session.CharacterCoverage().Single(c => c.Key == "序列号/A").Value);
 
         var entries = session.Train(new RegionAnomalyDetector());
         CollectionAssert.AreEquivalent(
-            new[] { "标志", "码", "1", "2", "3", "A", "B", "C" },
+            new[] { "标志", "码", "序列号/1", "序列号/2", "序列号/3", "序列号/A", "序列号/B", "序列号/C" },
             entries.Select(e => e.Key).ToArray()
         );
         Assert.AreEqual(3, entries.Single(e => e.Key == "标志").LocalRadius);
@@ -145,6 +145,7 @@ public sealed partial class AnomalyTrainingSessionTests
         Assert.AreEqual(3, bound.Count);
         Assert.IsTrue(bound.All(r => r.Tasks.DetectAnomaly && r.Anomaly!.LibraryRevision == 2));
         Assert.IsTrue(bound.Single(r => r.Name == "序列号").Anomaly!.PerCharacter);
+        Assert.AreEqual("序列号", bound.Single(r => r.Name == "序列号").Anomaly!.ModelKey);
         Assert.AreEqual(new PixelRect(25, 15, 80, 50), bound.Single(r => r.Name == "标志").Bounds);
 
         var fixedRoi = bound
@@ -180,6 +181,32 @@ public sealed partial class AnomalyTrainingSessionTests
         Assert.IsTrue(bad.Findings.Any(f => f.Code == "patch_anomaly" || f.Verdict == EInspectionVerdict.Ng));
     }
 
+    /// <summary>
+    /// 训练页保留期间配方变化：新画的ROI自动加入模型列表，已有模型关联到最新ROI配置，配方删除的ROI模型转为独立模型；
+    /// 人工删除的模型不再自动加回，但手动“从配方导入”可以加回。
+    /// </summary>
+    [TestMethod]
+    public void SyncRecipeFollowsRecipeChanges()
+    {
+        var session = new AnomalyTrainingSession();
+        var logo = new InspectionRegion("标志", ERegionKind.Fixed, new PixelRect(25, 15, 80, 50));
+        var old = new InspectionRegion("旧码", ERegionKind.Barcode, new PixelRect(292, 12, 116, 76));
+        session.SyncRecipe(new[] { logo, old });
+        Assert.AreEqual(2, session.Models.Count);
+
+        var moved = logo.WithBounds(new PixelRect(30, 15, 80, 50));
+        var line = new InspectionRegion("ROI-4", ERegionKind.Text, TextLine, true);
+        var added = session.SyncRecipe(new[] { moved, line });
+        Assert.AreEqual("ROI-4", added.Single().Name);
+        Assert.AreEqual(EAnomalyTrainingKind.Characters, added.Single().Kind);
+        Assert.AreSame(moved, session.Models.Single(m => m.Name == "标志").Region);
+        Assert.IsNull(session.Models.Single(m => m.Name == "旧码").Region);
+
+        session.RemoveModel(session.Models.Single(m => m.Name == "ROI-4"));
+        Assert.AreEqual(0, session.SyncRecipe(new[] { moved, line }).Count);
+        Assert.AreEqual(1, session.ImportRecipe(new[] { moved, line }).Count);
+    }
+
     /// <summary>采集可保存后再打开：图像（无路径的另存为PNG）、模型尺寸、样本框、逐字符确认文本与取消的字符都恢复。</summary>
     [TestMethod]
     public async Task ProjectRoundTrips()
@@ -200,6 +227,7 @@ public sealed partial class AnomalyTrainingSessionTests
             await session.ExtractAsync(new Candidates());
             session.SetLabel(line, 2, "8");
             session.SetInclude(line, 4, false);
+            session.SetGroup(session.Models[0], "字体A");
             string file = Path.Combine(dir, "采集.json");
             AnomalyTrainingProject.Save(session, file, codec);
 
@@ -208,6 +236,7 @@ public sealed partial class AnomalyTrainingSessionTests
             Assert.IsTrue(File.Exists(back.Images[0].Path));
             Assert.AreEqual(86, back.Models.Single(m => m.Name == "标志").Width);
             Assert.AreSame(recipe[0], back.Models.Single(m => m.Name == "序列号").Region);
+            Assert.AreEqual("字体A", back.Models.Single(m => m.Name == "序列号").CharacterGroup);
             var restored = back.Samples.Single(s => s.Model.Kind == EAnomalyTrainingKind.Characters);
             Assert.AreEqual("A182C3", restored.ConfirmedText);
             CollectionAssert.AreEqual(new[] { 4 }, excluded[restored]);

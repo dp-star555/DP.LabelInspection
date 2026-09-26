@@ -466,9 +466,30 @@ public sealed partial class OpenCvInspectionBackend
 
             if (!library.Models.TryGetValue(key, out var entry))
             {
+                // 按字符组列出：“组：字符…”，未分组的只列字符。
+                var characters = library
+                    .Models.Values.Where(m => m.Scope == EAnomalyModelScope.Character)
+                    .GroupBy(m => m.Group)
+                    .Select(g =>
+                        (g.Key == null ? "" : g.Key + "：")
+                        + string.Concat(g.Select(m => m.Character).OrderBy(c => c, StringComparer.Ordinal))
+                    )
+                    .ToArray();
+                var regions = library
+                    .Models.Values.Where(m => m.Scope == EAnomalyModelScope.Region)
+                    .Select(m => m.Key)
+                    .ToArray();
+                string hint =
+                    r.Kind == ERegionKind.Text && characters.Length > 0
+                        ? $"库中是字符模型（{string.Join("；", characters)}）：文字行请在ROI编辑中把“逐字符检查”设为是，模型键填字符组。"
+                    : regions.Length > 0
+                        ? "库中现有整ROI模型："
+                            + string.Join("、", regions)
+                            + "；请为本ROI训练，或在ROI编辑中填写对应的模型键。"
+                    : "库中还没有整ROI模型；请在“批量训练(B)”中为本ROI训练并发布。";
                 Fail(
                     "anomaly_model_missing",
-                    $"异常模型库 {library.Name} r{library.Revision} 中没有模型[{key}]；请为该ROI训练并发布模型。"
+                    $"异常模型库 {library.Name} r{library.Revision} 中没有模型[{key}]。" + hint
                 );
                 return findings;
             }
@@ -523,12 +544,23 @@ public sealed partial class OpenCvInspectionBackend
             Action<string, string> fail
         )
         {
-            var entries = library.Models.Values.Where(m => m.Scope == EAnomalyModelScope.Character).ToArray();
+            string? group = r.Anomaly!.ModelKey;
+            var all = library.Models.Values.Where(m => m.Scope == EAnomalyModelScope.Character).ToArray();
+            var entries = all.Where(m => m.Group == group).ToArray();
             if (entries.Length == 0)
             {
+                var groups = all.Select(m => m.Group ?? "（未分组）").Distinct().ToArray();
                 fail(
                     "anomaly_model_missing",
-                    $"异常模型库 {library.Name} r{library.Revision} 中没有字符模型；请用“字符异常模型制作”训练并发布。"
+                    $"异常模型库 {library.Name} r{library.Revision} 中没有"
+                        + (group == null ? "未分组的字符模型" : $"字符组[{group}]的字符模型")
+                        + (
+                            groups.Length == 0
+                                ? "，库中还没有字符模型；请在“批量训练(B)”中训练并发布。"
+                                : "；库中现有字符组："
+                                    + string.Join("、", groups)
+                                    + "，请在ROI编辑的“模型键”中填写对应的字符组。"
+                        )
                 );
                 return findings;
             }
@@ -560,7 +592,7 @@ public sealed partial class OpenCvInspectionBackend
                     );
                 }
 
-                models[e.Key] = new CharacterAnomalyModel(
+                models[e.Character!] = new CharacterAnomalyModel(
                     e,
                     model,
                     _owner._anomalyDetectors[e.FeatureSource]
@@ -652,7 +684,9 @@ public sealed partial class OpenCvInspectionBackend
             findings.Add(
                 new InspectionFinding(
                     "anomaly_summary",
-                    $"B逐字符异常检测（{pin.LibraryId} r{pin.LibraryRevision}）：{result.Scores.Count}字中{compared.Length}字已检测"
+                    $"B逐字符异常检测（{pin.LibraryId} r{pin.LibraryRevision}"
+                        + (pin.ModelKey == null ? "" : $"，字符组[{pin.ModelKey}]")
+                        + $"）：{result.Scores.Count}字中{compared.Length}字已检测"
                         + (
                             worst == null
                                 ? ""
