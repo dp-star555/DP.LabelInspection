@@ -318,7 +318,8 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             (int)entry["stride"]!,
             (int)entry["minimum_area"]!,
             (string?)entry["calibration"] ?? "",
-            (EAnomalyModelScope)((int?)entry["scope"] ?? 0)
+            (EAnomalyModelScope)((int?)entry["scope"] ?? 0),
+            (double?)entry["ink_threshold"]
         );
     }
 
@@ -339,6 +340,7 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             { "minimum_area", model.MinimumArea },
             { "calibration", model.Calibration },
             { "scope", (int)model.Scope },
+            { "ink_threshold", model.InkThreshold },
         };
     }
 

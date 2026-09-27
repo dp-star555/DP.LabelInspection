@@ -29,6 +29,7 @@ public sealed partial class OpenCvInspectionBackend
     private readonly DP.Vision.Algorithms.ITextQualityInspector? _textQuality;
     private readonly DP.Vision.Algorithms.ICharacterMatcher _matcher;
     private readonly IAnomalyLibraryRepository? _anomalyModels;
+    private readonly AnomalyModelCache _anomalyCache = new AnomalyModelCache();
     private readonly Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector> _anomalyDetectors;
 
     /// <summary>除非明确转移所有权，参考及算法均为借用。</summary>

@@ -26,6 +26,10 @@ public sealed class CharacterAnomalyModel
         }
     }
 
+    /// <summary>缺墨检查的良品参考（按模型对象缓存，线程安全）；未标定缺墨阈值或模型不支持时为null。</summary>
+    internal CharacterInkLoss? Ink =>
+        Entry.InkThreshold != null && CharacterInkLoss.Supports(Model) ? CharacterInkLoss.For(Model) : null;
+
     /// <summary>库条目。</summary>
     public AnomalyModelEntry Entry { get; }
 

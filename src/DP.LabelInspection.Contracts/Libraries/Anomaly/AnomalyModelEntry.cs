@@ -26,6 +26,7 @@ public sealed class AnomalyModelEntry
     /// <param name = "minimumArea">异常区域最小面积（原图平方像素）。</param>
     /// <param name = "calibration">阈值标定说明。</param>
     /// <param name = "scope">适用范围：整个ROI或单个字符；字符模型的键必须是单个ASCII字母或数字。</param>
+    /// <param name = "inkThreshold">字符模型的缺墨阈值（墨量，0–1之间的比例）；null表示未标定，不做缺墨检查。</param>
     public AnomalyModelEntry(
         string key,
         byte[] model,
@@ -40,9 +41,15 @@ public sealed class AnomalyModelEntry
         int stride,
         int minimumArea,
         string calibration = "",
-        EAnomalyModelScope scope = EAnomalyModelScope.Region
+        EAnomalyModelScope scope = EAnomalyModelScope.Region,
+        double? inkThreshold = null
     )
     {
+        if (inkThreshold is double ink && (!(ink > 0) || ink > 1))
+        {
+            throw new ArgumentOutOfRangeException(nameof(inkThreshold));
+        }
+
         if (!Enum.IsDefined(typeof(EAnomalyModelScope), scope))
         {
             throw new ArgumentOutOfRangeException(nameof(scope));
@@ -115,7 +122,14 @@ public sealed class AnomalyModelEntry
         MinimumArea = minimumArea;
         Calibration = calibration ?? "";
         Scope = scope;
+        InkThreshold = inkThreshold;
     }
+
+    /// <summary>
+    /// 缺墨阈值：笔画内墨量比任何良品在±1像素内的最低墨量还低多少（墨量为按纸色归一化的0–1比例，3×3平均）即判缺墨；
+    /// 按来源图留一标定。null表示未标定（旧版本模型或与位置无关的模型），不做缺墨检查。
+    /// </summary>
+    public double? InkThreshold { get; }
 
     /// <summary>适用范围：整个ROI或单个字符。</summary>
     public EAnomalyModelScope Scope { get; }
@@ -225,7 +239,8 @@ public sealed class AnomalyModelEntry
             Stride,
             MinimumArea,
             Calibration,
-            Scope
+            Scope,
+            InkThreshold
         );
     }
 

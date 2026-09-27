@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net48</TargetFramework>
+        <HalconRoot Condition="'$(HalconRoot)'==''">$(HALCONROOT)</HalconRoot>
+    </PropertyGroup>
+    <ItemGroup>
+        <ProjectReference Include="../../src/DP.LabelInspection.Contracts/DP.LabelInspection.Contracts.csproj" />
+        <Reference Include="halcondotnet">
+            <HintPath>$(HalconRoot)/bin/dotnet35/halcondotnet.dll</HintPath>
+            <Private>true</Private>
+        </Reference>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    </ItemGroup>
+</Project>

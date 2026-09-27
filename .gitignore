@@ -21,3 +21,4 @@ jobs/
 # 架构图工具生成的历史HTML、截图和校验JSON不进入源码仓库。
 docs/decision-flow/archive-v1/
 docs/decision-flow/index.html
+__pycache__/

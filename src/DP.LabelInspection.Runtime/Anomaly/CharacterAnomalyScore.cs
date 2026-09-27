@@ -16,6 +16,8 @@ public sealed class CharacterAnomalyScore
     /// <param name = "maximumScore">最大块得分；未检测时为0。</param>
     /// <param name = "threshold">该字符模型的阈值；未检测时为0。</param>
     /// <param name = "findings">异常区域（NG，原图坐标）或阻断原因。</param>
+    /// <param name = "inkLoss">缺墨检查的最大值（墨量比例）；未做缺墨检查时为null。</param>
+    /// <param name = "inkThreshold">缺墨阈值；未做缺墨检查时为null。</param>
     public CharacterAnomalyScore(
         string character,
         int tokenIndex,
@@ -23,7 +25,9 @@ public sealed class CharacterAnomalyScore
         string status,
         double maximumScore,
         double threshold,
-        IEnumerable<InspectionFinding> findings
+        IEnumerable<InspectionFinding> findings,
+        double? inkLoss = null,
+        double? inkThreshold = null
     )
     {
         Character = character ?? throw new ArgumentNullException(nameof(character));
@@ -33,6 +37,8 @@ public sealed class CharacterAnomalyScore
         MaximumScore = maximumScore;
         Threshold = threshold;
         Findings = Array.AsReadOnly((findings ?? Array.Empty<InspectionFinding>()).ToArray());
+        InkLoss = inkLoss;
+        InkThreshold = inkThreshold;
     }
 
     /// <summary>字符身份。</summary>
@@ -53,8 +59,20 @@ public sealed class CharacterAnomalyScore
     /// <summary>阈值。</summary>
     public double Threshold { get; }
 
-    /// <summary>最大得分相对阈值的倍数。</summary>
-    public double Ratio => Threshold > 0 ? MaximumScore / Threshold : 0;
+    /// <summary>缺墨检查的最大值（墨量比例）；未做缺墨检查时为null。</summary>
+    public double? InkLoss { get; }
+
+    /// <summary>缺墨阈值；未做缺墨检查时为null。</summary>
+    public double? InkThreshold { get; }
+
+    /// <summary>局部块比较的最大得分相对阈值的倍数。</summary>
+    public double PatchRatio => Threshold > 0 ? MaximumScore / Threshold : 0;
+
+    /// <summary>缺墨相对阈值的倍数；未做缺墨检查时为0。</summary>
+    public double InkRatio => InkLoss is double ink && InkThreshold is double t && t > 0 ? ink / t : 0;
+
+    /// <summary>两项检查中较大的阈值倍数。</summary>
+    public double Ratio => Math.Max(PatchRatio, InkRatio);
 
     /// <summary>异常区域或阻断原因。</summary>
     public IReadOnlyList<InspectionFinding> Findings { get; }

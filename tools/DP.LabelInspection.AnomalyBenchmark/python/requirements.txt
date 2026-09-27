@@ -1,0 +1,8 @@
+# 对比评估脚本的依赖（Python 3.10–3.12）。GPU可选；CPU也能跑，字符图很小。
+# 验证过的版本：anomalib 2.6.2、torch 2.14、timm 1.0.30、opencv-python-headless 5.0、numpy 2.4。
+anomalib==2.6.2
+torch
+torchvision
+timm
+numpy
+opencv-python-headless

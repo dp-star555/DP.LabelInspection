@@ -15,11 +15,16 @@ public sealed class AnomalySettings
     /// <param name = "perCharacter">
     /// 逐字符模式：按文字质量的分割结果逐字检查，每个字符使用库中同名的字符模型（适合内容可变的文字）；仅文字ROI可用。
     /// </param>
+    /// <param name = "inkLoss">
+    /// 逐字符模式的缺墨检查：笔画内比任何良品在±1像素内的最低墨量还浅的区域判为缺墨（斑驳、褪色、断笔），
+    /// 与局部块比较并行，任一项超阈值即NG。需要带缺墨阈值的字符模型（批量训练自动标定）；旧模型不做此项。
+    /// </param>
     public AnomalySettings(
         string libraryId,
         int libraryRevision,
         string? modelKey = null,
-        bool perCharacter = false
+        bool perCharacter = false,
+        bool inkLoss = true
     )
     {
         if (
@@ -54,7 +59,11 @@ public sealed class AnomalySettings
         LibraryRevision = libraryRevision;
         ModelKey = modelKey;
         PerCharacter = perCharacter;
+        InkLoss = inkLoss;
     }
+
+    /// <summary>逐字符模式是否做缺墨检查（默认是）。</summary>
+    public bool InkLoss { get; }
 
     /// <summary>逐字符模式：每个分割出的字符使用库中该字符的模型。</summary>
     public bool PerCharacter { get; }
