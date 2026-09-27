@@ -427,7 +427,11 @@ public sealed partial class OpenCvInspectionBackend
             AnomalyLibrarySnapshot library;
             try
             {
-                library = _owner._anomalyModels.LoadAnomalyLibrary(pin.LibraryId, pin.LibraryRevision);
+                library = _owner._anomalyCache.Library(
+                    _owner._anomalyModels,
+                    pin.LibraryId,
+                    pin.LibraryRevision
+                );
             }
             catch (Exception error)
                 when (error is System.IO.IOException
@@ -503,7 +507,7 @@ public sealed partial class OpenCvInspectionBackend
                 return findings;
             }
 
-            var model = A.PatchAnomalyModel.FromBytes(entry.CopyModel());
+            var model = _owner._anomalyCache.Model(entry);
             if (model.FeatureSource != entry.FeatureSource)
             {
                 throw new System.IO.InvalidDataException("Anomaly model metadata does not match its bytes.");
@@ -584,7 +588,7 @@ public sealed partial class OpenCvInspectionBackend
             var models = new Dictionary<string, CharacterAnomalyModel>(StringComparer.Ordinal);
             foreach (var e in entries)
             {
-                var model = A.PatchAnomalyModel.FromBytes(e.CopyModel());
+                var model = _owner._anomalyCache.Model(e);
                 if (model.FeatureSource != e.FeatureSource)
                 {
                     throw new System.IO.InvalidDataException(
@@ -675,7 +679,8 @@ public sealed partial class OpenCvInspectionBackend
                 segmentation.Characters,
                 r.Bounds,
                 c => models.TryGetValue(c, out var m) ? m : null,
-                token
+                token,
+                pin.InkLoss
             );
             var findings = result.Scores.SelectMany(s => s.Findings).ToList();
             var compared = result.Scores.Where(s => s.Status == "compared").ToArray();

@@ -20,7 +20,7 @@ public sealed partial class CharacterAnomalyTests
 {
     private static readonly PixelRect Line = new PixelRect(10, 12, 300, 64);
 
-    private static ImageFrame Label(string text, int seed, int breakAt = -1)
+    private static ImageFrame Label(string text, int seed, int breakAt = -1, int fadeAt = -1)
     {
         using var m = new Mat(90, 320, MatType.CV_8UC1, Scalar.All(235));
         Cv2.Randn(m, Scalar.All(235), Scalar.All(3));
@@ -46,6 +46,30 @@ public sealed partial class CharacterAnomalyTests
                 out _
             ).Width;
             Cv2.Rectangle(m, new Rect(left, 43, width, 5), Scalar.All(235), -1);
+        }
+
+        if (fadeAt >= 0)
+        {
+            // 第fadeAt个字符整体褪色：墨色向纸色靠近一半（形状不变）。
+            var origin2 = new Point(24 + seed % 2, 60);
+            int left =
+                origin2.X
+                + Cv2.GetTextSize(
+                    text.Substring(0, fadeAt),
+                    HersheyFonts.HersheySimplex,
+                    1.2,
+                    3,
+                    out _
+                ).Width;
+            int width = Cv2.GetTextSize(
+                text.Substring(fadeAt, 1),
+                HersheyFonts.HersheySimplex,
+                1.2,
+                3,
+                out _
+            ).Width;
+            using var part = new Mat(m, new Rect(left + 4, 20, width - 8, 50));
+            part.ConvertTo(part, MatType.CV_8UC1, .5, 117.5);
         }
 
         var bytes = new byte[m.Rows * m.Cols];
@@ -322,5 +346,95 @@ public sealed partial class CharacterAnomalyTests
             entries.Single(e => e.Key == "甲/B").Width,
             cells.First(c => c.Key == "甲/B").Image.Width
         );
+    }
+
+    /// <summary>
+    /// 缺墨检查：训练时按来源图留一标定缺墨阈值并随库保存；褪色的字符报ink_loss，良品每字一行缺墨评分说明、不报缺墨；
+    /// 绑定关闭缺墨检查或旧模型（无缺墨阈值）时不做此项。
+    /// </summary>
+    [TestMethod]
+    public void InkLossFlagsFadedCharacters()
+    {
+        using var temp = new Temp();
+        var models = temp.Store.AnomalyLibraries;
+        string id = models.CreateAnomalyLibrary("缺墨");
+        var entries = new RegionAnomalyDetector().TrainCharacters(Lines());
+        Assert.IsTrue(
+            entries.All(e => e.InkThreshold is double t && t >= .04 && t <= 1),
+            entries[0].Calibration
+        );
+        int revision = models.PutAnomalyModels(id, 1, entries);
+        var loaded = models.LoadAnomalyLibrary(id, revision).Models;
+        Assert.IsTrue(entries.All(e => loaded[e.Key].InkThreshold == e.InkThreshold));
+
+        var good = Run(
+            temp.Store,
+            Text(new AnomalySettings(id, revision, perCharacter: true)),
+            Label("B1C3A2", 1),
+            "B1C3A2"
+        );
+        Assert.AreEqual(
+            ERoiStageState.Passed,
+            good.Execution!.Quality,
+            string.Join(";", good.Findings.Select(f => f.Code + ":" + f.Message))
+        );
+        Assert.AreEqual(6, good.Findings.Count(f => f.Code == "ink_loss_scope"));
+
+        var faded = Label("B1C3A2", 1, fadeAt: 2);
+        var result = Run(
+            temp.Store,
+            Text(new AnomalySettings(id, revision, perCharacter: true)),
+            faded,
+            "B1C3A2"
+        );
+        var ink = result.Findings.Where(f => f.Code == "ink_loss").ToArray();
+        Assert.IsTrue(
+            ink.Length > 0,
+            string.Join(";", result.Findings.Select(f => f.Code + ":" + f.Message))
+        );
+        Assert.IsTrue(
+            ink.All(f =>
+                f.Message.StartsWith("字符[C]（第3位）", StringComparison.Ordinal) && f.Bounds.HasValue
+            ),
+            string.Join(";", ink.Select(f => f.Message))
+        );
+        Assert.AreEqual(ERoiStageState.Failed, result.Execution!.Quality);
+
+        var off = Run(
+            temp.Store,
+            Text(new AnomalySettings(id, revision, perCharacter: true, inkLoss: false)),
+            faded,
+            "B1C3A2"
+        );
+        Assert.IsFalse(off.Findings.Any(f => f.Code.StartsWith("ink_loss", StringComparison.Ordinal)));
+
+        string old = models.CreateAnomalyLibrary("旧模型");
+        int oldRevision = models.PutAnomalyModels(
+            old,
+            1,
+            entries.Select(e => new AnomalyModelEntry(
+                e.Key,
+                e.CopyModel(),
+                e.Sha256,
+                e.FeatureSource,
+                e.Width,
+                e.Height,
+                e.LocalRadius,
+                e.TrainingImages,
+                e.Threshold,
+                e.Margin,
+                e.Stride,
+                e.MinimumArea,
+                e.Calibration,
+                e.Scope
+            ))
+        );
+        var legacy = Run(
+            temp.Store,
+            Text(new AnomalySettings(old, oldRevision, perCharacter: true)),
+            faded,
+            "B1C3A2"
+        );
+        Assert.IsFalse(legacy.Findings.Any(f => f.Code.StartsWith("ink_loss", StringComparison.Ordinal)));
     }
 }

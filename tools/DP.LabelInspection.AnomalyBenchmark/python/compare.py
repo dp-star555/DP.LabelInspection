@@ -7,6 +7,7 @@
 方法B另列产品当前的阈值，用于看标定方式的影响：
   dp-b@model    模型自身阈值（按单个字符图留一；同一行重复的字符留一时另一个仍在训练中，阈值偏紧）
   dp-b@product  检测时实际使用的阈值（模型阈值加中位数下限）
+缺墨检查（dp-ink）同样列出统一标定与产品阈值（dp-ink@product，按来源图留一、下限0.04）；dp-b+ink为两项取较大倍数，即产品的判定。
 
 输出（前缀由--out-name指定，默认report）：report.md（汇总、缺陷字符逐方法倍数、各方法误报最高的字符）、
 report.html（带字符图）、report-per-character.csv（每个测试字符在各方法下的倍数）。
@@ -54,13 +55,17 @@ def auroc(positives: list[float], negatives: list[float]) -> float:
     return wins / (len(positives) * len(negatives))
 
 
-def thresholds(sets, results, rule, margin, floor):
+# 方法自身的阈值下限：缺墨值在良品上常为0，留一最大值×余量可能为0，产品同样以0.04（墨量比例）为下限。
+MINIMUM = {"dp-ink": 0.04}
+
+
+def thresholds(sets, results, rule, margin, floor, minimum=0.0):
     """(run, key) → 阈值；只有一张训练图含该键时为NaN（无法标定）。"""
     thr: dict[tuple[str, str], float] = {}
     group_of: dict[tuple[str, str], str] = {}
     for ks in sets:
         loo = [float(results[(ks.run, c.id)]["score"]) for c in ks.train if (ks.run, c.id) in results]
-        thr[(ks.run, ks.key)] = rule_value(loo, rule) * margin if loo else float("nan")
+        thr[(ks.run, ks.key)] = max(rule_value(loo, rule) * margin, minimum) if loo else float("nan")
         group_of[(ks.run, ks.key)] = ks.key.split("/")[0] if "/" in ks.key else ""
     if floor == "group-median":
         by_run: dict[str, list[float]] = defaultdict(list)
@@ -95,13 +100,21 @@ def main() -> None:
     ratios: dict[str, dict[tuple[str, str], float]] = {}
     for method in methods:
         results = read_results(os.path.join(results_dir, method + ".csv"))
-        thr = thresholds(sets, results, args.rule, args.margin, args.floor)
+        thr = thresholds(
+            sets, results, args.rule, args.margin, "none" if method == "dp-ink" else args.floor, MINIMUM.get(method, 0.0)
+        )
         ratios[method] = {}
         for ks, c in tests:
             r = results.get((c.run, c.id))
             t = thr[(ks.run, ks.key)]
             if r is not None and not math.isnan(t) and t > 0:
                 ratios[method][(c.run, c.id)] = float(r["score"]) / t
+        if method == "dp-ink":
+            ratios["dp-ink@product"] = {}
+            for ks, c in tests:
+                r = results.get((c.run, c.id))
+                if r is not None and r.get("product_threshold"):
+                    ratios["dp-ink@product"][(c.run, c.id)] = float(r["score"]) / float(r["product_threshold"])
         if method == "dp-b":
             # 产品当前的阈值：模型自身（按单个字符留一，同一行重复的字符互相作证，阈值偏紧）与加中位数下限后的实际阈值。
             for name, column in (("dp-b@model", "model_threshold"), ("dp-b@product", "product_threshold")):
@@ -110,6 +123,17 @@ def main() -> None:
                     r = results.get((c.run, c.id))
                     if r is not None and r.get(column):
                         ratios[name][(c.run, c.id)] = float(r["score"]) / float(r[column])
+    if "dp-b" in ratios and "dp-ink" in ratios:
+        # 产品的逐字符检查：局部块比较与缺墨检查任一项超阈值即NG，倍数取两者较大者。
+        ratios["dp-b+ink"] = {
+            k: max(ratios["dp-b"].get(k, 0.0), ratios["dp-ink"].get(k, 0.0))
+            for k in set(ratios["dp-b"]) | set(ratios["dp-ink"])
+        }
+        if "dp-b@product" in ratios and "dp-ink@product" in ratios:
+            ratios["dp-b+ink@product"] = {
+                k: max(ratios["dp-b@product"].get(k, 0.0), ratios["dp-ink@product"].get(k, 0.0))
+                for k in set(ratios["dp-b@product"]) | set(ratios["dp-ink@product"])
+            }
     names = list(ratios)
 
     rows = []

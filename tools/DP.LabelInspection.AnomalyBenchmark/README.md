@@ -5,6 +5,7 @@
 | 方法 | 结果文件 | 说明 |
 |---|---|---|
 | 方法B（本项目） | `results/dp-b.csv` | 手工特征、位置相关±1像素的局部块最近邻（导出器直接调用产品代码） |
+| 缺墨检查（本项目） | `results/dp-ink.csv` | 单向：笔画内比所有良品同位置都浅多少；报告另列 `dp-b+ink`（两项取较大，即产品判定） |
 | 变差模型（numpy） | `results/variation-numpy.csv` | 逐像素均值/标准差，与HALCON `train_variation_model` 'standard' 同一判据，作参考与交叉检查 |
 | HALCON变差模型 | `results/halcon-variation.csv` | 全部用HALCON算子计算（`DP.LabelInspection.AnomalyBenchmark.Halcon`） |
 | anomalib PatchCore | `results/anomalib-patchcore.csv` | WideResNet50 layer2+3，记忆库最近邻，anomalib的图像得分（含重加权） |

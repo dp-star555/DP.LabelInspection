@@ -108,6 +108,7 @@
 | `OpenCvQrPrintInspector` | [src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs](src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs) |
 | `ZxingBarcodeDecoder` | [src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs](src/DP.LabelInspection.Runtime/Codes/ZxingBarcodeDecoder.cs) |
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
+| `AnomalyModelCache` | [src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs](src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs) |
 | `RegionAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs) |
 | `CharacterAnomalyCell` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyCell.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyCell.cs) |
 | `CharacterAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyDetector.cs) |
@@ -116,6 +117,7 @@
 | `CharacterAnomalyScore` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyScore.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyScore.cs) |
 | `CharacterCell` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterCell.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterCell.cs) |
 | `CharacterCells` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterCells.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterCells.cs) |
+| `CharacterInkLoss` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterInkLoss.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterInkLoss.cs) |
 | `CharacterLine` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterLine.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterLine.cs) |
 | `RegionAnomalyResult` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs) |
 | `OpenCvImageCodec` | [src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs](src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs) |

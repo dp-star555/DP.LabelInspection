@@ -111,6 +111,14 @@ internal sealed class BenchmarkExporter
             "model_threshold",
             "product_threshold"
         );
+        // 缺墨检查单独成列（同一套阈值规则由compare.py统一标定），另有产品阈值（按来源图留一）供参考。
+        using var ink = new Csv(
+            Path.Combine(output, "results", "dp-ink.csv"),
+            "run",
+            "id",
+            "score",
+            "product_threshold"
+        );
         foreach (var (name, runTrain, runTest) in runs)
         {
             watch.Restart();
@@ -178,9 +186,14 @@ internal sealed class BenchmarkExporter
             int scored = 0;
             foreach (var (image, line, _) in testSamples)
             {
-                foreach (var (id, score, model, threshold) in Score(detector, models, image, line))
+                foreach (var s in Score(detector, models, image, line))
                 {
-                    ours.Row(new object[] { name, id, score, model, threshold });
+                    ours.Row(new object[] { name, s.id, s.score, s.model, s.threshold });
+                    if (s.ink is double loss)
+                    {
+                        ink.Row(new object[] { name, s.id, loss, s.inkThreshold! });
+                    }
+
                     scored++;
                 }
             }
@@ -194,9 +207,14 @@ internal sealed class BenchmarkExporter
                 var others = Train(detector, algorithm, runTrain.Where(t => t != held));
                 foreach (var line in held.Lines)
                 {
-                    foreach (var (id, score, _, _) in Score(detector, others, held, line))
+                    foreach (var s in Score(detector, others, held, line))
                     {
-                        ours.Row(new object[] { name, id, score, "", "" });
+                        ours.Row(new object[] { name, s.id, s.score, "", "" });
+                        if (s.ink is double loss)
+                        {
+                            ink.Row(new object[] { name, s.id, loss, "" });
+                        }
+
                         calibrated++;
                     }
                 }
@@ -225,8 +243,15 @@ internal sealed class BenchmarkExporter
             );
     }
 
-    /// <summary>一行中已检测字符的得分；返回（编号、最大得分、模型自身阈值、产品阈值（含中位数下限））。</summary>
-    private static IEnumerable<(string id, double score, double model, double threshold)> Score(
+    /// <summary>一行中已检测字符的得分：编号、局部块最大得分、模型自身阈值、产品阈值（含中位数下限），以及缺墨值与缺墨阈值（未标定时为null）。</summary>
+    private static IEnumerable<(
+        string id,
+        double score,
+        double model,
+        double threshold,
+        double? ink,
+        double? inkThreshold
+    )> Score(
         CharacterAnomalyDetector detector,
         Dictionary<string, CharacterAnomalyModel> models,
         LoadedImage image,
@@ -246,7 +271,9 @@ internal sealed class BenchmarkExporter
                     Id(image, line, s.TokenIndex + 1),
                     s.MaximumScore,
                     models[AnomalyModelEntry.CharacterKey(line.Group, s.Character)].Model.Threshold,
-                    s.Threshold
+                    s.Threshold,
+                    s.InkLoss,
+                    s.InkThreshold
                 )
             )
             .ToList();

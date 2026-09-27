@@ -23,6 +23,7 @@ internal static partial class RegionEditor
             AnomalyLibraryRevision = r.Anomaly?.LibraryRevision;
             AnomalyModelKey = r.Anomaly?.ModelKey;
             AnomalyPerCharacter = r.Anomaly?.PerCharacter ?? false;
+            AnomalyInkLoss = r.Anomaly?.InkLoss ?? true;
             Name = r.Name;
             Kind = r.Kind;
             X = r.Bounds.X;
@@ -117,6 +118,16 @@ internal static partial class RegionEditor
             )
         ]
         public bool AnomalyPerCharacter { get; set; }
+
+        [
+            Category("07 异常检测（方法B）"),
+            DisplayName("缺墨检查（逐字符）"),
+            TypeConverter(typeof(ChineseBooleanConverter)),
+            Description(
+                "是：逐字符检查时另外检查笔画内是否比所有良品同位置都浅（斑驳、褪色、断笔），与局部块比较任一项超阈值即NG。需要批量训练发布的新模型（旧模型没有缺墨阈值，不做此项）。照明或曝光变化较大时可能误报。"
+            )
+        ]
+        public bool AnomalyInkLoss { get; set; } = true;
 
         [
             Category("01 区域位置与类型"),
@@ -402,7 +413,8 @@ internal static partial class RegionEditor
                 AnomalyLibraryId!.Trim(),
                 AnomalyLibraryRevision.Value,
                 string.IsNullOrWhiteSpace(AnomalyModelKey) ? null : AnomalyModelKey!.Trim(),
-                perCharacter
+                perCharacter,
+                AnomalyInkLoss
             );
         }
 
