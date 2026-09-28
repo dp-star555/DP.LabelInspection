@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using DP.LabelInspection.Contracts;
-using OpenCvSharp;
 using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
 namespace DP.LabelInspection.Runtime;

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.Vision;
-using OpenCvSharp;
 using A = DP.Vision.Algorithms;
 using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
