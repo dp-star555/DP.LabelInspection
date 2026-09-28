@@ -48,7 +48,7 @@ WPF控件现在实现`IDisposable`。宿主应先`await CancelAndWaitAsync()`，
 
 ## 性能基准与限制
 
-- 历史全BGR/GDI基准冻结在`tools/DP.LabelInspection.CanvasBenchmark/Baseline/ImageViewerControl.cs`与`Baseline/CanvasGeometryLayer.cs`；`unified`模式显式使用冻结类，避免误把已迁移的公开ImageViewerControl当作旧版基准。
+- 历史全BGR/GDI基准工具（`tools/DP.LabelInspection.CanvasBenchmark`）已删除，结论见`docs/archive/CANVAS_BENCHMARK.md`。
 - 本轮仅构建验证该可选工具，没有重跑40进程性能矩阵，也没有新的工作台FPS结论。
 - 通用图块Renderer的既有性能结果不能直接等同于含OCR/报告/字库的完整工作台吞吐。
 - 兼容图像输入仍会复制，尚未接入相机池/异步大文件解码；Label `ImageFrame`原有12000边长/1600万像素限制没有改变。

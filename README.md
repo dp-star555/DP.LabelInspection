@@ -55,7 +55,7 @@
 | 条码 | ZXing真实1D/QR等解码＋独立一维条/空隙缺墨、多墨检测；原图缺陷框、面积、局部阈值NG；另支持QR模块内部缺墨/多墨（[QR_PRINT.md](QR_PRINT.md)）；非ISO评级，DataMatrix外观未实现，见[BARCODE_PRINT.md](BARCODE_PRINT.md) |
 | WinForms | 一维/QR独立ROI选项、条码F汇总＋单一缺陷标记视图＋完整子项（[说明](BARCODE_EVIDENCE_GROUPS.md)）、滚轮缩放/中右键平移/1:1/适应窗口、图像/鼠标ROI、坐标与规则编辑、库版本绑定、阈值、单字/参考/差异图、补库与下载 |
 | 桌面工作台 | 模型加载、样例加载、配方读写、逐图批量、自动报告历史、人工复核、ZIP导出 |
-| 中立几何验证 | Region游程/XLD contour亚像素折线可在当前画布显示；HALCON23.11实测提取，显示侧无HALCON依赖。验证底座与限制见[HALCON_CANVAS_FEASIBILITY.md](HALCON_CANVAS_FEASIBILITY.md)，不等于完整通用画布交付；新通用能力已独立至[DP.Vision](../DP.Vision/README.md)，旧工作台的WinForms/WPF图像和证据绘制现已接入DP.Vision，公开类型和矩形ROI事件保留，见[工作台迁移记录](VISION_WORKBENCH_MIGRATION.md)；[历史同机性能实测](CANVAS_BENCHMARK.md)保留独立旧版基准，不是本轮工作台FPS结论 |
+| 中立几何验证 | Region游程/XLD contour亚像素折线可在当前画布显示；HALCON23.11实测提取，显示侧无HALCON依赖。验证底座与限制见[docs/archive/HALCON_CANVAS_FEASIBILITY.md](docs/archive/HALCON_CANVAS_FEASIBILITY.md)，不等于完整通用画布交付；新通用能力已独立至[DP.Vision](../DP.Vision/README.md)，旧工作台的WinForms/WPF图像和证据绘制现已接入DP.Vision，公开类型和矩形ROI事件保留，见[工作台迁移记录](VISION_WORKBENCH_MIGRATION.md)；[历史同机性能实测](docs/archive/CANVAS_BENCHMARK.md)为已归档的旧版基准（基准工具已删除），不是本轮工作台FPS结论 |
 | WPF | 独立原生图像/ROI/异步检测/证据/字符图控件，无WinForms嵌套；编辑器UI尚不与WinForms全等 |
 | SDK | 无界面同步/异步调用，宿主选择后端/存储/识别器；显式资源所有权 |
 

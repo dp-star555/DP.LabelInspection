@@ -181,7 +181,7 @@ WinForms实际ONNX识别A1020、ZXing解码QR后，与本次任务字段形成�
 
 ## 原生/中立画布同机性能对比
 
-独立可选`CanvasBenchmark`在net48/x64实测HALCON23.11 HWindowControl与当前GDI+ ImageViewerControl。8场景×2控件×2轮＝32进程，通过数据数量检查和DwmFlush返回检查。约4MP缓存重绘0.62/7.23ms，10万XLD点11.46/33.34ms，10万碎片Region游程16.80/14.02ms（原生/通用）。连续换图CPU/内存与GC差异明显。完整口径、P95与限制见`CANVAS_BENCHMARK.md`；绘制提交时间不是屏幕FPS，不代表未来GPU画布上限。未修改生产渲染代码，未测长期耐久性。
+（历史记录；`CanvasBenchmark`与`HalconGeometryProbe`工具已删除，说明见`docs/archive/`）独立可选`CanvasBenchmark`在net48/x64实测HALCON23.11 HWindowControl与当前GDI+ ImageViewerControl。8场景×2控件×2轮＝32进程，通过数据数量检查和DwmFlush返回检查。约4MP缓存重绘0.62/7.23ms，10万XLD点11.46/33.34ms，10万碎片Region游程16.80/14.02ms（原生/通用）。连续换图CPU/内存与GC差异明显。完整口径、P95与限制见`CANVAS_BENCHMARK.md`；绘制提交时间不是屏幕FPS，不代表未来GPU画布上限。未修改生产渲染代码，未测长期耐久性。
 
 ## HALCON几何可行性探针
 
