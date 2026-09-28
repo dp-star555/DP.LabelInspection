@@ -24,11 +24,19 @@ public sealed class CharacterAnomalyModel
         {
             throw new ArgumentException("A character-scope entry is required.", nameof(entry));
         }
+
+        Reference = new CharacterAnomalyReference(
+            model,
+            detector,
+            RegionAnomalyDetector.DetectionOptions(entry, model),
+            entry.Width,
+            entry.Height,
+            entry.InkThreshold
+        );
     }
 
-    /// <summary>缺墨检查的良品参考（按模型对象缓存，线程安全）；未标定缺墨阈值或模型不支持时为null。</summary>
-    internal CharacterInkLoss? Ink =>
-        Entry.InkThreshold != null && CharacterInkLoss.Supports(Model) ? CharacterInkLoss.For(Model) : null;
+    /// <summary>交给DP.Vision逐字符检测的参考：模型、检测实现、按条目重建的检测参数、单元尺寸及缺墨阈值。</summary>
+    internal CharacterAnomalyReference Reference { get; }
 
     /// <summary>库条目。</summary>
     public AnomalyModelEntry Entry { get; }

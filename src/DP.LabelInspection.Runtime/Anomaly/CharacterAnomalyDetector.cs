@@ -4,15 +4,14 @@ using System.Linq;
 using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.Vision.Algorithms;
-using OpenCvSharp;
 using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
 namespace DP.LabelInspection.Runtime;
 
 /// <summary>
-/// 逐字符局部块异常检测（质量方法B的逐字符模式），用于内容可变的文字：每个字符（区分大小写的字母/数字）一个模型，
-/// 用多个良品样本训练。字符按整行几何归一化（大写高度缩放到32像素，见<see cref = "CharacterCells"/>），
-/// 在单元内按位置相关模式（默认±1像素）与同一字符的良品比较，因此相邻字符与字符间距的变化互不影响。
+/// 逐字符局部块异常检测（质量方法B的逐字符模式）的业务组合，用于内容可变的文字：算子为DP.Vision的
+/// <see cref = "ICharacterAnomalyDetector"/>（字符按行几何归一化、局部块比较、缺墨检查）；本类只负责
+/// 模型键（字符组/字符，区分大小写的字母/数字）、库条目、组内阈值下限和报告措辞。
 /// 字符身份与分割来自OCR和文字质量的分割（或显式等格）。
 /// </summary>
 public sealed class CharacterAnomalyDetector
@@ -57,89 +56,37 @@ public sealed class CharacterAnomalyDetector
             throw new InvalidOperationException("MaximumSamples must be positive.");
         }
 
-        var grays = new Dictionary<ImageFrame, Mat>();
-        try
-        {
-            var samples = Collect(lines, grays, token).Select(s => (s.key, s.gray, s.line, s.cell)).ToList();
-
-            if (samples.Count == 0)
+        using var vision = new VisionLines(lines);
+        var trained = Operator()
+            .Train(
+                vision.Lines,
+                new CharacterAnomalyOptions(ThresholdMargin, LocalRadius, MaximumSamples),
+                token
+            );
+        var entries = trained
+            .Select(t =>
             {
-                throw new ArgumentException("No measurable alphanumeric characters in the good lines.");
-            }
-
-            var options = new PatchAnomalyOptions(thresholdMargin: ThresholdMargin, localRadius: LocalRadius);
-            var sources = grays.Values.ToList();
-            var entries = new List<AnomalyModelEntry>();
-            foreach (var group in samples.GroupBy(s => s.key).OrderBy(g => g.Key, StringComparer.Ordinal))
-            {
-                token.ThrowIfCancellationRequested();
-                var all = group.ToArray();
-                int width = all.Max(s => CharacterCells.Width(s.cell.Width, s.line));
-                var chosen = all.Length <= MaximumSamples ? all : Diverse(all, width);
-                var crops = new List<DP.Vision.IImageSource>();
-                try
-                {
-                    foreach (var s in chosen)
-                    {
-                        using var cell = CharacterCells.Normalize(s.gray, s.line, s.cell, width);
-                        crops.Add(Bridge.ToVision(CvImages.Frame(cell.Image)));
-                    }
-
-                    var model = _algorithm.Train(crops, options, token);
-                    var bytes = model.ToBytes();
-                    // 缺墨阈值按来源图留一标定（同一图的灰度图对象相同，即同一来源）。
-                    double? ink = CharacterInkLoss.Supports(model)
-                        ? CharacterInkLoss.Calibrate(
-                            CharacterInkLoss.Planes(model),
-                            chosen.Select(c => sources.FindIndex(g => ReferenceEquals(g, c.gray))).ToList(),
-                            model.Width,
-                            model.Height,
-                            ThresholdMargin
-                        )
-                        : null;
-                    entries.Add(
-                        new AnomalyModelEntry(
-                            group.Key,
-                            bytes,
-                            Sha256(bytes),
-                            model.FeatureSource,
-                            width,
-                            CharacterCells.CellHeight,
-                            model.Radius,
-                            chosen.Length,
-                            model.Threshold,
-                            0,
-                            options.Stride,
-                            options.MinimumArea,
-                            model.Calibration
-                                + (
-                                    ink is double t
-                                        ? $"；缺墨阈值{t:F3}（按来源图留一）"
-                                        : "；缺墨检查未标定（良品来源图少于2张）"
-                                ),
-                            EAnomalyModelScope.Character,
-                            ink
-                        )
-                    );
-                }
-                finally
-                {
-                    foreach (var c in crops)
-                    {
-                        c.Dispose();
-                    }
-                }
-            }
-
-            return Floor(entries).AsReadOnly();
-        }
-        finally
-        {
-            foreach (var g in grays.Values)
-            {
-                g.Dispose();
-            }
-        }
+                var bytes = t.Model.ToBytes();
+                return new AnomalyModelEntry(
+                    t.Key,
+                    bytes,
+                    Sha256(bytes),
+                    t.Model.FeatureSource,
+                    t.CellWidth,
+                    t.CellHeight,
+                    t.Model.Radius,
+                    t.Samples,
+                    t.Model.Threshold,
+                    0,
+                    t.Options.Stride,
+                    t.Options.MinimumArea,
+                    t.Calibration,
+                    EAnomalyModelScope.Character,
+                    t.InkThreshold
+                );
+            })
+            .ToList();
+        return Floor(entries).AsReadOnly();
     }
 
     /// <summary>
@@ -160,97 +107,33 @@ public sealed class CharacterAnomalyDetector
             throw new ArgumentNullException(training == null ? nameof(training) : nameof(others));
         }
 
-        var grays = new Dictionary<ImageFrame, Mat>();
+        using var vision = new VisionLines(training.Concat(others).ToArray());
+        var cells = Operator()
+            .NormalizeCells(
+                vision.Lines.Take(training.Count).ToArray(),
+                vision.Lines.Skip(training.Count).ToArray(),
+                token
+            );
         try
         {
-            var all = Collect(training.Concat(others).ToArray(), grays, token);
-            var widths = all.Where(s => s.sample < training.Count)
-                .GroupBy(s => s.key)
-                .ToDictionary(g => g.Key, g => g.Max(s => CharacterCells.Width(s.cell.Width, s.line)));
-            var cells = new List<CharacterAnomalyCell>();
-            foreach (var s in all)
-            {
-                token.ThrowIfCancellationRequested();
-                if (widths.TryGetValue(s.key, out int width))
-                {
-                    using var cell = CharacterCells.Normalize(s.gray, s.line, s.cell, width);
-                    cells.Add(
-                        new CharacterAnomalyCell(
-                            s.sample,
-                            s.index,
-                            s.key,
-                            s.sample < training.Count,
-                            CvImages.Frame(cell.Image)
-                        )
-                    );
-                }
-            }
-
-            return cells.AsReadOnly();
+            return cells
+                .Select(c => new CharacterAnomalyCell(
+                    c.Line,
+                    c.Index,
+                    c.Key,
+                    c.Training,
+                    Bridge.ToLabel(c.Image)
+                ))
+                .ToList()
+                .AsReadOnly();
         }
         finally
         {
-            foreach (var g in grays.Values)
+            foreach (var c in cells)
             {
-                g.Dispose();
+                c.Dispose();
             }
         }
-    }
-
-    /// <summary>收集可测量行中未取消的字母/数字字符（灰度图按图像缓存到<paramref name = "grays"/>，由调用方释放）。</summary>
-    private static List<(
-        int sample,
-        int index,
-        string key,
-        Mat gray,
-        CharacterLine line,
-        PixelRect cell
-    )> Collect(
-        IReadOnlyList<CharacterAnomalySample> lines,
-        Dictionary<ImageFrame, Mat> grays,
-        CancellationToken token
-    )
-    {
-        var samples = new List<(int, int, string, Mat, CharacterLine, PixelRect)>();
-        for (int n = 0; n < lines.Count; n++)
-        {
-            var sample = lines[n];
-            token.ThrowIfCancellationRequested();
-            if (!grays.TryGetValue(sample.Image, out var gray))
-            {
-                gray = grays[sample.Image] = Gray(sample.Image);
-            }
-
-            var line = CharacterCells.Measure(gray, sample.Characters);
-            if (line == null)
-            {
-                continue;
-            }
-
-            for (int i = 0; i < sample.Characters.Count; i++)
-            {
-                var c = sample.Characters[i];
-                if (
-                    !sample.Excluded.Contains(i)
-                    && c.Character.Length == 1
-                    && FieldSettings.IsAlphanumeric(c.Character[0])
-                )
-                {
-                    samples.Add(
-                        (
-                            n,
-                            i,
-                            AnomalyModelEntry.CharacterKey(sample.Group, c.Character),
-                            gray,
-                            line,
-                            c.Bounds
-                        )
-                    );
-                }
-            }
-        }
-
-        return samples;
     }
 
     /// <summary>
@@ -277,8 +160,8 @@ public sealed class CharacterAnomalyDetector
             throw new ArgumentNullException(image == null ? nameof(image) : nameof(characters));
         }
 
-        using var gray = Gray(image);
-        return InspectGray(gray, characters, crop, models, token, inkLoss);
+        using var source = Bridge.ToVision(image);
+        return Inspect(source, characters, crop, models, token, inkLoss);
     }
 
     /// <summary>借用Vision原图执行逐字异常检测，不生成旧标签图像快照。</summary>
@@ -300,353 +183,107 @@ public sealed class CharacterAnomalyDetector
     {
         if (image == null || characters == null || models == null)
             throw new ArgumentNullException(image == null ? nameof(image) : nameof(characters));
-        using var gray = Gray(image);
-        return InspectGray(gray, characters, crop, models, token, inkLoss);
-    }
-
-    private CharacterAnomalyResult InspectGray(
-        Mat gray,
-        IReadOnlyList<DP.LabelInspection.Contracts.CharacterPatch> characters,
-        PixelRect crop,
-        Func<string, CharacterAnomalyModel?> models,
-        CancellationToken token,
-        bool inkLoss
-    )
-    {
-        var line = CharacterCells.Measure(gray, characters);
-        var region = new Rect(crop.X, crop.Y, crop.Width, crop.Height) & new Rect(0, 0, gray.Cols, gray.Rows);
-        var work = characters
-            .Where(c => c.Character.Length == 1 && FieldSettings.IsAlphanumeric(c.Character[0]))
-            .Select(c => (patch: c, model: models(c.Character)))
-            .ToList();
-        var outcomes = new (CharacterAnomalyScore Score, Mat? Heat)[work.Count];
-        void Run(int i)
-        {
-            outcomes[i] = One(gray, line, region, work[i].patch, work[i].model, inkLoss, token);
-        }
-
-        try
-        {
-            if (
-                work.Count > 1
-                && work.All(w =>
-                    w.model == null || w.model.Detector is DP.Vision.OpenCv.OpenCvPatchAnomalyDetector
-                )
-            )
-            {
-                System.Threading.Tasks.Parallel.For(
-                    0,
-                    work.Count,
-                    new System.Threading.Tasks.ParallelOptions { CancellationToken = token },
-                    Run
-                );
-            }
-            else
-            {
-                for (int i = 0; i < work.Count; i++)
-                {
-                    token.ThrowIfCancellationRequested();
-                    Run(i);
-                }
-            }
-
-            using var heat = new Mat(
-                Math.Max(1, region.Height),
-                Math.Max(1, region.Width),
-                MatType.CV_8UC1,
-                Scalar.All(0)
+        using var result = Operator()
+            .Inspect(
+                image,
+                characters.Select(c => ToVision(c, Alphanumeric(c) ? c.Character : null)).ToArray(),
+                Bridge.ToVision(crop),
+                key => models(key)?.Reference,
+                inkLoss,
+                token
             );
-            bool anyHeat = false;
-            foreach (var (_, mapped) in outcomes)
-            {
-                if (mapped != null)
-                {
-                    Cv2.Max(heat, mapped, heat);
-                    anyHeat = true;
-                }
-            }
-
-            return new CharacterAnomalyResult(
-                new PixelRect(region.X, region.Y, region.Width, region.Height),
-                outcomes.Select(o => o.Score),
-                anyHeat ? CvImages.Frame(heat) : null
-            );
-        }
-        finally
-        {
-            foreach (var (_, mapped) in outcomes)
-            {
-                mapped?.Dispose();
-            }
-        }
-    }
-
-    /// <summary>检测一个字符；返回结果与映射回ROI坐标的热力图（没有时为null，调用方释放）。只读访问共享的灰度图。</summary>
-    private static (CharacterAnomalyScore Score, Mat? Heat) One(
-        Mat gray,
-        CharacterLine? line,
-        Rect region,
-        DP.LabelInspection.Contracts.CharacterPatch c,
-        CharacterAnomalyModel? model,
-        bool inkLoss,
-        CancellationToken token
-    )
-    {
-        string where = $"字符[{c.Character}]（第{c.TokenIndex + 1}位）";
-        (CharacterAnomalyScore, Mat?) Stop(string status, string code, string message)
-        {
-            return (
-                new CharacterAnomalyScore(
-                    c.Character,
-                    c.TokenIndex,
-                    c.Bounds,
-                    status,
-                    0,
-                    0,
-                    new[]
-                    {
-                        new InspectionFinding(code, where + "：" + message, EInspectionVerdict.Ng, c.Bounds),
-                    }
-                ),
-                null
-            );
-        }
-
-        if (model == null)
-        {
-            return Stop(
-                "missing_model",
-                "anomaly_character_model_missing",
-                "异常模型库中没有该字符的模型，无法判断；请用含该字符的良品补充训练。"
-            );
-        }
-
-        if (line == null)
-        {
-            return Stop("unmeasurable", "anomaly_line_unmeasurable", "无法测量该行的字高与基线。");
-        }
-
-        if (model.Entry.Height != CharacterCells.CellHeight)
-        {
-            return Stop(
-                "blocked",
-                "patch_anomaly_model_mismatch",
-                "字符模型的归一化尺寸与当前实现不一致，需重新训练。"
-            );
-        }
-
-        using var cell = CharacterCells.Normalize(gray, line, c.Bounds, model.Entry.Width);
-        using var source = Bridge.ToVision(CvImages.Frame(cell.Image));
-        using var result = model.Detector.Detect(
-            source,
-            model.Model,
-            RegionAnomalyDetector.DetectionOptions(model.Entry, model.Model),
-            token
+        return new CharacterAnomalyResult(
+            Bridge.ToLabel(result.Crop),
+            result.Characters.Select(Score),
+            result.HeatMap == null ? null : Bridge.ToLabel(result.HeatMap)
         );
-        var findings = result
-            .Findings.Select(f =>
-                f.Bounds is { } b
-                    ? new QualityFinding(
-                        f.Code,
-                        where + "：" + f.Message,
-                        f.Kind,
-                        Bridge.ToVision(cell.ToImage(b.X, b.Y, b.Width, b.Height)),
-                        f.AreaPixels is { } area
-                            ? Math.Max(1, (int)Math.Round(area / (cell.Scale * cell.Scale)))
-                            : (int?)null
-                    )
-                    : new QualityFinding(f.Code, where + "：" + f.Message, f.Kind)
-            )
-            .ToList();
-        bool completed = result.Status == EAlgorithmStatus.Completed;
-        using var local = result.HeatMap != null ? CvImages.Mat(Bridge.ToLabel(result.HeatMap)) : new Mat();
-        double? inkScore = null,
-            inkThreshold = null;
-        var reference = model.Ink;
-        if (inkLoss && completed && reference != null && model.Entry.InkThreshold is double threshold)
-        {
-            var (score, excess) = reference.Measure(CharacterInkLoss.Ink(cell.Image));
-            using (excess)
-            {
-                inkScore = score;
-                inkThreshold = threshold;
-                findings.AddRange(InkFindings(excess, threshold, model.Entry.MinimumArea, cell, where));
-                findings.Add(
-                    new QualityFinding(
-                        "ink_loss_scope",
-                        where
-                            + $"：缺墨检查：笔画内墨量最多比良品最低值低{score:F3}（阈值{threshold:F3}，{score / threshold:F2}倍），"
-                            + $"参考{reference.Samples}个良品样本。",
-                        EQualityFindingKind.Information
-                    )
-                );
-                if (!local.Empty())
-                {
-                    // 缺墨也画入热力图（128对应阈值），与局部块比较取较大者。
-                    using var inkHeat = new Mat();
-                    excess.ConvertTo(inkHeat, MatType.CV_8U, 128.0 / threshold);
-                    Cv2.Max(local, inkHeat, local);
-                }
-            }
-        }
+    }
 
-        var scored = new CharacterAnomalyScore(
+    /// <summary>Vision逐字结果转为报告：各证据前加“字符[x]（第n位）：”。</summary>
+    private static CharacterAnomalyScore Score(CharacterAnomalyOutcome o)
+    {
+        var c = o.Character;
+        string where = $"字符[{c.Character}]（第{c.TokenIndex + 1}位）：";
+        return new CharacterAnomalyScore(
             c.Character,
             c.TokenIndex,
-            c.Bounds,
-            completed ? "compared" : "blocked",
-            result.MaximumScore,
-            result.Threshold,
-            findings.Select(Bridge.ToLabel),
-            inkScore,
-            inkThreshold
+            Bridge.ToLabel(c.Bounds),
+            o.Status switch
+            {
+                ECharacterAnomalyStatus.Compared => "compared",
+                ECharacterAnomalyStatus.MissingModel => "missing_model",
+                ECharacterAnomalyStatus.Unmeasurable => "unmeasurable",
+                _ => "blocked",
+            },
+            o.MaximumScore,
+            o.Threshold,
+            o.Findings.Select(f =>
+                Bridge.ToLabel(new QualityFinding(f.Code, where + f.Message, f.Kind, f.Bounds, f.AreaPixels))
+            ),
+            o.InkLoss,
+            o.InkThreshold
         );
-        if (local.Empty() || region.Width <= 0 || region.Height <= 0)
-        {
-            return (scored, null);
-        }
-
-        using var back = new Mat(2, 3, MatType.CV_64FC1);
-        back.Set(0, 0, 1 / cell.Scale);
-        back.Set(0, 1, 0.0);
-        back.Set(0, 2, cell.X0 - region.X);
-        back.Set(1, 0, 0.0);
-        back.Set(1, 1, 1 / cell.Scale);
-        back.Set(1, 2, cell.Y0 - region.Y);
-        var mapped = new Mat();
-        Cv2.WarpAffine(
-            local,
-            mapped,
-            back,
-            new Size(region.Width, region.Height),
-            InterpolationFlags.Linear,
-            BorderTypes.Constant,
-            Scalar.All(0)
-        );
-        return (scored, mapped);
     }
 
-    /// <summary>缺墨图中超过阈值、面积不小于下限的连通区域（原图坐标）。</summary>
-    private static IEnumerable<QualityFinding> InkFindings(
-        Mat excess,
-        double threshold,
-        int minimumArea,
-        CharacterCell cell,
-        string where
-    )
+    private ICharacterAnomalyDetector Operator()
     {
-        using var mask = new Mat();
-        Cv2.Threshold(excess, mask, threshold, 255, ThresholdTypes.Binary);
-        mask.ConvertTo(mask, MatType.CV_8U);
-        using var labels = new Mat();
-        using var stats = new Mat();
-        using var centroids = new Mat();
-        int count = Cv2.ConnectedComponentsWithStats(
-            mask,
-            labels,
-            stats,
-            centroids,
-            PixelConnectivity.Connectivity8
-        );
-        var findings = new List<QualityFinding>();
-        for (int k = 1; k < count; k++)
-        {
-            int area = stats.At<int>(k, (int)ConnectedComponentsTypes.Area);
-            if (area < minimumArea)
-            {
-                continue;
-            }
-
-            int x = stats.At<int>(k, (int)ConnectedComponentsTypes.Left),
-                y = stats.At<int>(k, (int)ConnectedComponentsTypes.Top),
-                w = stats.At<int>(k, (int)ConnectedComponentsTypes.Width),
-                h = stats.At<int>(k, (int)ConnectedComponentsTypes.Height);
-            using var part = new Mat(excess, new Rect(x, y, w, h));
-            Cv2.MinMaxLoc(part, out _, out double peak);
-            findings.Add(
-                new QualityFinding(
-                    "ink_loss",
-                    where
-                        + $"：缺墨：最多比良品最低墨量低{peak:F3}（阈值{threshold:F3}，{peak / threshold:F2}倍），面积{area}像素²；笔画内比所有良品同位置都浅（斑驳、褪色或断笔）。",
-                    EQualityFindingKind.Defect,
-                    Bridge.ToVision(cell.ToImage(x, y, w, h)),
-                    Math.Max(1, (int)Math.Round(area / (cell.Scale * cell.Scale)))
-                )
-            );
-        }
-
-        return findings;
+        return new DP.Vision.OpenCv.OpenCvCharacterAnomalyDetector(_algorithm);
     }
 
-    /// <summary>
-    /// 样本多于上限时按形态多样性选取（贪心最远点）：先取最接近其余样本的一个，再依次取与已选样本最不相似的。
-    /// 按顺序等间隔抽取会漏掉少数形态不同的良品（例如另一行字号略不同的同一字符），检测时这些良品会被误报；
-    /// 实拍标签上“WF675907”中的“0”即如此。超过400个样本时先等间隔抽到400个再选。
-    /// </summary>
-    private (string key, Mat gray, CharacterLine line, PixelRect cell)[] Diverse(
-        (string key, Mat gray, CharacterLine line, PixelRect cell)[] all,
-        int width
+    private static bool Alphanumeric(DP.LabelInspection.Contracts.CharacterPatch c)
+    {
+        return c.Character.Length == 1 && FieldSettings.IsAlphanumeric(c.Character[0]);
+    }
+
+    private static CharacterAnomalyCharacter ToVision(
+        DP.LabelInspection.Contracts.CharacterPatch c,
+        string? key
     )
     {
-        var pool =
-            all.Length <= 400
-                ? all
-                : Enumerable.Range(0, 400).Select(i => all[(int)((long)i * all.Length / 400)]).ToArray();
-        var vectors = pool.Select(s =>
-            {
-                using var cell = CharacterCells.Normalize(s.gray, s.line, s.cell, width);
-                using var small = new Mat();
-                // 缩到1/2比较整体形态，对细微噪声不敏感。
-                Cv2.Resize(
-                    cell.Image,
-                    small,
-                    new Size(width / 2, CharacterCells.CellHeight / 2),
-                    0,
-                    0,
-                    InterpolationFlags.Area
-                );
-                var bytes = new byte[small.Rows * small.Cols];
-                System.Runtime.InteropServices.Marshal.Copy(small.Data, bytes, 0, bytes.Length);
-                return bytes.Select(b => (float)b).ToArray();
-            })
-            .ToArray();
-        int n = vectors.Length;
-        double Distance(int i, int j)
-        {
-            double sum = 0;
-            var a = vectors[i];
-            var b = vectors[j];
-            for (int k = 0; k < a.Length; k++)
-            {
-                double t = a[k] - b[k];
-                sum += t * t;
-            }
+        return new CharacterAnomalyCharacter(c.Character, c.TokenIndex, Bridge.ToVision(c.Bounds), key);
+    }
 
-            return sum;
+    /// <summary>标签行样本转为Vision行：同一标签图对象只转换一次（同一来源），未排除的字母/数字带“组/字符”模型键。</summary>
+    private sealed class VisionLines : IDisposable
+    {
+        private readonly Dictionary<ImageFrame, DP.Vision.IImageSource> _images =
+            new Dictionary<ImageFrame, DP.Vision.IImageSource>();
+
+        internal VisionLines(IReadOnlyList<CharacterAnomalySample> samples)
+        {
+            Lines = samples
+                .Select(s =>
+                {
+                    if (!_images.TryGetValue(s.Image, out var image))
+                    {
+                        image = _images[s.Image] = Bridge.ToVision(s.Image);
+                    }
+
+                    return new CharacterAnomalyLine(
+                        image,
+                        s.Characters.Select(
+                            (c, i) =>
+                                ToVision(
+                                    c,
+                                    !s.Excluded.Contains(i) && Alphanumeric(c)
+                                        ? AnomalyModelEntry.CharacterKey(s.Group, c.Character)
+                                        : null
+                                )
+                        )
+                    );
+                })
+                .ToArray();
         }
 
-        int first = Enumerable
-            .Range(0, n)
-            .OrderBy(i => Enumerable.Range(0, n).Sum(j => j == i ? 0 : Math.Sqrt(Distance(i, j))))
-            .First();
-        var selected = new List<int> { first };
-        var nearest = Enumerable.Range(0, n).Select(i => Distance(i, first)).ToArray();
-        while (selected.Count < MaximumSamples)
-        {
-            int next = Enumerable.Range(0, n).OrderByDescending(i => nearest[i]).First();
-            if (nearest[next] <= 0)
-            {
-                break;
-            }
+        internal IReadOnlyList<CharacterAnomalyLine> Lines { get; }
 
-            selected.Add(next);
-            for (int i = 0; i < n; i++)
+        public void Dispose()
+        {
+            foreach (var image in _images.Values)
             {
-                nearest[i] = Math.Min(nearest[i], Distance(i, next));
+                image.Dispose();
             }
         }
-
-        return selected.OrderBy(i => i).Select(i => pool[i]).ToArray();
     }
 
     /// <summary>
@@ -698,64 +335,6 @@ public sealed class CharacterAnomalyDetector
                     e.InkThreshold
                 )
         );
-    }
-
-    private static Mat Gray(DP.Vision.IImageSource frame)
-    {
-        var info = frame.Info;
-        if (info.Layout != DP.Vision.EPixelLayout.Gray8 && info.Layout != DP.Vision.EPixelLayout.Bgr24)
-            throw new NotSupportedException("Character anomaly inspection requires Gray8 or Bgr24.");
-        var bytes = new byte[info.ByteLength];
-        frame.CopyTo(0, bytes, 0, bytes.Length);
-        var raw = new Mat(
-            info.Height,
-            info.Width,
-            info.Layout == DP.Vision.EPixelLayout.Gray8 ? MatType.CV_8UC1 : MatType.CV_8UC3
-        );
-        try
-        {
-            System.Runtime.InteropServices.Marshal.Copy(bytes, 0, raw.Data, bytes.Length);
-            if (info.Layout == DP.Vision.EPixelLayout.Gray8)
-                return raw;
-            var gray = new Mat();
-            try
-            {
-                Cv2.CvtColor(raw, gray, ColorConversionCodes.BGR2GRAY);
-                return gray;
-            }
-            catch
-            {
-                gray.Dispose();
-                throw;
-            }
-        }
-        catch
-        {
-            if (info.Layout == DP.Vision.EPixelLayout.Gray8)
-                raw.Dispose();
-            throw;
-        }
-        finally
-        {
-            if (info.Layout != DP.Vision.EPixelLayout.Gray8)
-                raw.Dispose();
-        }
-    }
-
-    private static Mat Gray(ImageFrame frame)
-    {
-        var raw = CvImages.Mat(frame);
-        if (frame.Format == EImagePixelFormat.Gray8)
-        {
-            return raw;
-        }
-
-        using (raw)
-        {
-            var gray = new Mat();
-            Cv2.CvtColor(raw, gray, ColorConversionCodes.BGR2GRAY);
-            return gray;
-        }
     }
 
     private static string Sha256(byte[] bytes)
