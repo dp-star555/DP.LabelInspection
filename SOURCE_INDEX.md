@@ -117,7 +117,6 @@
 | `SampleExporter` | [src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs](src/DP.LabelInspection.Storage/Persistence/SampleExporter.cs) |
 | `LabelInspectionControl` | [src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs](src/DP.LabelInspection.Wpf/Workbench/LabelInspectionControl.cs) |
 | `WpfInspectionCompletedEventArgs` | [src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs](src/DP.LabelInspection.Wpf/Workbench/WpfInspectionCompletedEventArgs.cs) |
-| `CanvasGeometryLayer` | [src/DP.LabelInspection/Canvas/CanvasGeometryLayer.cs](src/DP.LabelInspection/Canvas/CanvasGeometryLayer.cs) |
 | `FindingSelectedEventArgs` | [src/DP.LabelInspection/Canvas/FindingSelectedEventArgs.cs](src/DP.LabelInspection/Canvas/FindingSelectedEventArgs.cs) |
 | `ImageViewerControl` | [src/DP.LabelInspection/Canvas/ImageViewerControl.cs](src/DP.LabelInspection/Canvas/ImageViewerControl.cs) |
 | `RegionDrawnEventArgs` | [src/DP.LabelInspection/Canvas/RegionDrawnEventArgs.cs](src/DP.LabelInspection/Canvas/RegionDrawnEventArgs.cs) |
