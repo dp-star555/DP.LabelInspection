@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using DP.LabelInspection.Contracts;
 using OpenCvSharp;
+using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
 namespace DP.LabelInspection.Runtime;
 
@@ -16,15 +17,14 @@ public sealed partial class OpenCvInspectionBackend
         IRoiWorkflowBackend
 {
     private bool _disposed;
-    private readonly ITextLineRecognizer? _recognizer;
+    private readonly DP.Vision.Algorithms.ITextLineRecognizer? _recognizer;
     private readonly bool _ownsRecognizer;
     private readonly IGlyphLibraryRepository? _libraries;
-    private readonly IBarcodeDecoder? _barcode;
-    private readonly ITextRegionDetector? _detector;
-    private readonly bool _ownsDetector;
-    private readonly ICharacterSegmenter _segmenter;
-    private readonly IGlyphComparer _comparer;
-    private readonly IBarcodePrintInspector _barcodePrint;
+    private readonly DP.Vision.Algorithms.IBarcodeReader? _barcode;
+    private readonly DP.Vision.Algorithms.ICharacterSegmenter _segmenter;
+    private readonly DP.Vision.Algorithms.IGlyphComparer _comparer;
+    private readonly DP.Vision.Algorithms.ILinearBarcodeQualityInspector _linearQuality;
+    private readonly DP.Vision.Algorithms.IQrQualityInspector _qrQuality;
     private readonly RegionQualityAlgorithms _qualityAlgorithms;
     private readonly DP.Vision.Algorithms.ITextQualityInspector? _textQuality;
     private readonly DP.Vision.Algorithms.ICharacterMatcher _matcher;
@@ -36,26 +36,24 @@ public sealed partial class OpenCvInspectionBackend
     /// <param name = "recognizer">可选真实单行识别器。</param>
     /// <param name = "ownsRecognizer">是否把识别器释放责任交给后台，默认不转移。</param>
     /// <param name = "libraries">可选固定版本字库仓库，仅借用。</param>
-    /// <param name = "barcode">可选真实条码解码器，仅借用。</param>
-    /// <param name = "detector">可选文本候选检测器。</param>
-    /// <param name = "ownsDetector">是否把检测器释放责任交给后台，默认不转移。</param>
+    /// <param name = "barcode">可选Vision原图读码器，仅借用。</param>
     /// <param name = "segmenter">可选物理分割器，null使用默认实现。</param>
     /// <param name = "comparer">可选独立单字比较器，null使用默认实现。</param>
-    /// <param name = "barcodePrint">可选码印刷策略，null使用默认实现。</param>
+    /// <param name = "linearQuality">可选Vision一维码质量策略，null使用默认实现。</param>
+    /// <param name = "qrQuality">可选Vision QR质量策略，null使用默认实现。</param>
     /// <param name = "anomalyModels">可选固定版本异常模型库（方法B），仅借用。</param>
     /// <param name = "anomalyDetectors">
     /// 按特征来源提供的额外异常检测实现（例如CNN骨干网络，键为其FeatureSource），仅借用；手工特征实现始终内置。
     /// </param>
     public OpenCvInspectionBackend(
-        ITextLineRecognizer? recognizer = null,
+        DP.Vision.Algorithms.ITextLineRecognizer? recognizer = null,
         bool ownsRecognizer = false,
         IGlyphLibraryRepository? libraries = null,
-        IBarcodeDecoder? barcode = null,
-        ITextRegionDetector? detector = null,
-        bool ownsDetector = false,
-        ICharacterSegmenter? segmenter = null,
-        IGlyphComparer? comparer = null,
-        IBarcodePrintInspector? barcodePrint = null,
+        DP.Vision.Algorithms.IBarcodeReader? barcode = null,
+        DP.Vision.Algorithms.ICharacterSegmenter? segmenter = null,
+        DP.Vision.Algorithms.IGlyphComparer? comparer = null,
+        DP.Vision.Algorithms.ILinearBarcodeQualityInspector? linearQuality = null,
+        DP.Vision.Algorithms.IQrQualityInspector? qrQuality = null,
         IAnomalyLibraryRepository? anomalyModels = null,
         IReadOnlyDictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>? anomalyDetectors = null
     )
@@ -68,11 +66,10 @@ public sealed partial class OpenCvInspectionBackend
             ownsRecognizer,
             libraries,
             barcode,
-            detector,
-            ownsDetector,
             segmenter,
             comparer,
-            barcodePrint,
+            linearQuality,
+            qrQuality,
             anomalyModels: anomalyModels,
             anomalyDetectors: anomalyDetectors
         ) { }
@@ -83,26 +80,24 @@ public sealed partial class OpenCvInspectionBackend
     /// <param name = "ownsRecognizer">是否把识别器释放责任交给后台。</param>
     /// <param name = "libraries">可选固定版本字库仓库，仅借用。</param>
     /// <param name = "barcode">可选真实条码解码器，仅借用。</param>
-    /// <param name = "detector">可选文本候选检测器。</param>
-    /// <param name = "ownsDetector">是否把检测器释放责任交给后台。</param>
     /// <param name = "segmenter">可选物理分割器，供默认文字组合策略使用。</param>
     /// <param name = "comparer">可选单字比较器，供默认文字组合策略使用。</param>
-    /// <param name = "barcodePrint">可选码印刷策略，null使用默认实现。</param>
+    /// <param name = "linearQuality">可选Vision一维码质量策略，null使用默认实现。</param>
+    /// <param name = "qrQuality">可选Vision QR质量策略，null使用默认实现。</param>
     /// <param name = "textQuality">可选整段文字质量替代策略，null使用默认组合。</param>
     /// <param name = "matcher">可选字符到参考配对策略，供默认文字组合使用。</param>
     /// <param name = "anomalyModels">可选固定版本异常模型库（方法B），仅借用。</param>
     /// <param name = "anomalyDetectors">按特征来源提供的额外异常检测实现，仅借用；手工特征实现始终内置。</param>
     public static OpenCvInspectionBackend WithQualityAlgorithms(
         RegionQualityAlgorithms qualityAlgorithms,
-        ITextLineRecognizer? recognizer = null,
+        DP.Vision.Algorithms.ITextLineRecognizer? recognizer = null,
         bool ownsRecognizer = false,
         IGlyphLibraryRepository? libraries = null,
-        IBarcodeDecoder? barcode = null,
-        ITextRegionDetector? detector = null,
-        bool ownsDetector = false,
-        ICharacterSegmenter? segmenter = null,
-        IGlyphComparer? comparer = null,
-        IBarcodePrintInspector? barcodePrint = null,
+        DP.Vision.Algorithms.IBarcodeReader? barcode = null,
+        DP.Vision.Algorithms.ICharacterSegmenter? segmenter = null,
+        DP.Vision.Algorithms.IGlyphComparer? comparer = null,
+        DP.Vision.Algorithms.ILinearBarcodeQualityInspector? linearQuality = null,
+        DP.Vision.Algorithms.IQrQualityInspector? qrQuality = null,
         DP.Vision.Algorithms.ITextQualityInspector? textQuality = null,
         DP.Vision.Algorithms.ICharacterMatcher? matcher = null,
         IAnomalyLibraryRepository? anomalyModels = null,
@@ -115,11 +110,10 @@ public sealed partial class OpenCvInspectionBackend
             ownsRecognizer,
             libraries,
             barcode,
-            detector,
-            ownsDetector,
             segmenter,
             comparer,
-            barcodePrint,
+            linearQuality,
+            qrQuality,
             textQuality,
             matcher,
             anomalyModels,
@@ -129,15 +123,14 @@ public sealed partial class OpenCvInspectionBackend
 
     private OpenCvInspectionBackend(
         RegionQualityAlgorithms qualityAlgorithms,
-        ITextLineRecognizer? recognizer,
+        DP.Vision.Algorithms.ITextLineRecognizer? recognizer,
         bool ownsRecognizer,
         IGlyphLibraryRepository? libraries,
-        IBarcodeDecoder? barcode,
-        ITextRegionDetector? detector,
-        bool ownsDetector,
-        ICharacterSegmenter? segmenter,
-        IGlyphComparer? comparer,
-        IBarcodePrintInspector? barcodePrint,
+        DP.Vision.Algorithms.IBarcodeReader? barcode,
+        DP.Vision.Algorithms.ICharacterSegmenter? segmenter,
+        DP.Vision.Algorithms.IGlyphComparer? comparer,
+        DP.Vision.Algorithms.ILinearBarcodeQualityInspector? linearQuality,
+        DP.Vision.Algorithms.IQrQualityInspector? qrQuality,
         DP.Vision.Algorithms.ITextQualityInspector? textQuality = null,
         DP.Vision.Algorithms.ICharacterMatcher? matcher = null,
         IAnomalyLibraryRepository? anomalyModels = null,
@@ -166,16 +159,15 @@ public sealed partial class OpenCvInspectionBackend
         _ownsRecognizer = ownsRecognizer;
         _libraries = libraries;
         _barcode = barcode;
-        _detector = detector;
-        _ownsDetector = ownsDetector;
-        _segmenter = segmenter ?? new CharacterSegmenter();
-        _comparer = comparer ?? new GlyphComparer();
-        _barcodePrint = barcodePrint ?? new OpenCvBarcodePrintInspector();
+        _segmenter = segmenter ?? new DP.Vision.OpenCv.OpenCvCharacterSegmenter();
+        _comparer = comparer ?? new DP.Vision.OpenCv.OpenCvGlyphComparer();
+        _linearQuality = linearQuality ?? new DP.Vision.OpenCv.OpenCvBarcodePrintInspector();
+        _qrQuality = qrQuality ?? new DP.Vision.OpenCv.OpenCvQrPrintInspector();
     }
 
     /// <inheritdoc/>
     public GlyphCandidateExtraction ExtractGlyphCandidates(
-        ImageFrame frame,
+        DP.Vision.IImageSource frame,
         PixelRect bounds,
         string? confirmedText,
         CancellationToken token
@@ -191,7 +183,7 @@ public sealed partial class OpenCvInspectionBackend
             throw new ArgumentNullException(nameof(frame));
         }
 
-        if (!bounds.Fits(frame))
+        if (!bounds.Fits(frame.Info.Width, frame.Info.Height))
         {
             throw new ArgumentException("Candidate ROI outside image.");
         }
@@ -214,25 +206,24 @@ public sealed partial class OpenCvInspectionBackend
         TextLineRecognition? recognition = null;
         if (confirmedText == null)
         {
-            recognition = (
-                _recognizer
-                ?? throw new InvalidOperationException(
-                    "请先加载OCR模型，或输入人工确认的单行文字后重新切割。 "
-                )
-            ).Recognize(frame, bounds, token);
+            var reader = _recognizer ?? throw new InvalidOperationException(
+                "请先加载OCR模型，或输入人工确认的单行文字后重新切割。 "
+            );
+            recognition = Bridge.ToLabel(reader.Recognize(frame, Bridge.ToVision(bounds), token));
         }
 
         string text = confirmedText ?? recognition!.Text;
-        var segmentation = _segmenter is IGlyphCandidateSegmenter candidates
-            ? candidates.SegmentCandidates(frame, bounds, text, token)
-            : _segmenter.Segment(frame, bounds, text, token);
+        using var measured = _segmenter is DP.Vision.Algorithms.IGlyphCandidateSegmenter candidates
+            ? candidates.SegmentCandidates(frame, Bridge.ToVision(bounds), text, token)
+            : _segmenter.Segment(frame, Bridge.ToVision(bounds), text, token);
         token.ThrowIfCancellationRequested();
-        return new GlyphCandidateExtraction(recognition, confirmedText, segmentation);
+        return new GlyphCandidateExtraction(recognition, confirmedText, Bridge.ToLabel(measured));
     }
 
     /// <inheritdoc/>
     public string Name =>
-        "OpenCvSharp 4.10 / staged label inspection" + (_recognizer == null ? "" : " + injected OCR");
+        "OpenCvSharp 4.10 / staged label inspection"
+        + (_recognizer == null ? "" : " + injected OCR");
 
     /// <inheritdoc/>
     public EInspectionCapabilities Capabilities =>
@@ -244,12 +235,11 @@ public sealed partial class OpenCvInspectionBackend
         | EInspectionCapabilities.TranslationAlignment
         | EInspectionCapabilities.BarcodeStructure
         | (
-            _detector != null || _barcode != null
-                ? EInspectionCapabilities.Discovery
-                : EInspectionCapabilities.None
+            _barcode == null ? EInspectionCapabilities.None : EInspectionCapabilities.BarcodeDecode
         )
-        | (_barcode == null ? EInspectionCapabilities.None : EInspectionCapabilities.BarcodeDecode)
-        | (_recognizer == null ? EInspectionCapabilities.None : EInspectionCapabilities.Ocr);
+        | (
+            _recognizer == null ? EInspectionCapabilities.None : EInspectionCapabilities.Ocr
+        );
 
     /// <summary>既有分析入口委托到同一分阶段Core，不另建第二套单体流程。</summary>
     /// <param name = "request">不可变检测请求，交由Core执行相同的分阶段流程。</param>
@@ -299,16 +289,20 @@ public sealed partial class OpenCvInspectionBackend
         );
     }
 
-    private static Mat Gray(ImageFrame frame)
+    private static Mat Gray(DP.Vision.IImageSource frame)
     {
-        var bytes = frame.CopyPixels();
+        var info = frame.Info;
+        if (info.Layout != DP.Vision.EPixelLayout.Gray8 && info.Layout != DP.Vision.EPixelLayout.Bgr24)
+            throw new NotSupportedException("Registration requires Gray8 or Bgr24.");
+        var bytes = new byte[info.ByteLength];
+        frame.CopyTo(0, bytes, 0, bytes.Length);
         using var raw = new Mat(
-            frame.Height,
-            frame.Width,
-            frame.Format == EImagePixelFormat.Gray8 ? MatType.CV_8UC1 : MatType.CV_8UC3
+            info.Height,
+            info.Width,
+            info.Layout == DP.Vision.EPixelLayout.Gray8 ? MatType.CV_8UC1 : MatType.CV_8UC3
         );
         Marshal.Copy(bytes, 0, raw.Data, bytes.Length);
-        if (frame.Format == EImagePixelFormat.Gray8)
+        if (info.Layout == DP.Vision.EPixelLayout.Gray8)
         {
             return raw.Clone();
         }
@@ -335,19 +329,9 @@ public sealed partial class OpenCvInspectionBackend
         }
 
         _disposed = true;
-        try
+        if (_ownsRecognizer)
         {
-            if (_ownsRecognizer)
-            {
-                _recognizer?.Dispose();
-            }
-        }
-        finally
-        {
-            if (_ownsDetector)
-            {
-                _detector?.Dispose();
-            }
+            _recognizer?.Dispose();
         }
     }
 }

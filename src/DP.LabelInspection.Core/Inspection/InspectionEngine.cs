@@ -60,8 +60,8 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
             if (_backend is IRoiWorkflowBackend staged)
             {
                 if (
-                    request.Actual.Width != request.Recipe.Width
-                    || request.Actual.Height != request.Recipe.Height
+                    request.ImageWidth != request.Recipe.Width
+                    || request.ImageHeight != request.Recipe.Height
                 )
                 {
                     throw new ArgumentException("Recipe and image dimensions differ.");
@@ -240,13 +240,13 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
     }
 
     /// <summary>异步提取字库制作候选，与正式验收分割分离；同一引擎上的原生工作仍串行执行。</summary>
-    /// <param name = "frame">不可变原始图像，供本次候选提取读取。</param>
+    /// <param name = "frame">借用Vision原图，调用时立即Retain；宿主可在返回任务后释放自己的句柄。</param>
     /// <param name = "bounds">候选区域的原图像素范围，必须完全位于frame内。</param>
     /// <param name = "confirmedText">人工确认的可选文本，用于候选标注，不改写正式检测读数。</param>
     /// <param name = "token">协作式取消标记，在后台算法调用前后检查。</param>
     /// <returns>包含候选、标注和待复核原因的异步结果，不代表已批准发布字库。</returns>
-    public Task<GlyphCandidateExtraction> ExtractGlyphCandidatesAsync(
-        ImageFrame frame,
+    public async Task<GlyphCandidateExtraction> ExtractGlyphCandidatesAsync(
+        DP.Vision.IImageSource frame,
         PixelRect bounds,
         string? confirmedText = null,
         CancellationToken token = default
@@ -257,12 +257,13 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
             throw new ArgumentNullException(nameof(frame));
         }
 
-        if (!bounds.Fits(frame))
+        if (!bounds.Fits(frame.Info.Width, frame.Info.Height))
         {
             throw new ArgumentException("Candidate ROI outside image.");
         }
 
-        return Task.Run(
+        using var lease = frame.Retain();
+        return await Task.Run(
             () =>
             {
                 lock (_sync)
@@ -278,19 +279,19 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
                         ?? throw new NotSupportedException(
                             "Backend has no glyph candidate extraction capability."
                         );
-                    var result = source.ExtractGlyphCandidates(frame, bounds, confirmedText, token);
+                    var result = source.ExtractGlyphCandidates(lease, bounds, confirmedText, token);
                     token.ThrowIfCancellationRequested();
                     return result ?? throw new InvalidOperationException("No extraction result.");
                 }
             },
             token
-        );
+        ).ConfigureAwait(false);
     }
 
     private static void Validate(InspectionRequest request)
     {
         var recipe = request.Recipe;
-        if (request.Actual.Width != recipe.Width || request.Actual.Height != recipe.Height)
+        if (request.ImageWidth != recipe.Width || request.ImageHeight != recipe.Height)
         {
             throw new ArgumentException("Recipe and image dimensions differ.");
         }
@@ -298,9 +299,9 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
         if (
             recipe.Mode == EInspectionMode.Template
             && (
-                request.Reference == null
-                || request.Reference.Width != recipe.Width
-                || request.Reference.Height != recipe.Height
+                !request.HasReference
+                || request.ReferenceWidth != recipe.Width
+                || request.ReferenceHeight != recipe.Height
             )
         )
         {
@@ -311,9 +312,9 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
                     + recipe.Height
                     + "；参考："
                     + (
-                        request.Reference == null
+                        !request.HasReference
                             ? "未载入"
-                            : request.Reference.Width + "×" + request.Reference.Height
+                            : request.ReferenceWidth + "×" + request.ReferenceHeight
                     )
                     + "。单字库图块不需要与整图同尺寸；若仅做单字库检查，请切换“无整图参考（可用单字库）”（SDK使用Free模式且Reference=null），ROI中的字库绑定保留。若需要整图模板检查，请载入匹配尺寸的参考整图，不要拉伸单字图块。"
             );
@@ -321,7 +322,7 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
 
         foreach (var region in recipe.Regions)
         {
-            if (!region.Bounds.Fits(request.Actual))
+            if (!region.Bounds.Fits(request.ImageWidth, request.ImageHeight))
             {
                 throw new ArgumentException("ROI lies outside the image: " + region.Name);
             }

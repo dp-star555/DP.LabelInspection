@@ -1,7 +1,7 @@
 using System.Linq;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
+using ZxingBarcodeDecoder = DP.LabelInspection.Tests.BarcodeFixtureReader;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ZXing;
 using ZXing.Common;

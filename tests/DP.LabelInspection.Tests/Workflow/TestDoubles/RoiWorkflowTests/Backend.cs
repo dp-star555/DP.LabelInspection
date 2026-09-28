@@ -21,6 +21,7 @@ public sealed partial class RoiWorkflowTests
         internal bool Complete = true,
             NeedsRead;
         internal int Defects;
+        internal int X, Y;
         internal string Value = "A";
         public string Name => "stage spy";
         public EInspectionCapabilities Capabilities => EInspectionCapabilities.None;
@@ -112,8 +113,8 @@ public sealed partial class RoiWorkflowTests
             }
         }
 
-        public int OffsetX => 0;
-        public int OffsetY => 0;
+        public int OffsetX => X;
+        public int OffsetY => Y;
 
         public void Dispose() { }
     }

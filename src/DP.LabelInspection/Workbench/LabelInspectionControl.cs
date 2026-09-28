@@ -86,6 +86,8 @@ public sealed class LabelInspectionControl : UserControl
     private IInspectionEngine? _engine;
     private ImageFrame? _actual;
     private ImageFrame? _reference;
+    private DP.Vision.ImageFrame? _visionActual;
+    private DP.Vision.ImageFrame? _visionReference;
     private readonly Label _referenceMode = new Label { AutoSize = true };
     private CancellationTokenSource? _cancel;
     private Task<InspectionReport>? _active;
@@ -465,8 +467,15 @@ public sealed class LabelInspectionControl : UserControl
                 return;
             }
 
-            int x = e.Bounds.X - (LastReport?.Analysis.OffsetX ?? 0),
-                y = e.Bounds.Y - (LastReport?.Analysis.OffsetY ?? 0);
+            int dx = 0, dy = 0;
+            if (LastReport != null && !LastReport.Analysis.TryGetTranslation(out dx, out dy))
+            {
+                _status.Message = "当前报告包含非整数平移变换，不能按轴对齐ROI编辑。";
+                return;
+            }
+
+            int x = e.Bounds.X - dx,
+                y = e.Bounds.Y - dy;
             if (x < 0 || y < 0 || x + e.Bounds.Width > _actual.Width || y + e.Bounds.Height > _actual.Height)
             {
                 _status.Message = "调整超出配方坐标范围，未保存。";
@@ -602,13 +611,16 @@ public sealed class LabelInspectionControl : UserControl
     }
 
     /// <summary>设置输入图像，可选择清除旧ROI。</summary>
-    /// <param name = "actual">借用实际源，内部复制为业务快照，返回后客户可释放自己的句柄；支持Gray8/Bgr24。</param>
+    /// <param name = "actual">借用实际源，内部保留Vision租约并复制显示快照；返回后客户可释放自己的句柄。</param>
     /// <param name = "clearRegions">是否丢弃原有坐标配置。</param>
     public void SetActualImage(DP.Vision.IImageSource actual, bool clearRegions = true)
     {
         EnsureIdle();
-        // 工作台继续使用独立业务快照保存配方/报告；客户只传源，返回后可释放自己的句柄。
-        _actual = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(actual);
+        using var frame = new DP.Vision.ImageFrame(Guid.NewGuid().ToString("N"), actual);
+        var preview = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(frame.Image);
+        _visionActual?.Dispose();
+        _visionActual = frame.Retain();
+        _actual = preview;
         _viewer.SetImage(_actual);
         _taskData = null;
         _cycleId = null;
@@ -623,15 +635,16 @@ public sealed class LabelInspectionControl : UserControl
     }
 
     /// <summary>设置同尺寸参考，自由模式可传null。</summary>
-    /// <param name = "reference">借用参考源，内部复制为业务快照，返回后调用方可释放；null表示清空。</param>
+    /// <param name = "reference">借用参考源，内部保留Vision租约并复制显示快照；null表示清空。</param>
     /// <param name = "assumeAligned">宿主是否明确确认实际图与参考坐标已对齐。</param>
     public void SetReferenceImage(DP.Vision.IImageSource? reference, bool assumeAligned = false)
     {
         EnsureIdle();
-        _reference =
-            reference == null
-                ? null
-                : DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(reference);
+        using var frame = reference == null ? null : new DP.Vision.ImageFrame(Guid.NewGuid().ToString("N"), reference);
+        var preview = frame == null ? null : DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(frame.Image);
+        _visionReference?.Dispose();
+        _visionReference = frame?.Retain();
+        _reference = preview;
         _aligned.Checked = assumeAligned;
         UpdateReferenceMode();
     }
@@ -699,6 +712,7 @@ public sealed class LabelInspectionControl : UserControl
         }
 
         var request = CreateRequest();
+        LastRequest?.Dispose();
         LastRequest = request;
         LastReport = null;
         _cancel = new CancellationTokenSource();
@@ -766,7 +780,7 @@ public sealed class LabelInspectionControl : UserControl
         }
     }
 
-    /// <summary>最近一次原生工作开始前捕获的输入快照。</summary>
+    /// <summary>最近一次请求；借用至下次配置更改、检测或控件释放，需长期使用时自行在有效期内复制像素。</summary>
     [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public InspectionRequest? LastRequest { get; private set; }
 
@@ -795,7 +809,7 @@ public sealed class LabelInspectionControl : UserControl
         _anomalyTrainer = trainer;
     }
 
-    /// <summary>捕获当前不可变输入及配置，供持久化或无界面使用。</summary>
+    /// <summary>捕获当前Vision帧租约及不可变配置；调用方负责释放返回的请求。</summary>
     public InspectionRequest CreateRequest()
     {
         EnsureIdle();
@@ -804,8 +818,8 @@ public sealed class LabelInspectionControl : UserControl
             throw new InvalidOperationException("尚未载入待检图。");
         }
 
-        return new InspectionRequest(
-            _actual,
+        return InspectionRequest.FromVision(
+            _visionActual!,
             new InspectionRecipe(
                 "WinForms configuration",
                 _actual.Width,
@@ -816,7 +830,7 @@ public sealed class LabelInspectionControl : UserControl
                 _options,
                 _bindings
             ),
-            _reference,
+            _visionReference,
             _cycleId,
             _taskData
         );
@@ -834,6 +848,8 @@ public sealed class LabelInspectionControl : UserControl
 
         if (recipe.Mode == EInspectionMode.Free)
         {
+            _visionReference?.Dispose();
+            _visionReference = null;
             _reference = null;
         }
         else if (_reference == null)
@@ -909,6 +925,7 @@ public sealed class LabelInspectionControl : UserControl
 
     private void RefreshRegions()
     {
+        LastRequest?.Dispose();
         LastRequest = null;
         LastReport = null;
         ClearGallery();
@@ -952,7 +969,10 @@ public sealed class LabelInspectionControl : UserControl
         }
 
         _lastFindings = findings.AsReadOnly();
-        var mapped = Regions
+        bool translationOnly = report.Analysis.TryGetTranslation(out _, out _);
+        if (!translationOnly)
+            _status.Message = "当前报告包含仿射变换，轴对齐ROI叠加已隐藏；请使用矩阵几何预览。";
+        var mapped = (translationOnly ? Regions : Array.Empty<InspectionRegion>())
             .Select(r =>
                 new InspectionRegion(
                     r.Name,
@@ -1435,7 +1455,14 @@ public sealed class LabelInspectionControl : UserControl
     {
         if (disposing)
         {
-            _cancel?.Cancel();
+            if (_active != null)
+                throw new InvalidOperationException("Await CancelAndWaitAsync before disposal.");
+            LastRequest?.Dispose();
+            LastRequest = null;
+            _visionActual?.Dispose();
+            _visionActual = null;
+            _visionReference?.Dispose();
+            _visionReference = null;
             ClearGallery();
             _tips.Dispose();
         }

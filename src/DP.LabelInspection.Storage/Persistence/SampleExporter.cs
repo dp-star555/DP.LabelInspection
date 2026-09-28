@@ -120,6 +120,21 @@ public sealed class SampleExporter
         var analysis = report["analysis"] as JObject;
         int offsetX = (int?)Child(analysis, "offsetX") ?? 0,
             offsetY = (int?)Child(analysis, "offsetY") ?? 0;
+        // 旧报告没有alignment，仍按历史平移导出；新报告不能把旋转/缩放误裁成轴对齐ROI。
+        var alignment = Child(analysis, "alignment");
+        if (alignment != null && alignment.Type != JTokenType.Null)
+        {
+            var matrix = Child(alignment, "recipeToImage");
+            double? m11 = (double?)Child(matrix, "m11"), m12 = (double?)Child(matrix, "m12"),
+                m21 = (double?)Child(matrix, "m21"), m22 = (double?)Child(matrix, "m22"),
+                tx = (double?)Child(matrix, "tx"), ty = (double?)Child(matrix, "ty");
+            if (m11 == null || m12 == null || m21 == null || m22 == null || tx == null || ty == null)
+                throw new InvalidDataException("Stored alignment matrix is incomplete.");
+            if (m11 != 1 || m12 != 0 || m21 != 0 || m22 != 1)
+                throw new NotSupportedException("Sample export requires translation-only alignment; affine ROI cropping is not implemented.");
+            if (tx != offsetX || ty != offsetY)
+                throw new InvalidDataException("Stored alignment does not match legacy ROI offsets.");
+        }
         var results = (Child(analysis, "regions") as JArray ?? new JArray())
             .OfType<JObject>()
             .Where(r => r["regionName"] != null)

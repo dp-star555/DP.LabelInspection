@@ -37,6 +37,85 @@ public sealed class ReferenceModeTests
         StringAssert.Contains(message, "单字库");
     }
 
+    /// <summary>固定和空白质量直接裁取Vision租约；整图参考不需要转成标签快照。</summary>
+    [TestMethod]
+    [DataRow(ERegionKind.Fixed)]
+    [DataRow(ERegionKind.Blank)]
+    public void VisionFramesRunSurfaceQuality(ERegionKind kind)
+    {
+        var bytes = Enumerable.Repeat((byte)255, 32 * 16).ToArray();
+        if (kind == ERegionKind.Fixed)
+            for (int y = 4; y < 12; y++)
+            for (int x = 8; x < 24; x++)
+                bytes[y * 32 + x] = 0;
+        using var image = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(32, 16, DP.Vision.EPixelLayout.Gray8),
+            bytes
+        );
+        using var actual = new DP.Vision.ImageFrame("actual-surface", image);
+        using var reference = new DP.Vision.ImageFrame("reference-surface", image);
+        var recipe = new InspectionRecipe(
+            "surface",
+            32,
+            16,
+            kind == ERegionKind.Fixed ? EInspectionMode.Template : EInspectionMode.Free,
+            EAlignmentMode.AssumeAligned,
+            new[] { new InspectionRegion("surface", kind, new PixelRect(0, 0, 32, 16)) }
+        );
+        using var request = InspectionRequest.FromVision(
+            actual,
+            recipe,
+            kind == ERegionKind.Fixed ? reference : null
+        );
+        using var backend = new OpenCvInspectionBackend();
+        using var engine = new InspectionEngine(backend);
+        var report = engine.Inspect(request);
+        Assert.AreEqual(
+            EInspectionVerdict.Ok,
+            report.Verdict,
+            string.Join(";", report.Analysis.Regions.Single().Findings.Select(f => f.Code))
+        );
+        Assert.AreEqual(ERoiStageState.Passed, report.Analysis.Regions.Single().Execution!.Quality);
+        Assert.AreEqual("actual-surface", report.Analysis.Alignment!.FrameId);
+    }
+
+    /// <summary>真实ECC平移定位直接读取Vision租约，不依赖旧标签图像快照。</summary>
+    [TestMethod]
+    public void VisionFramesRunTranslationRegistration()
+    {
+        var bytes = new byte[48 * 48];
+        new Random(42).NextBytes(bytes);
+        using var source = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(48, 48, DP.Vision.EPixelLayout.Gray8),
+            bytes
+        );
+        using var actual = new DP.Vision.ImageFrame("ecc-actual", source);
+        using var reference = new DP.Vision.ImageFrame("ecc-reference", source);
+        var recipe = new InspectionRecipe(
+            "position",
+            48,
+            48,
+            EInspectionMode.Template,
+            EAlignmentMode.Translation,
+            new[]
+            {
+                new InspectionRegion("anchor", ERegionKind.Fixed, new PixelRect(0, 0, 48, 48)).WithTasks(
+                    new RoiInspectionTasks(false, true)
+                ),
+            }
+        );
+        using var request = InspectionRequest.FromVision(actual, recipe, reference);
+        using var backend = new OpenCvInspectionBackend();
+        using var engine = new InspectionEngine(backend);
+        var report = engine.Inspect(request);
+        Assert.IsTrue(
+            report.Analysis.Alignment!.Measured,
+            string.Join(";", report.Analysis.Regions.Single().Findings.Select(f => f.Code))
+        );
+        Assert.AreEqual(0, report.Analysis.OffsetX);
+        Assert.AreEqual(0, report.Analysis.OffsetY);
+    }
+
     /// <summary>明确模板模式但无模板时仍报错，不隐式切换为自由模式。</summary>
     [TestMethod]
     public void MissingWholeReferenceStillRejects()

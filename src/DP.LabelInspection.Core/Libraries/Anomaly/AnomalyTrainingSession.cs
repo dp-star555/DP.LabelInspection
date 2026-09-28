@@ -437,8 +437,9 @@ public sealed class AnomalyTrainingSession
             var bounds = sample.Bounds;
             try
             {
+                using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(sample.Image.Image);
                 var result = await service
-                    .ExtractGlyphCandidatesAsync(sample.Image.Image, bounds, sample.ConfirmedText, token)
+                    .ExtractGlyphCandidatesAsync(source, bounds, sample.ConfirmedText, token)
                     .ConfigureAwait(true);
                 // 提取期间框被调整或删除时丢弃结果，由下一轮重新提取。
                 if (_samples.Contains(sample) && sample.Bounds.Equals(bounds) && sample.NeedsExtraction)

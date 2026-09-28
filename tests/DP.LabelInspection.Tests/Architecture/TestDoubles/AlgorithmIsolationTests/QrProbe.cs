@@ -15,28 +15,24 @@ namespace DP.LabelInspection.Tests;
 
 public sealed partial class AlgorithmIsolationTests
 {
-    private sealed class QrProbe : IBarcodePrintInspector
+    private sealed class QrProbe : IQrQualityInspector
     {
         internal int Calls;
+        public bool RequiresDecodedStructure => false;
 
-        public IReadOnlyList<InspectionFinding> Inspect(
-            ImageFrame frame,
-            PixelRect bounds,
-            IReadOnlyList<BarcodeObservation> symbols,
-            BarcodePrintOptions options,
-            CancellationToken token
+        public BarcodeQualityResult Inspect(
+            IImageSource frame,
+            PixelBounds bounds,
+            IReadOnlyList<DP.Vision.Algorithms.BarcodeObservation> symbols,
+            DP.Vision.Algorithms.BarcodePrintOptions options,
+            CancellationToken token = default
         )
         {
             Calls++;
-            return new[]
-            {
-                new InspectionFinding(
-                    "replacement_qr",
-                    "Explicit replacement.",
-                    EInspectionVerdict.Ng,
-                    bounds
-                ),
-            };
+            return new BarcodeQualityResult(true, new[] {
+                new QualityFinding("replacement_qr", "Explicit replacement.",
+                    EQualityFindingKind.Defect, bounds)
+            });
         }
     }
 }

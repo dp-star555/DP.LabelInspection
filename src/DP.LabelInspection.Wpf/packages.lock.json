@@ -16,7 +16,10 @@
         }
       },
       "dp.labelinspection.contracts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
       },
       "dp.vision": {
         "type": "Project"
@@ -49,7 +52,10 @@
         }
       },
       "dp.labelinspection.contracts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
       },
       "dp.vision": {
         "type": "Project"

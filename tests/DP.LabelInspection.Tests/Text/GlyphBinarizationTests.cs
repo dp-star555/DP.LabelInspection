@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Runtime;
+using GlyphComparer = DP.LabelInspection.Tests.SnapshotComparer;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using A = DP.Vision.Algorithms;
 using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;

@@ -110,11 +110,32 @@ public sealed partial class GlyphQuickLibraryTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = await engine.ExtractGlyphCandidatesAsync(Line(), new PixelRect(0, 0, 64, 32), "A0");
+        using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(Line());
+        var result = await engine.ExtractGlyphCandidatesAsync(source, new PixelRect(0, 0, 64, 32), "A0");
         Assert.IsNull(result.Recognition);
         Assert.AreEqual("A0", result.ConfirmedText);
         Assert.AreEqual(2, result.Segmentation.Characters.Count);
         Assert.AreEqual("0", result.Segmentation.Characters[1].Character);
+    }
+
+    /// <summary>异步候选提取立即保留Vision租约，调用方返回任务后即可释放图像句柄。</summary>
+    [TestMethod]
+    public async Task CandidateExtractionRetainsSourceBeforeScheduling()
+    {
+        using var backend = new OpenCvInspectionBackend();
+        using var engine = new InspectionEngine(backend);
+        var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(Line());
+        Task<GlyphCandidateExtraction> pending;
+        try
+        {
+            pending = engine.ExtractGlyphCandidatesAsync(source, new PixelRect(0, 0, 64, 32), "A0");
+        }
+        finally
+        {
+            source.Dispose();
+        }
+        var result = await pending;
+        Assert.AreEqual(2, result.Segmentation.Characters.Count);
     }
 
     /// <summary>不支持的人工文本会被拒绝，不静默归一化。</summary>
@@ -123,11 +144,12 @@ public sealed partial class GlyphQuickLibraryTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
+        using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(Line());
         await Assert.ThrowsExactlyAsync<ArgumentException>(() =>
-            engine.ExtractGlyphCandidatesAsync(Line(), new PixelRect(0, 0, 64, 32), "A\nO")
+            engine.ExtractGlyphCandidatesAsync(source, new PixelRect(0, 0, 64, 32), "A\nO")
         );
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() =>
-            engine.ExtractGlyphCandidatesAsync(Line(), new PixelRect(0, 0, 64, 32))
+            engine.ExtractGlyphCandidatesAsync(source, new PixelRect(0, 0, 64, 32))
         );
     }
 
@@ -138,15 +160,16 @@ public sealed partial class GlyphQuickLibraryTests
         using var backend = new OpenCvInspectionBackend();
         var engine = new InspectionEngine(backend);
         engine.Dispose();
+        using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(Line());
         await Assert.ThrowsExactlyAsync<ObjectDisposedException>(() =>
-            engine.ExtractGlyphCandidatesAsync(Line(), new PixelRect(0, 0, 64, 32), "AB")
+            engine.ExtractGlyphCandidatesAsync(source, new PixelRect(0, 0, 64, 32), "AB")
         );
         using var live = new InspectionEngine(backend);
         using var cancel = new CancellationTokenSource();
         cancel.Cancel();
         try
         {
-            await live.ExtractGlyphCandidatesAsync(Line(), new PixelRect(0, 0, 64, 32), "AB", cancel.Token);
+            await live.ExtractGlyphCandidatesAsync(source, new PixelRect(0, 0, 64, 32), "AB", cancel.Token);
             Assert.Fail("Expected cancellation.");
         }
         catch (OperationCanceledException) { }
@@ -159,6 +182,7 @@ public sealed partial class GlyphQuickLibraryTests
         using var backend = new GateBackend();
         using var engine = new InspectionEngine(backend);
         var frame = Line();
+        using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(frame);
         var request = new InspectionRequest(
             frame,
             new InspectionRecipe(
@@ -176,7 +200,7 @@ public sealed partial class GlyphQuickLibraryTests
                 .Select(i =>
                     i % 2 == 0
                         ? (Task)engine.InspectAsync(request)
-                        : engine.ExtractGlyphCandidatesAsync(frame, new PixelRect(0, 0, 64, 32), "AB")
+                        : engine.ExtractGlyphCandidatesAsync(source, new PixelRect(0, 0, 64, 32), "AB")
                 )
         );
         Assert.IsFalse(backend.Overlap);

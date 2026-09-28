@@ -29,6 +29,7 @@ internal static class RoiWorkflow
         using var session = staged.OpenSession(request);
         var results = new Dictionary<string, RegionInspectionResult>(StringComparer.Ordinal);
         var active = new HashSet<string>(StringComparer.Ordinal);
+        bool measuredAlignment = false;
         foreach (var roi in configured)
         {
             token.ThrowIfCancellationRequested();
@@ -53,10 +54,31 @@ internal static class RoiWorkflow
             .Any(f => f.Verdict != EInspectionVerdict.Ok)
             ? EInspectionVerdict.Ng
             : EInspectionVerdict.Ok;
+        var alignment = measuredAlignment
+            ? new InspectionAlignment(
+                request.FrameId,
+                DP.Vision.Algorithms.CoordinateMatrix2D.FromAffine(
+                    1,
+                    0,
+                    session.OffsetX,
+                    0,
+                    1,
+                    session.OffsetY
+                ),
+                true
+            )
+            : new InspectionAlignment(request.FrameId);
         return new InspectionReport(
             backend.Name,
             verdict,
-            new BackendAnalysis(double.NaN, double.NaN, ordered, session.OffsetX, session.OffsetY),
+            new BackendAnalysis(
+                double.NaN,
+                double.NaN,
+                ordered,
+                measuredAlignment ? session.OffsetX : 0,
+                measuredAlignment ? session.OffsetY : 0,
+                alignment
+            ),
             global,
             watch.Elapsed.TotalMilliseconds
         );
@@ -224,6 +246,13 @@ internal static class RoiWorkflow
                 }
 
                 region = session.Locate(config, token);
+                if (
+                    request.Recipe.Mode == EInspectionMode.Template
+                    && request.Recipe.Alignment == EAlignmentMode.Translation
+                )
+                {
+                    measuredAlignment = true;
+                }
                 if (read)
                 {
                     phase = "read";

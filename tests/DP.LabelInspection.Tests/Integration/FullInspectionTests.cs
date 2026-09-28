@@ -7,7 +7,9 @@ using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
+using CharacterSegmenter = DP.LabelInspection.Tests.SnapshotSegmenter;
+using GlyphComparer = DP.LabelInspection.Tests.SnapshotComparer;
+using ZxingBarcodeDecoder = DP.LabelInspection.Tests.BarcodeFixtureReader;
 using DP.LabelInspection.Storage;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
@@ -234,7 +236,7 @@ public sealed partial class FullInspectionTests
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         Assert.AreEqual("DP12345", symbols.Single().Text);
-        using var backend = new OpenCvInspectionBackend(barcode: new ZxingBarcodeDecoder());
+        using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
         using var engine = new InspectionEngine(backend);
         var recipe = new InspectionRecipe(
             "barcode",
@@ -400,6 +402,21 @@ public sealed partial class FullInspectionTests
             2,
             (int)JObject.Parse(File.ReadAllText(Path.Combine(output, "manifest.json")))["samples"]!
         );
+
+        string reportPath = Path.Combine(temp.Path, "jobs", id, "report.json");
+        var stored = JObject.Parse(File.ReadAllText(reportPath));
+        var matrix = (JObject?)stored["analysis"]?["alignment"]?["recipeToImage"];
+        Assert.IsNotNull(matrix);
+        matrix["m12"] = 0.25;
+        File.WriteAllText(reportPath, stored.ToString());
+        string rejected = Path.Combine(temp.Path, "affine-samples");
+        Assert.ThrowsExactly<NotSupportedException>(() => new SampleExporter(temp.Store).Export(rejected));
+        Assert.IsFalse(Directory.Exists(rejected), "Failed export must not publish partial samples.");
+
+        // 历史报告没有矩阵，仍按旧平移字段导出。
+        stored["analysis"]!["alignment"] = null;
+        File.WriteAllText(reportPath, stored.ToString());
+        Assert.AreEqual(2, new SampleExporter(temp.Store).Export(Path.Combine(temp.Path, "legacy-samples")));
     }
 
     /// <summary>并发编辑不能覆盖已发布版本。</summary>
@@ -525,7 +542,7 @@ public sealed partial class FullInspectionTests
         }
 
         var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
-        using var backend = new OpenCvInspectionBackend(barcode: new ZxingBarcodeDecoder());
+        using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
         using var engine = new InspectionEngine(backend);
         var request = new InspectionRequest(
             frame,

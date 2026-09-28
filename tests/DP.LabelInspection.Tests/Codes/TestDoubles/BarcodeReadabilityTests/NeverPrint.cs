@@ -4,36 +4,25 @@ using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DP.LabelInspection.Tests;
 
 public sealed partial class BarcodeReadabilityTests
 {
-    private sealed class NeverPrint : IBarcodePrintInspector, IRoiBarcodeQualityInspector
+    private sealed class NeverPrint : DP.Vision.Algorithms.IQrQualityInspector
     {
-        public RoiQualityMeasurement InspectQuality(
-            ImageFrame frame,
-            InspectionRegion region,
-            System.Collections.Generic.IReadOnlyList<BarcodeObservation> symbols,
-            CancellationToken token
+        public bool RequiresDecodedStructure => true;
+
+        public DP.Vision.Algorithms.BarcodeQualityResult Inspect(
+            DP.Vision.IImageSource frame,
+            DP.Vision.Algorithms.PixelBounds bounds,
+            System.Collections.Generic.IReadOnlyList<DP.Vision.Algorithms.BarcodeObservation> symbols,
+            DP.Vision.Algorithms.BarcodePrintOptions options,
+            CancellationToken token = default
         )
         {
             throw new InvalidOperationException("Quality must not run after failed reading.");
-        }
-
-        public System.Collections.Generic.IReadOnlyList<InspectionFinding> Inspect(
-            ImageFrame frame,
-            PixelRect bounds,
-            System.Collections.Generic.IReadOnlyList<BarcodeObservation> symbols,
-            BarcodePrintOptions options,
-            CancellationToken token
-        )
-        {
-            throw new InvalidOperationException(
-                "Unreadable explicit QR must not be sent to the linear fallback."
-            );
         }
     }
 }

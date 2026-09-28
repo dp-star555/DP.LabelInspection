@@ -41,8 +41,24 @@ public sealed class OpenCvQrPrintInspector
     )
     {
         using var image = Bridge.ToVision(frame);
+        return InspectQuality(image, region, symbols, token);
+    }
+
+    /// <summary>借用Vision原图租约运行QR质量检查，不复制成标签图像快照。</summary>
+    /// <param name="frame">借用原图，调用方保持有效。</param>
+    /// <param name="region">当前ROI与参数。</param>
+    /// <param name="symbols">本轮真实读码结构。</param>
+    /// <param name="token">协作式取消。</param>
+    /// <returns>标签业务质量证据与显式完成状态。</returns>
+    public RoiQualityMeasurement InspectQuality(
+        DP.Vision.IImageSource frame,
+        InspectionRegion region,
+        IReadOnlyList<BarcodeObservation> symbols,
+        CancellationToken token
+    )
+    {
         var result = _algorithm.Inspect(
-            image,
+            frame,
             Bridge.ToVision(region.Bounds),
             symbols.Select(Bridge.ToVision).ToArray(),
             Bridge.ToVision(region.Field.BarcodePrint),

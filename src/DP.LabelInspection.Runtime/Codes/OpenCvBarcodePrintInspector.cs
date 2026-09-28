@@ -60,6 +60,23 @@ public sealed class OpenCvBarcodePrintInspector
         CancellationToken token
     )
     {
+        using var image = Bridge.ToVision(frame);
+        return InspectQuality(image, region, symbols, token);
+    }
+
+    /// <summary>借用Vision原图运行码质量策略，只有旧式自定义QR实现才需要复制成历史图像快照。</summary>
+    /// <param name="frame">借用的原图租约。</param>
+    /// <param name="region">ROI及印刷参数。</param>
+    /// <param name="symbols">已有的解码证据。</param>
+    /// <param name="token">协作式取消。</param>
+    /// <returns>带完成状态的ROI质量证据。</returns>
+    public RoiQualityMeasurement InspectQuality(
+        DP.Vision.IImageSource frame,
+        InspectionRegion region,
+        IReadOnlyList<BarcodeObservation> symbols,
+        CancellationToken token
+    )
+    {
         bool qr =
             region.Field.BarcodeType == EBarcodeKind.QrCode
             || region.Field.BarcodeType == EBarcodeKind.Auto
@@ -67,10 +84,10 @@ public sealed class OpenCvBarcodePrintInspector
                 && symbols[0].Format == "QR_CODE";
         if (qr)
         {
+            if (_qr is OpenCvQrPrintInspector visionQr)
+                return visionQr.InspectQuality(frame, region, symbols, token);
             if (_qr is IRoiBarcodeQualityInspector structured)
-            {
-                return structured.InspectQuality(frame, region, symbols, token);
-            }
+                return structured.InspectQuality(Bridge.ToLabel(frame), region, symbols, token);
 
             return new RoiQualityMeasurement(
                 new RegionInspectionResult(
@@ -90,9 +107,8 @@ public sealed class OpenCvBarcodePrintInspector
             );
         }
 
-        using var image = Bridge.ToVision(frame);
         var result = _linear.Inspect(
-            image,
+            frame,
             Bridge.ToVision(region.Bounds),
             symbols.Select(Bridge.ToVision).ToArray(),
             Bridge.ToVision(region.Field.BarcodePrint),

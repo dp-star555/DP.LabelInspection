@@ -38,7 +38,7 @@ public sealed partial class GlyphQuickLibraryTests
         }
 
         public GlyphCandidateExtraction ExtractGlyphCandidates(
-            ImageFrame frame,
+            DP.Vision.IImageSource frame,
             PixelRect bounds,
             string? confirmedText,
             CancellationToken token

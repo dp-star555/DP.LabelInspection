@@ -667,7 +667,8 @@ public sealed class GlyphQuickBuilderControl : UserControl
     {
         try
         {
-            var result = await _extractor!.ExtractGlyphCandidatesAsync(image, roi, text, token);
+            using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(image);
+            var result = await _extractor!.ExtractGlyphCandidatesAsync(source, roi, text, token);
             token.ThrowIfCancellationRequested();
             _draft.ApplyExtraction(result.Segmentation);
             _result = result;

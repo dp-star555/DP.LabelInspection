@@ -70,6 +70,27 @@ public sealed class RegionAnomalyTests
         );
     }
 
+    /// <summary>整ROI异常检测直接借用Vision原图，保留与旧快照入口一致的原图证据。</summary>
+    [TestMethod]
+    public void VisionAnomalyInspectionMatchesSnapshotEvidence()
+    {
+        var region = new InspectionRegion("fixed", ERegionKind.Fixed, new PixelRect(30, 20, 150, 50));
+        var detector = new RegionAnomalyDetector();
+        var options = RegionAnomalyDetector.DefaultOptions(region);
+        var reference = Label(0, 1);
+        var model = detector.Train(new[] { reference }, region, options);
+        var actual = Label(1, 2);
+        using var image = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(actual.Width, actual.Height, DP.Vision.EPixelLayout.Gray8),
+            actual.CopyPixels()
+        );
+        var old = detector.Inspect(actual, region, model, options);
+        var vision = detector.Inspect(image, region, model, options);
+        Assert.AreEqual(old.Crop, vision.Crop);
+        Assert.AreEqual(old.MaximumScore, vision.MaximumScore, 1e-9);
+        Assert.AreEqual(old.Findings.Count, vision.Findings.Count);
+    }
+
     /// <summary>良品通过；缺口以原图坐标报告，落在ROI内而不是裁图坐标。</summary>
     [TestMethod]
     public void DefectIsReportedInImageCoordinates()

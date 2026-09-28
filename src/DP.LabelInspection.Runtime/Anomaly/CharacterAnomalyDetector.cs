@@ -278,6 +278,41 @@ public sealed class CharacterAnomalyDetector
         }
 
         using var gray = Gray(image);
+        return InspectGray(gray, characters, crop, models, token, inkLoss);
+    }
+
+    /// <summary>借用Vision原图执行逐字异常检测，不生成旧标签图像快照。</summary>
+    /// <param name="image">借用原图。</param>
+    /// <param name="characters">原图坐标中的字符及身份。</param>
+    /// <param name="crop">热力图范围。</param>
+    /// <param name="models">固定版本字符模型查询。</param>
+    /// <param name="token">协作式取消。</param>
+    /// <param name="inkLoss">是否执行可用的缺墨检查。</param>
+    /// <returns>原图坐标的逐字证据。</returns>
+    public CharacterAnomalyResult Inspect(
+        DP.Vision.IImageSource image,
+        IReadOnlyList<DP.LabelInspection.Contracts.CharacterPatch> characters,
+        PixelRect crop,
+        Func<string, CharacterAnomalyModel?> models,
+        CancellationToken token = default,
+        bool inkLoss = true
+    )
+    {
+        if (image == null || characters == null || models == null)
+            throw new ArgumentNullException(image == null ? nameof(image) : nameof(characters));
+        using var gray = Gray(image);
+        return InspectGray(gray, characters, crop, models, token, inkLoss);
+    }
+
+    private CharacterAnomalyResult InspectGray(
+        Mat gray,
+        IReadOnlyList<DP.LabelInspection.Contracts.CharacterPatch> characters,
+        PixelRect crop,
+        Func<string, CharacterAnomalyModel?> models,
+        CancellationToken token,
+        bool inkLoss
+    )
+    {
         var line = CharacterCells.Measure(gray, characters);
         var region = new Rect(crop.X, crop.Y, crop.Width, crop.Height) & new Rect(0, 0, gray.Cols, gray.Rows);
         var work = characters
@@ -663,6 +698,48 @@ public sealed class CharacterAnomalyDetector
                     e.InkThreshold
                 )
         );
+    }
+
+    private static Mat Gray(DP.Vision.IImageSource frame)
+    {
+        var info = frame.Info;
+        if (info.Layout != DP.Vision.EPixelLayout.Gray8 && info.Layout != DP.Vision.EPixelLayout.Bgr24)
+            throw new NotSupportedException("Character anomaly inspection requires Gray8 or Bgr24.");
+        var bytes = new byte[info.ByteLength];
+        frame.CopyTo(0, bytes, 0, bytes.Length);
+        var raw = new Mat(
+            info.Height,
+            info.Width,
+            info.Layout == DP.Vision.EPixelLayout.Gray8 ? MatType.CV_8UC1 : MatType.CV_8UC3
+        );
+        try
+        {
+            System.Runtime.InteropServices.Marshal.Copy(bytes, 0, raw.Data, bytes.Length);
+            if (info.Layout == DP.Vision.EPixelLayout.Gray8)
+                return raw;
+            var gray = new Mat();
+            try
+            {
+                Cv2.CvtColor(raw, gray, ColorConversionCodes.BGR2GRAY);
+                return gray;
+            }
+            catch
+            {
+                gray.Dispose();
+                throw;
+            }
+        }
+        catch
+        {
+            if (info.Layout == DP.Vision.EPixelLayout.Gray8)
+                raw.Dispose();
+            throw;
+        }
+        finally
+        {
+            if (info.Layout != DP.Vision.EPixelLayout.Gray8)
+                raw.Dispose();
+        }
     }
 
     private static Mat Gray(ImageFrame frame)

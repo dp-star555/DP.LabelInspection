@@ -4,6 +4,7 @@ using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
+using OpenCvBarcodePrintInspector = DP.LabelInspection.Tests.SnapshotBarcodeQuality;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DP.LabelInspection.Tests;
@@ -50,7 +51,7 @@ public sealed class BarcodePrintTests
 
         var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
-        var symbols = new DP.LabelInspection.Runtime.Codes.ZxingBarcodeDecoder().Decode(
+        var symbols = new BarcodeFixtureReader().Decode(
             frame,
             bounds,
             default

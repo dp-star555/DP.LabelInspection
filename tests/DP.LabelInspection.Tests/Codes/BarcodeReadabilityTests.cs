@@ -4,7 +4,6 @@ using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DP.LabelInspection.Tests;
@@ -20,8 +19,8 @@ public sealed partial class BarcodeReadabilityTests
     public void UnreadableQrIsNgWithoutLinearFallback(double sharpness)
     {
         using var backend = new OpenCvInspectionBackend(
-            barcode: new ZxingBarcodeDecoder(),
-            barcodePrint: new NeverPrint()
+            barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
+            qrQuality: new NeverPrint()
         );
         using var engine = new InspectionEngine(backend);
         var frame = Blank();
@@ -52,6 +51,94 @@ public sealed partial class BarcodeReadabilityTests
         );
         Assert.AreEqual(ERoiStageState.NotExecuted, report.Analysis.Regions.Single().Execution!.Quality);
         Assert.AreEqual("NG", report.EvidenceGroups.First().Status);
+    }
+
+    /// <summary>Vision图像租约入口可以走真实读码流程；释放宿主帧句柄不使请求失效。</summary>
+    [TestMethod]
+    public void VisionFrameRequestRunsActualBarcodeBackend()
+    {
+        var pixels = Enumerable.Repeat((byte)255, 80 * 80).ToArray();
+        using var source = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(80, 80, DP.Vision.EPixelLayout.Gray8),
+            pixels
+        );
+        var frame = new DP.Vision.ImageFrame("real-barcode-frame", source);
+        var roi = new InspectionRegion(
+            "qr",
+            ERegionKind.Barcode,
+            new PixelRect(0, 0, 80, 80),
+            field: new FieldSettings(barcodeType: EBarcodeKind.QrCode)
+        ).WithTasks(new RoiInspectionTasks(true, false));
+        using var request = InspectionRequest.FromVision(
+            frame,
+            new InspectionRecipe(
+                "vision-barcode",
+                80,
+                80,
+                EInspectionMode.Free,
+                EAlignmentMode.AssumeAligned,
+                new[] { roi }
+            )
+        );
+        frame.Dispose();
+        using var backend = new OpenCvInspectionBackend(
+            barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder()
+        );
+        using var engine = new InspectionEngine(backend);
+        var report = engine.Inspect(request);
+        Assert.AreEqual("real-barcode-frame", report.Analysis.Alignment!.FrameId);
+        Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
+        Assert.IsTrue(report.Analysis.Regions.Single().Findings.Any(f => f.Code == "barcode_not_decoded"));
+    }
+
+    /// <summary>Vision输入与Vision读码器组合能成功读出QR，并保持原始文本与帧身份。</summary>
+    [TestMethod]
+    public void VisionReaderDecodesActualQrFromVisionRequest()
+    {
+        var encoded = new ZXing.BarcodeWriterPixelData
+        {
+            Format = ZXing.BarcodeFormat.QR_CODE,
+            Options = new ZXing.Common.EncodingOptions
+            {
+                Width = 200,
+                Height = 200,
+                Margin = 4,
+            },
+        }.Write("VISION-QR-1020");
+        var bytes = new byte[200 * 200];
+        for (int i = 0; i < bytes.Length; i++)
+            bytes[i] = encoded.Pixels[i * 4];
+        using var pixels = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(200, 200, DP.Vision.EPixelLayout.Gray8),
+            bytes
+        );
+        using var frame = new DP.Vision.ImageFrame("qr-actual", pixels);
+        var roi = new InspectionRegion(
+            "code",
+            ERegionKind.Barcode,
+            new PixelRect(0, 0, 200, 200),
+            field: new FieldSettings(barcodeType: EBarcodeKind.QrCode)
+        ).WithTasks(new RoiInspectionTasks(true, true));
+        using var request = InspectionRequest.FromVision(
+            frame,
+            new InspectionRecipe(
+                "vision-qr",
+                200,
+                200,
+                EInspectionMode.Free,
+                EAlignmentMode.AssumeAligned,
+                new[] { roi }
+            )
+        );
+        using var backend = new OpenCvInspectionBackend(
+            barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder()
+        );
+        using var engine = new InspectionEngine(backend);
+        var report = engine.Inspect(request);
+        Assert.AreEqual(EInspectionVerdict.Ok, report.Verdict);
+        Assert.AreEqual("VISION-QR-1020", report.Analysis.Regions.Single().Barcodes.Single().Text);
+        Assert.AreEqual(ERoiStageState.Passed, report.Analysis.Regions.Single().Execution!.Quality);
+        Assert.AreEqual("qr-actual", report.Analysis.Alignment!.FrameId);
     }
 
     /// <summary>没有解码器不等于已经执行但解码失败。</summary>
@@ -94,7 +181,8 @@ public sealed partial class BarcodeReadabilityTests
     [TestMethod]
     public void NoConfiguredScopeCannotPass()
     {
-        using var backend = new OpenCvInspectionBackend(barcode: new ZxingBarcodeDecoder());
+        using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
+        Assert.IsFalse(backend.Capabilities.HasFlag(EInspectionCapabilities.Discovery));
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
             new InspectionRequest(
@@ -142,7 +230,7 @@ public sealed partial class BarcodeReadabilityTests
         }
 
         var frame = new ImageFrame(200, 200, EImagePixelFormat.Gray8, pixels);
-        using var backend = new OpenCvInspectionBackend(barcode: new ZxingBarcodeDecoder());
+        using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
             new InspectionRequest(

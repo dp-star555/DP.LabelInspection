@@ -48,9 +48,15 @@ public readonly struct PixelRect
     /// <summary>检查包含关系，并拒绝默认空矩形。</summary>
     /// <param name = "frame">用于确定边界的图像。</param>
     /// <returns>全部像素是否位于图像内。</returns>
-    public bool Fits(ImageFrame frame)
+    public bool Fits(ImageFrame frame) => Fits(frame.Width, frame.Height);
+
+    /// <summary>检查矩形是否完整位于给定图像尺寸内，无需读取或复制像素。</summary>
+    /// <param name="imageWidth">原图宽度。</param>
+    /// <param name="imageHeight">原图高度。</param>
+    /// <returns>矩形非空且位于图像内时为true。</returns>
+    public bool Fits(int imageWidth, int imageHeight)
     {
-        return Width > 0 && Height > 0 && (long)X + Width <= frame.Width && (long)Y + Height <= frame.Height;
+        return Width > 0 && Height > 0 && (long)X + Width <= imageWidth && (long)Y + Height <= imageHeight;
     }
 
     /// <summary>检查是否存在非空交集。</summary>

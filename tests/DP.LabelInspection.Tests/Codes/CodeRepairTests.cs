@@ -2,7 +2,8 @@ using System;
 using System.Linq;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
+using OpenCvBarcodePrintInspector = DP.LabelInspection.Tests.SnapshotBarcodeQuality;
+using ZxingBarcodeDecoder = DP.LabelInspection.Tests.BarcodeFixtureReader;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using ZXing;
 using ZXing.Common;
@@ -46,6 +47,181 @@ public sealed class CodeRepairTests
             .Decode(frame, new PixelRect(0, 0, size, size), default)
             .Single();
         Assert.AreEqual("", symbol.Preprocessing);
+    }
+
+    /// <summary>精确原图掩膜只保留左侧码；不修改输入图像或将两个码的搜索外接框当作有效ROI。</summary>
+    [TestMethod]
+    public void VisionBarcodeReaderHonorsImageRegionMask()
+    {
+        var left = Qr("MASK-LEFT-001", out int size);
+        var right = Qr("MASK-RIGHT-002", out _);
+        var pixels = new byte[size * 2 * size];
+        for (int y = 0; y < size; y++)
+        {
+            Buffer.BlockCopy(left, y * size, pixels, y * size * 2, size);
+            Buffer.BlockCopy(right, y * size, pixels, y * size * 2 + size, size);
+        }
+
+        using var source = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(size * 2, size, DP.Vision.EPixelLayout.Gray8),
+            pixels
+        );
+        var region = new DP.Vision.RegionGeometry(
+            Enumerable.Range(0, size).Select(y => new DP.Vision.RegionRun(y, 0, size))
+        );
+        DP.Vision.Algorithms.IMaskedBarcodeReader reader = new DP.Vision.Zxing.ZxingBarcodeDecoder();
+        var result = reader.Read(source, new DP.Vision.Algorithms.PixelBounds(0, 0, size * 2, size), region);
+        Assert.AreEqual(DP.Vision.Algorithms.EAlgorithmStatus.Completed, result.Status);
+        Assert.AreEqual("MASK-LEFT-001", result.Observations.Single().Text);
+        var after = new byte[pixels.Length];
+        source.CopyTo(0, after, 0, after.Length);
+        CollectionAssert.AreEqual(pixels, after);
+    }
+
+    /// <summary>掩膜不得脱离原图，也不能默默把空交集当成无缺陷的正常读数。</summary>
+    [TestMethod]
+    public void VisionBarcodeReaderRejectsInvalidRegionMask()
+    {
+        using var source = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(32, 32, DP.Vision.EPixelLayout.Gray8),
+            Enumerable.Repeat((byte)255, 32 * 32).ToArray()
+        );
+        DP.Vision.Algorithms.IMaskedBarcodeReader reader = new DP.Vision.Zxing.ZxingBarcodeDecoder();
+        var bounds = new DP.Vision.Algorithms.PixelBounds(0, 0, 16, 16);
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            reader.Read(
+                source,
+                bounds,
+                new DP.Vision.RegionGeometry(new[] { new DP.Vision.RegionRun(31, 20, 21) })
+            )
+        );
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            reader.Read(
+                source,
+                bounds,
+                new DP.Vision.RegionGeometry(new[] { new DP.Vision.RegionRun(31, 20, 33) })
+            )
+        );
+    }
+
+    /// <summary>精确原图掩膜只允许指定码参与读取，原始图像及另一个码保持不变。</summary>
+    [TestMethod]
+    public void VisionReaderRestrictsDecodingToMaskedRegion()
+    {
+        var left = Qr("LEFT-ONLY", out int size);
+        var right = Qr("RIGHT-ONLY", out _);
+        int width = size * 2 + 20;
+        var pixels = Enumerable.Repeat((byte)255, width * size).ToArray();
+        for (int y = 0; y < size; y++)
+        {
+            Buffer.BlockCopy(left, y * size, pixels, y * width, size);
+            Buffer.BlockCopy(right, y * size, pixels, y * width + size + 20, size);
+        }
+
+        using var image = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(width, size, DP.Vision.EPixelLayout.Gray8),
+            pixels
+        );
+        var mask = new DP.Vision.RegionGeometry(
+            Enumerable.Range(0, size).Select(y => new DP.Vision.RegionRun(y, 0, size))
+        );
+        DP.Vision.Algorithms.IMaskedBarcodeReader reader = new DP.Vision.Zxing.ZxingBarcodeDecoder();
+        var result = reader.Read(image, new DP.Vision.Algorithms.PixelBounds(0, 0, width, size), mask);
+
+        Assert.AreEqual(DP.Vision.Algorithms.EAlgorithmStatus.Completed, result.Status);
+        Assert.AreEqual(1, result.Observations.Count);
+        Assert.AreEqual("LEFT-ONLY", result.Observations[0].Text);
+        var after = new byte[pixels.Length];
+        image.CopyTo(0, after, 0, after.Length);
+        CollectionAssert.AreEqual(pixels, after);
+    }
+
+    /// <summary>旋转定位的局部ROI经矩阵映射为原图掩膜，读码仍在原始像素上完成。</summary>
+    [TestMethod]
+    public void LocatedReaderUsesRotatedLocalRoiWithoutRotatingPixels()
+    {
+        var left = Qr("POSE-CODE", out int size);
+        var right = Qr("OTHER-CODE", out _);
+        int width = size * 2 + 20;
+        var pixels = Enumerable.Repeat((byte)255, width * size).ToArray();
+        for (int y = 0; y < size; y++)
+        {
+            Buffer.BlockCopy(left, y * size, pixels, y * width, size);
+            Buffer.BlockCopy(right, y * size, pixels, y * width + size + 20, size);
+        }
+        using var image = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(width, size, DP.Vision.EPixelLayout.Gray8),
+            pixels
+        );
+        using var frame = new DP.Vision.ImageFrame("current-qr", image);
+        var pose = new DP.Vision.Algorithms.TemplatePoseTransform(
+            width,
+            size,
+            new DP.Vision.PointD(width / 2d, size / 2d),
+            Math.PI / 2,
+            1
+        );
+        var coordinates = new DP.Vision.Algorithms.LocatedCoordinateSystem(
+            "qr-location",
+            "template-signature",
+            frame.FrameId,
+            width,
+            size,
+            pose
+        );
+        var local = coordinates.ToLocalGeometry(
+            new DP.Vision.RectangleGeometry(new DP.Vision.PointD(size / 2d, size / 2d), size, size)
+        );
+        DP.Vision.Algorithms.IMaskedBarcodeReader reader = new DP.Vision.Zxing.ZxingBarcodeDecoder();
+        var result = DP.Vision.Algorithms.LocatedBarcodeReading.ReadLocated(
+            reader,
+            frame,
+            coordinates,
+            new[] { local },
+            Array.Empty<DP.Vision.Geometry>()
+        );
+        Assert.AreEqual(DP.Vision.Algorithms.EAlgorithmStatus.Completed, result.Status);
+        Assert.AreEqual("POSE-CODE", result.Observations.Single().Text);
+        var foreign = new DP.Vision.Algorithms.LocatedCoordinateSystem(
+            "qr-location",
+            "template-signature",
+            "other-frame",
+            width,
+            size,
+            pose
+        );
+        Assert.ThrowsExactly<InvalidOperationException>(() =>
+            DP.Vision.Algorithms.LocatedBarcodeReading.ReadLocated(
+                reader,
+                frame,
+                foreign,
+                new[] { local },
+                Array.Empty<DP.Vision.Geometry>()
+            )
+        );
+    }
+
+    /// <summary>空掩膜以及完全位于搜索范围外的掩膜必须显式拒绝，不得回退到整框读码。</summary>
+    [TestMethod]
+    public void VisionReaderRejectsMasksWithoutSearchPixels()
+    {
+        var pixels = Qr("MASK-CHECK", out int size);
+        using var image = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(size, size, DP.Vision.EPixelLayout.Gray8),
+            pixels
+        );
+        DP.Vision.Algorithms.IMaskedBarcodeReader reader = new DP.Vision.Zxing.ZxingBarcodeDecoder();
+        var search = new DP.Vision.Algorithms.PixelBounds(0, 0, size / 2, size);
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            reader.Read(image, search, new DP.Vision.RegionGeometry(Array.Empty<DP.Vision.RegionRun>()))
+        );
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            reader.Read(
+                image,
+                search,
+                new DP.Vision.RegionGeometry(new[] { new DP.Vision.RegionRun(0, size - 1, size) })
+            )
+        );
     }
 
     /// <summary>密集斑点使原图读不出；修复后读出的内容正确，并报告可读性余量不足。</summary>

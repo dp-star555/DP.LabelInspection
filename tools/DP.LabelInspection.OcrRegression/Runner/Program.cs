@@ -7,9 +7,9 @@ using System.Text;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
-using DP.LabelInspection.Runtime.Detection;
-using DP.LabelInspection.Runtime.Recognition;
+using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
+using VisionRecognizer = DP.Vision.Onnx.OnnxTextLineRecognizer;
+using VisionPreprocessor = DP.Vision.OpenCv.OpenCvTextLinePreprocessor;
 using DP.LabelInspection.Storage;
 using Newtonsoft.Json.Linq;
 using OpenCvSharp;
@@ -31,9 +31,9 @@ internal static class Program
 
             Console.OutputEncoding = Encoding.UTF8;
             string expectedModelHash = File.ReadAllText(args[2] + ".model-sha256").Trim();
-            using var recognizer = new OnnxTextLineRecognizer(
+            using var recognizer = new VisionRecognizer(
                 args[0],
-                new OpenCvTextLinePreprocessor(),
+                new VisionPreprocessor(),
                 expectedModelHash
             );
             string storePath = Path.Combine(
@@ -46,7 +46,7 @@ internal static class Program
                 store.InstallSeed(File.ReadAllText(Path.Combine(args[1], "libraries", id + ".json")));
             }
 
-            using var backend = new OpenCvInspectionBackend(recognizer, libraries: store);
+            using var backend = new OpenCvInspectionBackend(libraries: store, recognizer: recognizer);
             using var engine = new InspectionEngine(backend);
             int characters = 0,
                 comparisons = 0,
@@ -115,7 +115,11 @@ internal static class Program
                     }
                 );
                 // 只有图像和几何进入SDK；基准及人工文本只在之后用于评估。
-                var report = engine.Inspect(new InspectionRequest(frame, recipe));
+                using var visionSource = DP.Vision.VisionImage.CopyFrom(
+                    new DP.Vision.ImageInfo(frame.Width, frame.Height, DP.Vision.EPixelLayout.Bgr24), bytes);
+                using var visionFrame = new DP.Vision.ImageFrame(Guid.NewGuid().ToString("N"), visionSource);
+                using var request = InspectionRequest.FromVision(visionFrame, recipe);
+                var report = engine.Inspect(request);
                 var regionResult = report.Analysis.Regions.Single();
                 characters += regionResult.Segmentation?.Characters.Count ?? 0;
                 comparisons += regionResult.Glyphs.Count(g => g.Comparison?.Status == "compared");
@@ -198,9 +202,10 @@ internal static class Program
                 var bytes = new byte[image.Rows * image.Cols];
                 Marshal.Copy(image.Data, bytes, 0, bytes.Length);
                 var frame = new ImageFrame(image.Cols, image.Rows, EImagePixelFormat.Gray8, bytes);
+                using var visionImage = Bridge.ToVision(frame);
                 var result = recognizer.Recognize(
-                    frame,
-                    new PixelRect(0, 0, frame.Width, frame.Height),
+                    visionImage,
+                    Bridge.ToVision(new PixelRect(0, 0, frame.Width, frame.Height)),
                     default
                 );
                 if (result.Text != item[1])
@@ -210,11 +215,12 @@ internal static class Program
                     );
                 }
 
-                var segmented = new CharacterSegmenter().Segment(
-                    frame,
-                    new PixelRect(0, 0, frame.Width, frame.Height),
+                using var physical = new DP.Vision.OpenCv.OpenCvCharacterSegmenter().Segment(
+                    visionImage,
+                    Bridge.ToVision(new PixelRect(0, 0, frame.Width, frame.Height)),
                     result.Text
                 );
+                var segmented = Bridge.ToLabel(physical);
                 if (segmented.Characters.Count != item[1].Length)
                 {
                     throw new InvalidOperationException("Frozen physical segmentation failed.");
@@ -277,14 +283,11 @@ internal static class Program
             }
 
             using (
-                var detector = new TextRegionDetector(
-                    new DP.Vision.OnnxDetection.OnnxTextRegionDetector(
-                        Path.Combine(
-                            Path.GetDirectoryName(Path.GetFullPath(args[0]))!,
-                            "ch_PP-OCRv4_det_infer.onnx"
-                        )
-                    ),
-                    true
+                var detector = new DP.Vision.OnnxDetection.OnnxTextRegionDetector(
+                    Path.Combine(
+                        Path.GetDirectoryName(Path.GetFullPath(args[0]))!,
+                        "ch_PP-OCRv4_det_infer.onnx"
+                    )
                 )
             )
             {
@@ -292,26 +295,27 @@ internal static class Program
                     File.ReadAllBytes(Path.Combine(args[1], "frames", "regular-heldout.png"))
                 );
                 using var discoveryBackend = new OpenCvInspectionBackend(
-                    recognizer,
                     libraries: store,
-                    barcode: new ZxingBarcodeDecoder(),
-                    detector: detector
+                    recognizer: recognizer,
+                    barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder()
                 );
                 using var discoveryEngine = new InspectionEngine(discoveryBackend);
-                var discovery = discoveryEngine.Inspect(
-                    new InspectionRequest(
-                        frame,
-                        new InspectionRecipe(
+                using var discoverySource = Bridge.ToVision(frame);
+                using var discoveryFrame = new DP.Vision.ImageFrame(Guid.NewGuid().ToString("N"), discoverySource);
+                using var discoveryRequest = InspectionRequest.FromVision(
+                    discoveryFrame,
+                    new InspectionRecipe(
                             "discover",
                             frame.Width,
                             frame.Height,
                             EInspectionMode.Free,
                             EAlignmentMode.AssumeAligned,
                             Array.Empty<InspectionRegion>()
-                        )
                     )
                 );
-                int detected = detector.Detect(frame, default).Count;
+                var discovery = discoveryEngine.Inspect(discoveryRequest);
+                using var discoveryPixels = Bridge.ToVision(frame);
+                int detected = detector.Detect(discoveryPixels, default).Count;
                 if (
                     detected < 1
                     || discovery.Verdict != EInspectionVerdict.Ng
@@ -328,12 +332,13 @@ internal static class Program
                 );
             }
 
-            var tiny = new ImageFrame(1, 1, EImagePixelFormat.Gray8, new byte[] { 255 });
+            using var tiny = DP.Vision.VisionImage.CopyFrom(
+                new DP.Vision.ImageInfo(1, 1, DP.Vision.EPixelLayout.Gray8), new byte[] { 255 });
             try
             {
                 recognizer.Recognize(
                     tiny,
-                    new PixelRect(0, 0, 1, 1),
+                    Bridge.ToVision(new PixelRect(0, 0, 1, 1)),
                     new System.Threading.CancellationToken(true)
                 );
                 throw new InvalidOperationException("Cancellation was ignored.");
@@ -345,9 +350,9 @@ internal static class Program
 
             try
             {
-                using var rejected = new OnnxTextLineRecognizer(
+                using var rejected = new VisionRecognizer(
                     args[0],
-                    new OpenCvTextLinePreprocessor(),
+                    new VisionPreprocessor(),
                     new string('0', 64)
                 );
                 throw new InvalidOperationException("Wrong model hash accepted.");
@@ -360,7 +365,7 @@ internal static class Program
             recognizer.Dispose();
             try
             {
-                recognizer.Recognize(tiny, new PixelRect(0, 0, 1, 1), default);
+                recognizer.Recognize(tiny, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), default);
                 throw new InvalidOperationException("Disposed recognizer accepted work.");
             }
             catch (ObjectDisposedException)

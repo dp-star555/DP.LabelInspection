@@ -292,7 +292,7 @@ internal sealed class BenchmarkExporter
     private List<LoadedImage> Load()
     {
         using var aligner = _config.Reference == null ? null : new LabelAligner(ReadGray(_config.Reference));
-        var segmenter = new CharacterSegmenter();
+        var segmenter = new DP.Vision.OpenCv.OpenCvCharacterSegmenter();
         var images = new List<LoadedImage>();
         var stems = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var source in _config.Images)
@@ -310,6 +310,7 @@ internal sealed class BenchmarkExporter
                     ? raw.Clone()
                     : aligner.Align(raw);
             var frame = Frame(gray);
+            using var pixels = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(frame);
             var lines = new List<LoadedLine>();
             foreach (var line in _config.Lines)
             {
@@ -327,7 +328,9 @@ internal sealed class BenchmarkExporter
                 var box = new Rect(line.Box[0], line.Box[1], line.Box[2], line.Box[3]);
                 var shift = aligner?.LineShift(gray, box) ?? new Point(0, 0);
                 var roi = new PixelRect(box.X + shift.X, box.Y + shift.Y, box.Width, box.Height);
-                var segmentation = segmenter.Segment(frame, roi, text);
+                using var measured = segmenter.Segment(pixels,
+                    DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(roi), text);
+                var segmentation = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(measured);
                 if (segmentation.Status != "provisional")
                 {
                     Console.WriteLine(

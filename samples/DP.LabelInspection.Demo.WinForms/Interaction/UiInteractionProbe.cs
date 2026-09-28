@@ -119,7 +119,7 @@ internal static class UiInteractionProbe
         using var control = new LabelInspectionControl();
         form.Controls.Add(control);
         using var backend = new DP.LabelInspection.Runtime.OpenCvInspectionBackend(
-            barcode: new DP.LabelInspection.Runtime.Codes.ZxingBarcodeDecoder()
+            barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder()
         );
         using var engine = new DP.LabelInspection.Core.InspectionEngine(backend);
         control.AttachEngine(engine);
@@ -335,9 +335,13 @@ internal static class UiInteractionProbe
                     ),
                 }
             );
-            if (modes.CreateRequest().Recipe.Mode != EInspectionMode.Template)
+            using (var template = modes.CreateRequest())
             {
-                throw new InvalidOperationException("Mismatched reference was silently discarded.");
+                if (template.Recipe.Mode != EInspectionMode.Template
+                    || template.VisionSource == null || template.VisionReference == null)
+                    throw new InvalidOperationException("Workbench did not retain Vision input and reference leases.");
+                if (template.VisionSource.Info.Width != 16 || template.VisionReference.Info.Width != 8)
+                    throw new InvalidOperationException("Workbench Vision leases changed after caller disposal.");
             }
 
             var free =
@@ -346,9 +350,9 @@ internal static class UiInteractionProbe
                     "No visible recovery from stale whole-image reference mode."
                 );
             free.PerformClick();
-            var request = modes.CreateRequest();
+            using var request = modes.CreateRequest();
             if (
-                request.Reference != null
+                request.VisionReference != null
                 || request.Recipe.Mode != EInspectionMode.Free
                 || request.Recipe.Regions.Single().Field.LibraryId != "user-font"
             )
@@ -642,7 +646,8 @@ internal static class UiInteractionProbe
     {
         var form = control.FindForm()!;
         var originalSize = form.Size;
-        var originalFrame = control.CreateRequest().Actual;
+        using var originalRequest = control.CreateRequest();
+        var originalFrame = originalRequest.Actual;
         var originalRegions = control.Regions;
         var viewer = FindViewer(control)!;
         try
@@ -1136,7 +1141,7 @@ internal static class UiInteractionProbe
 
     internal static async Task VerifyDataBindings(LabelInspectionControl control)
     {
-        var request = control.CreateRequest();
+        using var request = control.CreateRequest();
         using var bitmap = DrawingImageConverter.ToBitmap(request.Actual);
         var matrix = new ZXing.MultiFormatWriter().encode("A1020", ZXing.BarcodeFormat.QR_CODE, 140, 140);
         for (int y = 0; y < 140; y++)
@@ -1214,9 +1219,10 @@ internal static class UiInteractionProbe
         }
 
         control.SetActualImage(source, false);
-        if (control.CreateRequest().TaskData != null)
+        using (var next = control.CreateRequest())
         {
-            throw new InvalidOperationException("New image retained preceding task data.");
+            if (next.TaskData != null)
+                throw new InvalidOperationException("New image retained preceding task data.");
         }
 
         report = await control.RunInspectionAsync();

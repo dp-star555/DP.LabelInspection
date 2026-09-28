@@ -14,7 +14,7 @@ public sealed partial class AnomalyTrainingSessionTests
         internal int Calls;
 
         public Task<GlyphCandidateExtraction> ExtractGlyphCandidatesAsync(
-            ImageFrame frame,
+            DP.Vision.IImageSource frame,
             PixelRect bounds,
             string? confirmedText = null,
             CancellationToken token = default
@@ -22,13 +22,11 @@ public sealed partial class AnomalyTrainingSessionTests
         {
             Calls++;
             string text = confirmedText ?? throw new InvalidOperationException("测试须先设置确认文本。");
-            return Task.FromResult(
-                new GlyphCandidateExtraction(
-                    null,
-                    confirmedText,
-                    new CharacterSegmenter().Segment(frame, bounds, text, token)
-                )
-            );
+            using var measured = new DP.Vision.OpenCv.OpenCvCharacterSegmenter().Segment(
+                frame, DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(bounds), text, token);
+            return Task.FromResult(new GlyphCandidateExtraction(
+                null, confirmedText, DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(measured)
+            ));
         }
     }
 }

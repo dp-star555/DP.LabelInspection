@@ -96,11 +96,15 @@
         }
       },
       "dp.labelinspection.contracts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
       },
       "dp.labelinspection.core": {
         "type": "Project",
         "dependencies": {
+          "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
           "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
         }
@@ -266,11 +270,15 @@
         }
       },
       "dp.labelinspection.contracts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
       },
       "dp.labelinspection.core": {
         "type": "Project",
         "dependencies": {
+          "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
           "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
         }

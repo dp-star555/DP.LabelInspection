@@ -17,7 +17,10 @@
         "contentHash": "kz0PEW2lhqygehI/d6XsPCQzD7ff7gUJaVGPVETX611eadGsA3A877GdSlU0LRVMCTH/+P3o2iDTak+S08V2+A=="
       },
       "dp.labelinspection.contracts": {
-        "type": "Project"
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )"
+        }
       },
       "dp.vision": {
         "type": "Project"

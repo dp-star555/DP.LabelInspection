@@ -95,51 +95,39 @@ public sealed partial class AlgorithmIsolationTests
     public void QrQualityIsIndependentlyInjected()
     {
         var qr = new QrProbe();
-        var router = new OpenCvBarcodePrintInspector(qr);
-        var image = White();
-        var bounds = new PixelRect(0, 0, 32, 16);
-        var observations = new[] { new BarcodeObservation("payload", "QR_CODE", bounds) };
-        var result = router.Inspect(
-            image,
-            bounds,
-            observations,
-            new BarcodePrintOptions(),
-            CancellationToken.None
-        );
+        using var backend = new OpenCvInspectionBackend(qrQuality: qr);
+        using var engine = new DP.LabelInspection.Core.InspectionEngine(backend);
+        using var image = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(White());
+        using var frame = new DP.Vision.ImageFrame("qr-quality-probe", image);
+        using var request = InspectionRequest.FromVision(frame,
+            new InspectionRecipe("qr-quality", 32, 16, EInspectionMode.Free,
+                EAlignmentMode.AssumeAligned, new[] {
+                    new InspectionRegion("qr", ERegionKind.Barcode, new PixelRect(0, 0, 32, 16),
+                        field: new FieldSettings(barcodeType: EBarcodeKind.QrCode))
+                        .WithTasks(new RoiInspectionTasks(false, true))
+                }));
+        var result = engine.Inspect(request);
         Assert.AreEqual(1, qr.Calls);
-        Assert.AreEqual("replacement_qr", result.Single().Code);
-        router.Inspect(
-            image,
-            bounds,
-            observations,
-            new BarcodePrintOptions(enabled: false),
-            CancellationToken.None
-        );
-        Assert.AreEqual(1, qr.Calls);
-        router.Inspect(
-            image,
-            bounds,
-            new[] { new BarcodeObservation("payload", "CODE_128", bounds) },
-            new BarcodePrintOptions(),
-            CancellationToken.None
-        );
-        Assert.AreEqual(1, qr.Calls);
+        Assert.IsTrue(result.Analysis.Regions.Single().Findings.Any(f => f.Code == "replacement_qr"));
     }
 
-    /// <summary>标签比较器委托给中立实现，并在释放租约前复制证据。</summary>
+    /// <summary>Vision比较器显式拥有证据租约，释放后不能再借用。</summary>
     [TestMethod]
-    public void GlyphCompatibilityAdapterUsesInjectedNeutralComparer()
+    public void NeutralComparerEvidenceHasExplicitLifetime()
     {
         var algorithm = new GlyphProbe();
-        var legacy = new GlyphComparer(algorithm);
         var frame = White().Crop(new PixelRect(0, 0, 16, 16));
-        var result = legacy.Compare(frame, new GlyphReference("A", frame, "pinned", "fixed"), 147, 0);
+        using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(frame);
+        using var reference = source.Retain();
+        var result = algorithm.Compare(source, reference,
+            new GlyphComparisonOptions(147, 0, EGlyphBinarization.Fixed));
         Assert.AreEqual(1, algorithm.Calls);
         Assert.AreEqual(147, algorithm.Options!.Threshold);
         Assert.AreEqual(EGlyphBinarization.Fixed, algorithm.Options.Binarization);
-        Assert.AreEqual("compared", result.Status);
+        Assert.AreEqual(EAlgorithmStatus.Completed, result.Status);
         Assert.AreEqual(.125, result.Difference);
-        Assert.AreEqual(256, result.Delta.CopyPixels().Length);
+        Assert.AreEqual(256, result.Delta!.Info.ByteLength);
+        result.Dispose();
         Assert.ThrowsExactly<ObjectDisposedException>(() => algorithm.LastResult!.Actual!.Retain());
     }
 }

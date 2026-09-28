@@ -4,6 +4,8 @@ using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
+using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
+using VisionPreprocessor = DP.Vision.OpenCv.OpenCvTextLinePreprocessor;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DP.LabelInspection.Tests;
@@ -16,8 +18,8 @@ public sealed partial class TextRecognitionTests
     [TestMethod]
     public void CtcRunsRespectBlankAndRepeat()
     {
-        var steps = new[] { 0, 1, 1, 0, 1, 2, 2, 0 }.Select(i => new CtcStep(i, .9f)).ToArray();
-        var tokens = CtcDecoder.Decode(steps, new[] { "", "A", "B" });
+        var steps = new[] { 0, 1, 1, 0, 1, 2, 2, 0 }.Select(i => new DP.Vision.Algorithms.CtcStep(i, .9f)).ToArray();
+        var tokens = DP.Vision.Algorithms.CtcDecoder.Decode(steps, new[] { "", "A", "B" });
         Assert.AreEqual("AAB", string.Concat(tokens.Select(t => t.Text)));
         Assert.AreEqual(1, tokens[0].Start);
         Assert.AreEqual(3, tokens[0].End);
@@ -29,7 +31,7 @@ public sealed partial class TextRecognitionTests
     [TestMethod]
     public void AllBlankIsEmpty()
     {
-        Assert.AreEqual(0, CtcDecoder.Decode(new[] { new CtcStep(0, 1) }, new[] { "", "A" }).Count);
+        Assert.AreEqual(0, DP.Vision.Algorithms.CtcDecoder.Decode(new[] { new DP.Vision.Algorithms.CtcStep(0, 1) }, new[] { "", "A" }).Count);
     }
 
     /// <summary>无效模型索引或概率明确失败。</summary>
@@ -37,10 +39,10 @@ public sealed partial class TextRecognitionTests
     public void InvalidCtcRejected()
     {
         Assert.ThrowsExactly<ArgumentException>(() =>
-            CtcDecoder.Decode(new[] { new CtcStep(2, 1) }, new[] { "", "A" })
+            DP.Vision.Algorithms.CtcDecoder.Decode(new[] { new DP.Vision.Algorithms.CtcStep(2, 1) }, new[] { "", "A" })
         );
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new CtcStep(1, float.NaN));
-        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new CtcStep(1, float.PositiveInfinity));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new DP.Vision.Algorithms.CtcStep(1, float.NaN));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new DP.Vision.Algorithms.CtcStep(1, float.PositiveInfinity));
     }
 
     /// <summary>BGR通道顺序及零填充而非白色填充符合模型预处理契约。</summary>
@@ -48,7 +50,8 @@ public sealed partial class TextRecognitionTests
     public void BgrChannelsAndPadding()
     {
         var frame = new ImageFrame(1, 1, EImagePixelFormat.Bgr24, new byte[] { 0, 127, 255 });
-        var input = new OpenCvTextLinePreprocessor().Prepare(frame, new PixelRect(0, 0, 1, 1), default);
+        using var source = Bridge.ToVision(frame);
+        var input = new VisionPreprocessor().Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), default);
         var values = input.CopyValues();
         Assert.AreEqual(320, input.Width);
         Assert.AreEqual(48, input.ContentWidth);
@@ -67,11 +70,12 @@ public sealed partial class TextRecognitionTests
         var pixels = new byte[700 * 48];
         pixels[0] = 255;
         var frame = new ImageFrame(700, 48, EImagePixelFormat.Gray8, pixels);
-        var prep = new OpenCvTextLinePreprocessor();
-        var tiny = prep.Prepare(frame, new PixelRect(0, 0, 1, 1), default).CopyValues();
+        using var source = Bridge.ToVision(frame);
+        var prep = new VisionPreprocessor();
+        var tiny = prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), default).CopyValues();
         Assert.AreEqual(1f, tiny[0]);
         Assert.AreEqual(1f, tiny[2 * 48 * 320]);
-        var wide = prep.Prepare(frame, new PixelRect(0, 0, 700, 48), default);
+        var wide = prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 700, 48)), default);
         Assert.AreEqual(700, wide.Width);
         Assert.AreEqual(700, wide.ContentWidth);
     }
@@ -80,16 +84,17 @@ public sealed partial class TextRecognitionTests
     [TestMethod]
     public void PreprocessingRejectsInvalidInput()
     {
-        var prep = new OpenCvTextLinePreprocessor();
+        var prep = new VisionPreprocessor();
         var frame = new ImageFrame(100, 1, EImagePixelFormat.Gray8, new byte[100]);
+        using var source = Bridge.ToVision(frame);
         Assert.ThrowsExactly<ArgumentException>(() =>
-            prep.Prepare(frame, new PixelRect(0, 0, 100, 1), default)
+            prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 100, 1)), default)
         );
         Assert.ThrowsExactly<ArgumentException>(() =>
-            prep.Prepare(frame, new PixelRect(99, 0, 2, 1), default)
+            prep.Prepare(source, Bridge.ToVision(new PixelRect(99, 0, 2, 1)), default)
         );
         Assert.ThrowsExactly<OperationCanceledException>(() =>
-            prep.Prepare(frame, new PixelRect(0, 0, 1, 1), new CancellationToken(true))
+            prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), new CancellationToken(true))
         );
         Assert.ThrowsExactly<ArgumentException>(() =>
             new InspectionRegion("bad", ERegionKind.Blank, new PixelRect(0, 0, 1, 1), true)

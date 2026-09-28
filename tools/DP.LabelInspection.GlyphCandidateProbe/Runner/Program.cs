@@ -29,8 +29,10 @@ internal static class Program
             var text = args[6];
             using var backend = new OpenCvInspectionBackend();
             using var engine = new InspectionEngine(backend);
-            var conservative = new CharacterSegmenter().Segment(image, roi, text);
-            var result = await engine.ExtractGlyphCandidatesAsync(image, roi, text);
+            using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(image);
+            using var conservative = new DP.Vision.OpenCv.OpenCvCharacterSegmenter().Segment(
+                source, DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(roi), text);
+            var result = await engine.ExtractGlyphCandidatesAsync(source, roi, text);
             var segmentation = result.Segmentation;
             var message =
                 "inspection: "

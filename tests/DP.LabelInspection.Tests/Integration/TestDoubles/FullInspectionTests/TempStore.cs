@@ -7,7 +7,6 @@ using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
 using DP.LabelInspection.Storage;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;

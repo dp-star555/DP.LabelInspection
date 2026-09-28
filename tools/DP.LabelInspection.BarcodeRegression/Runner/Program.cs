@@ -4,7 +4,6 @@ using System.Linq;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
 using DP.LabelInspection.Storage;
 
 namespace DP.LabelInspection.BarcodeRegression;
@@ -43,7 +42,7 @@ internal static class Program
                 original.Regions.Where(r => r.Kind == ERegionKind.Barcode),
                 original.Options
             );
-            using var backend = new OpenCvInspectionBackend(barcode: new ZxingBarcodeDecoder());
+            using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
             using var engine = new InspectionEngine(backend);
             var request = new InspectionRequest(frame, recipe);
             var report = engine.Inspect(request);

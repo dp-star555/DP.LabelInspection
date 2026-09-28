@@ -94,13 +94,38 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         CancellationToken token = default
     )
     {
-        if (image == null || region == null || model == null || options == null)
-        {
+        if (image == null)
             throw new ArgumentNullException(nameof(image));
-        }
+        using var source = Bridge.ToVision(image);
+        return Inspect(source, region, model, options, token);
+    }
 
-        var crop = Crop(image, region);
-        using var source = Bridge.ToVision(image.Crop(crop));
+    /// <summary>直接在借用的Vision原图上裁ROI运行异常检测，不生成旧标签图像快照。</summary>
+    /// <param name="image">借用原图。</param>
+    /// <param name="region">当前ROI。</param>
+    /// <param name="model">固定版本模型。</param>
+    /// <param name="options">模型对应的检测参数。</param>
+    /// <param name="token">协作式取消。</param>
+    /// <returns>映射回原图坐标的异常证据。</returns>
+    public RegionAnomalyResult Inspect(
+        DP.Vision.IImageSource image,
+        InspectionRegion region,
+        PatchAnomalyModel model,
+        PatchAnomalyOptions options,
+        CancellationToken token = default
+    )
+    {
+        if (image == null || region == null || model == null || options == null)
+            throw new ArgumentNullException(nameof(image));
+
+        var crop = CropFor(image.Info.Width, image.Info.Height, region.Bounds);
+        using var source = DP.Vision.ImageSourceExtensions.Crop(
+            image,
+            crop.X,
+            crop.Y,
+            crop.Width,
+            crop.Height
+        );
         using var result = _algorithm.Detect(source, model, options, token);
         var findings = result
             .Findings.Select(f =>

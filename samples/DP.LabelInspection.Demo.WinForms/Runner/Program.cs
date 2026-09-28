@@ -10,9 +10,6 @@ using DP.LabelInspection.Adapter.Vision;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
-using DP.LabelInspection.Runtime.Detection;
-using DP.LabelInspection.Runtime.Recognition;
 using DP.LabelInspection.Storage;
 using Newtonsoft.Json.Linq;
 
@@ -121,7 +118,7 @@ internal static class Program
         InspectionEngine engine = new InspectionEngine(
             new OpenCvInspectionBackend(
                 libraries: store,
-                barcode: new ZxingBarcodeDecoder(),
+                barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
                 anomalyModels: store.AnomalyLibraries,
                 anomalyDetectors: anomalyDetectors
             ),
@@ -138,45 +135,17 @@ internal static class Program
         };
         void LoadModel(string path)
         {
-            _ = control.CreateRequest();
-            var recognizer = new OnnxTextLineRecognizer(path, new OpenCvTextLinePreprocessor());
-            ITextRegionDetector? detector = null;
-            try
-            {
-                string det =
-                    Environment.GetEnvironmentVariable("DP_LABEL_DET_MODEL")
-                    ?? Path.Combine(
-                        Path.GetDirectoryName(Path.GetFullPath(path))!,
-                        "ch_PP-OCRv4_det_infer.onnx"
-                    );
-                if (File.Exists(det))
-                {
-                    detector = new TextRegionDetector(
-                        new DP.Vision.OnnxDetection.OnnxTextRegionDetector(det),
-                        true
-                    );
-                }
-                else if (Environment.GetEnvironmentVariable("DP_LABEL_DET_MODEL") != null)
-                {
-                    throw new FileNotFoundException("配置的检测模型不存在。", det);
-                }
-            }
-            catch
-            {
-                recognizer.Dispose();
-                throw;
-            }
-
+            using var input = control.CreateRequest();
+            var recognizer = new DP.Vision.Onnx.OnnxTextLineRecognizer(
+                path, new DP.Vision.OpenCv.OpenCvTextLinePreprocessor());
             var replacement = new InspectionEngine(
                 new OpenCvInspectionBackend(
-                    recognizer,
-                    true,
-                    store,
-                    new ZxingBarcodeDecoder(),
-                    detector,
-                    true,
+                    ownsRecognizer: true,
+                    libraries: store,
                     anomalyModels: store.AnomalyLibraries,
-                    anomalyDetectors: anomalyDetectors
+                    anomalyDetectors: anomalyDetectors,
+                    barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
+                    recognizer: recognizer
                 ),
                 true
             );
@@ -288,7 +257,8 @@ internal static class Program
                 using var d = new SaveFileDialog { Filter = "DP配方|*.json", FileName = "label.recipe.json" };
                 if (d.ShowDialog() == DialogResult.OK)
                 {
-                    File.WriteAllText(d.FileName, store.SerializeRecipe(control.CreateRequest().Recipe));
+                    using var request = control.CreateRequest();
+                    File.WriteAllText(d.FileName, store.SerializeRecipe(request.Recipe));
                 }
             }
         );

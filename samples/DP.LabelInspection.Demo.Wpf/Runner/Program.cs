@@ -10,8 +10,6 @@ using DP.LabelInspection.Adapter.Vision;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Runtime.Codes;
-using DP.LabelInspection.Runtime.Recognition;
 using DP.LabelInspection.Storage;
 
 namespace DP.LabelInspection.Demo.Wpf;
@@ -34,11 +32,12 @@ internal static class Program
         string? model = Environment.GetEnvironmentVariable("DP_LABEL_REC_MODEL");
         using var recognizer = string.IsNullOrWhiteSpace(model)
             ? null
-            : new OnnxTextLineRecognizer(model!, new OpenCvTextLinePreprocessor());
+            : new DP.Vision.Onnx.OnnxTextLineRecognizer(
+                model!, new DP.Vision.OpenCv.OpenCvTextLinePreprocessor());
         using var backend = new OpenCvInspectionBackend(
-            recognizer,
             libraries: store,
-            barcode: new ZxingBarcodeDecoder()
+            barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
+            recognizer: recognizer
         );
         using var engine = new InspectionEngine(backend);
         var app = new Application();

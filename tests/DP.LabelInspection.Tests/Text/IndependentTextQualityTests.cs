@@ -13,6 +13,42 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed partial class IndependentTextQualityTests
 {
+    /// <summary>Vision图像租约可直接用于独立文字质检，而不必先转换为旧标签图像。</summary>
+    [TestMethod]
+    public void VisionFrameRunsIndependentTextQuality()
+    {
+        var strategy = new Strategy();
+        var ink = new DP.Vision.OpenCv.OpenCvInkInspector();
+        using var backend = OpenCvInspectionBackend.WithQualityAlgorithms(
+            new RegionQualityAlgorithms(ink, ink),
+            textQuality: strategy
+        );
+        using var engine = new InspectionEngine(backend);
+        using var pixels = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(32, 32, DP.Vision.EPixelLayout.Gray8),
+            new byte[1024]
+        );
+        using var frame = new DP.Vision.ImageFrame("text-quality", pixels);
+        var roi = new InspectionRegion("text", ERegionKind.Text, new PixelRect(0, 0, 32, 32)).WithTasks(
+            new RoiInspectionTasks(false, true)
+        );
+        using var request = InspectionRequest.FromVision(
+            frame,
+            new InspectionRecipe(
+                "quality",
+                32,
+                32,
+                EInspectionMode.Free,
+                EAlignmentMode.AssumeAligned,
+                new[] { roi }
+            )
+        );
+        var report = engine.Inspect(request);
+        Assert.AreEqual(EInspectionVerdict.Ok, report.Verdict);
+        Assert.AreEqual(ERoiStageState.Passed, report.Analysis.Regions.Single().Execution!.Quality);
+        Assert.AreEqual(1, strategy.Calls);
+    }
+
     /// <summary>无参考质量策略可以通过，但必须明确完成。</summary>
     [TestMethod]
     [DataRow(true)]

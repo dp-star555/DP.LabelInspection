@@ -43,6 +43,25 @@ public sealed class ProjectBoundaryTests
 #endif
     }
 
+    /// <summary>通用读码、OCR、定位、分割及比较契约只由Vision提供，禁止标签侧重新引入镜像接口。</summary>
+    [TestMethod]
+    public void GeneralVisionAlgorithmsHaveNoLabelContractDuplicates()
+    {
+        var contracts = typeof(DP.LabelInspection.Contracts.InspectionRequest).Assembly;
+        var runtime = typeof(OpenCvInspectionBackend).Assembly;
+        var obsolete = new[] {
+            "IBarcodeDecoder", "ITextLineRecognizer", "ITextLinePreprocessor",
+            "ITextRegionDetector", "ICharacterSegmenter", "IGlyphCandidateSegmenter",
+            "IGlyphComparer", "ZxingBarcodeDecoder", "OnnxTextLineRecognizer",
+            "OpenCvTextLinePreprocessor", "TextRegionDetector", "CharacterSegmenter", "GlyphComparer"
+        };
+        foreach (var assembly in new[] { contracts, runtime })
+        {
+            foreach (var name in obsolete)
+                Assert.IsFalse(assembly.GetTypes().Any(t => t.Name == name), assembly.GetName().Name + ": " + name);
+        }
+    }
+
     /// <summary>真实识别、解码和候选实现程序集不包含标签依赖。</summary>
     [TestMethod]
     public void NeutralImplementationsDoNotReferenceLabelBusiness()

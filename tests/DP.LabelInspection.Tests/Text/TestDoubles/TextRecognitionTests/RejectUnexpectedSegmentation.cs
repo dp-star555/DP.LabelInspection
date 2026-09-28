@@ -10,11 +10,11 @@ namespace DP.LabelInspection.Tests;
 
 public sealed partial class TextRecognitionTests
 {
-    private sealed class RejectUnexpectedSegmentation : ICharacterSegmenter
+    private sealed class RejectUnexpectedSegmentation : DP.Vision.Algorithms.ICharacterSegmenter
     {
-        public CharacterSegmentation Segment(
-            ImageFrame frame,
-            PixelRect bounds,
+        public DP.Vision.Algorithms.CharacterSegmentation Segment(
+            DP.Vision.IImageSource frame,
+            DP.Vision.Algorithms.PixelBounds bounds,
             string text,
             CancellationToken token = default
         )
@@ -22,7 +22,7 @@ public sealed partial class TextRecognitionTests
             throw new InvalidOperationException("Unrequested appearance segmentation ran.");
         }
 
-        public CharacterSegmentation EqualCells(ImageFrame frame, PixelRect bounds, string expected)
+        public DP.Vision.Algorithms.CharacterSegmentation EqualCells(DP.Vision.IImageSource frame, DP.Vision.Algorithms.PixelBounds bounds, string expected)
         {
             throw new InvalidOperationException("Unrequested cells ran.");
         }

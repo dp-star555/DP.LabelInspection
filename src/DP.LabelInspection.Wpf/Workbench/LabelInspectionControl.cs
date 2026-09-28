@@ -56,6 +56,8 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
     private IInspectionEngine? _engine;
     private ImageFrame? _actual,
         _reference;
+    private DP.Vision.ImageFrame? _visionActual, _visionReference;
+    private InspectionRequest? _lastRequest;
     private CancellationTokenSource? _cancel;
     private Task<InspectionReport>? _active;
     private IReadOnlyList<FieldBinding> _bindings = Array.Empty<FieldBinding>();
@@ -272,13 +274,16 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
     }
 
     /// <summary>替换不可变实际图像。</summary>
-    /// <param name = "image">借用实际源，内部复制为业务快照，返回后客户可释放自己的句柄；支持Gray8/Bgr24。</param>
+    /// <param name = "image">借用实际源，内部保留Vision租约并复制显示快照；返回后客户可释放自己的句柄。</param>
     /// <param name = "clearRegions">是否清除之前的ROI坐标配置，默认true。</param>
     public void SetActualImage(DP.Vision.IImageSource image, bool clearRegions = true)
     {
         Idle();
-        // 工作台保存独立业务快照；客户源只在调用期间借用，不暴露内部像素租约。
-        _actual = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(image);
+        using var frame = new DP.Vision.ImageFrame(Guid.NewGuid().ToString("N"), image);
+        var preview = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(frame.Image);
+        _visionActual?.Dispose();
+        _visionActual = frame.Retain();
+        _actual = preview;
         _taskData = null;
         _cycleId = null;
         if (clearRegions)
@@ -294,13 +299,16 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
     }
 
     /// <summary>设置可选参考像素及对齐策略。</summary>
-    /// <param name = "image">借用同尺寸参考源，内部复制为业务快照，返回后客户可释放；null表示清空。</param>
+    /// <param name = "image">借用参考源，内部保留Vision租约并复制显示快照；null表示清空。</param>
     /// <param name = "assumeAligned">是否由宿主明确声明坐标已对齐，不代表自动配准。</param>
     public void SetReferenceImage(DP.Vision.IImageSource? image, bool assumeAligned = false)
     {
         Idle();
-        _reference =
-            image == null ? null : DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(image);
+        using var frame = image == null ? null : new DP.Vision.ImageFrame(Guid.NewGuid().ToString("N"), image);
+        var preview = frame == null ? null : DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(frame.Image);
+        _visionReference?.Dispose();
+        _visionReference = frame?.Retain();
+        _reference = preview;
         _aligned.IsChecked = assumeAligned;
         UpdateReferenceMode();
     }
@@ -432,8 +440,8 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
             throw new InvalidOperationException("需要图像和检测引擎。");
         }
 
-        var request = new InspectionRequest(
-            _actual,
+        var request = InspectionRequest.FromVision(
+            _visionActual!,
             new InspectionRecipe(
                 "WPF",
                 _actual.Width,
@@ -444,10 +452,12 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
                 options,
                 _bindings
             ),
-            _reference,
+            _visionReference,
             _cycleId,
             _taskData
         );
+        _lastRequest?.Dispose();
+        _lastRequest = request;
         _cancel = new CancellationTokenSource();
         _status.Text = "检测中…";
         _kind.IsEnabled = false;
@@ -461,7 +471,8 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
                 result.Verdict
                 + " · "
                 + result.ElapsedMilliseconds.ToString("F1")
-                + "ms · 仅配置范围，不是整标签放行认证";
+                + "ms · 仅配置范围，不是整标签放行认证"
+                + (result.Analysis.TryGetTranslation(out _, out _) ? "" : " · 仿射ROI叠加不可用");
             _evidence.Items.Clear();
             foreach (var group in result.EvidenceGroups)
             {
@@ -599,10 +610,11 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
             _source?.Dispose();
             _source = next;
             _displayedActual = _actual;
-            _frameId = Guid.NewGuid().ToString("N");
+            _frameId = _visionActual!.FrameId;
         }
 
-        var regions = _regions.Select(r =>
+        var regions = (_report == null || _report.Analysis.TryGetTranslation(out _, out _)
+            ? _regions : Enumerable.Empty<InspectionRegion>()).Select(r =>
             new InspectionRegion(
                 r.Name,
                 r.Kind,
@@ -670,6 +682,12 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
         _disposed = true;
         CancelDrag();
         _vision.Dispose();
+        _lastRequest?.Dispose();
+        _lastRequest = null;
+        _visionActual?.Dispose();
+        _visionActual = null;
+        _visionReference?.Dispose();
+        _visionReference = null;
         _source?.Dispose();
         _source = null;
         _displayedActual = null;

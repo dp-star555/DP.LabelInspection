@@ -60,6 +60,72 @@ public sealed partial class RoiWorkflowTests
         return engine.Inspect(request);
     }
 
+    /// <summary>Vision请求保留独立租约，宿主释放原图句柄后仍可检测，旧快照仅在需要时创建。</summary>
+    [TestMethod]
+    public void VisionRequestRetainsFrameAndReleasesItsLease()
+    {
+        var bytes = new byte[3200];
+        using var source = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(80, 40, DP.Vision.EPixelLayout.Gray8),
+            bytes
+        );
+        var frame = new DP.Vision.ImageFrame("frame-42", source);
+        var recipe = new InspectionRecipe(
+            "vision",
+            80,
+            40,
+            EInspectionMode.Free,
+            EAlignmentMode.AssumeAligned,
+            new[] { Region("a", 0) }
+        );
+        using var request = InspectionRequest.FromVision(frame, recipe);
+        frame.Dispose();
+        Assert.AreEqual("frame-42", request.FrameId);
+        Assert.AreEqual(80, request.ImageWidth);
+        Assert.AreEqual(EInspectionVerdict.Ok, Run(new Backend(), request).Verdict);
+        Assert.AreEqual(3200, request.Actual.CopyPixels().Length);
+        request.Dispose();
+        Assert.ThrowsExactly<ObjectDisposedException>(() => request.VisionSource);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => request.Actual);
+    }
+
+    /// <summary>正式流程发布与当前帧绑定的可逆矩阵；旧整数偏移只是其平移特例。</summary>
+    [TestMethod]
+    public void ReportIncludesFrameBoundAlignment()
+    {
+        var actual = new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
+        var recipe = new InspectionRecipe(
+            "pose",
+            80,
+            40,
+            EInspectionMode.Template,
+            EAlignmentMode.Translation,
+            new[] { Region("a", 0) }
+        );
+        var request = new InspectionRequest(actual, recipe, actual, frameId: "capture-1");
+        var report = Run(new Backend { X = 3, Y = -2 }, request);
+        var alignment = report.Analysis.Alignment!;
+        Assert.AreEqual(request.FrameId, alignment.FrameId);
+        Assert.IsTrue(alignment.Measured);
+        var image = alignment.RecipeToImage.Map(new DP.Vision.Algorithms.Coordinate2D(10, 10));
+        Assert.AreEqual(13d, image.X);
+        Assert.AreEqual(8d, image.Y);
+        var original = alignment.ImageToRecipe.Map(image);
+        Assert.AreEqual(10d, original.X);
+        Assert.AreEqual(10d, original.Y);
+        var failed = Run(new Backend { ThrowAt = "a:locate" }, request);
+        Assert.IsFalse(failed.Analysis.Alignment!.Measured);
+        var defaultPoint = failed.Analysis.Alignment.RecipeToImage.Map(
+            new DP.Vision.Algorithms.Coordinate2D(10, 10)
+        );
+        Assert.AreEqual(10d, defaultPoint.X);
+        Assert.AreEqual(10d, defaultPoint.Y);
+        var assumed = Run(new Backend(), Request(new[] { Region("a", 0) }));
+        Assert.IsFalse(assumed.Analysis.Alignment!.Measured);
+        Assert.AreEqual(0d, assumed.Analysis.Alignment.RecipeToImage.Tx);
+        Assert.AreEqual(1d, assumed.Analysis.Alignment.RecipeToImage.M11);
+    }
+
     /// <summary>四种项目组合均有明确状态，且只调用所需步骤。</summary>
     [TestMethod]
     [DataRow(false, false)]

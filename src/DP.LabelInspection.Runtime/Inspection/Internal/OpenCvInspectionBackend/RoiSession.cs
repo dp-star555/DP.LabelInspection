@@ -49,11 +49,10 @@ public sealed partial class OpenCvInspectionBackend
             return r.Kind == ERegionKind.Text
                 ? !r.Field.EqualCells && (_owner._textQuality?.RequiresRecognition ?? true)
                 : r.Kind == ERegionKind.Barcode
-                    && (
-                        _owner._barcodePrint is IBarcodePrintRequirements requirements
-                            ? requirements.RequiresReading(r.Field.BarcodeType)
-                            : true
-                    );
+                    && (r.Field.BarcodeType == EBarcodeKind.Auto
+                        || (r.Field.BarcodeType == EBarcodeKind.QrCode
+                            ? _owner._qrQuality.RequiresDecodedStructure
+                            : _owner._linearQuality.RequiresDecodedStructure));
         }
 
         /// <summary>在昂贵算法前检查配置、能力及资源，返回明确前提证据。</summary>
@@ -76,7 +75,10 @@ public sealed partial class OpenCvInspectionBackend
                 findings.Add(new InspectionFinding(code, reason, EInspectionVerdict.Ng, r.Bounds));
             }
 
-            if (!r.Bounds.Fits(_request.Actual))
+            if (
+                (long)r.Bounds.X + r.Bounds.Width > _request.ImageWidth
+                || (long)r.Bounds.Y + r.Bounds.Height > _request.ImageHeight
+            )
             {
                 Fail("roi_outside_image", "ROI超出原图。");
             }
@@ -115,23 +117,23 @@ public sealed partial class OpenCvInspectionBackend
             if (
                 referenceNeeded
                 && (
-                    _request.Reference == null
-                    || _request.Reference.Width != _request.Actual.Width
-                    || _request.Reference.Height != _request.Actual.Height
+                    !_request.HasReference
+                    || _request.ReferenceWidth != _request.ImageWidth
+                    || _request.ReferenceHeight != _request.ImageHeight
                 )
             )
             {
                 Fail(
                     "missing_reference",
                     "该ROI或定位需要同尺寸整图参考；待检 "
-                        + _request.Actual.Width
+                        + _request.ImageWidth
                         + "×"
-                        + _request.Actual.Height
+                        + _request.ImageHeight
                         + "，参考 "
                         + (
-                            _request.Reference == null
+                            !_request.HasReference
                                 ? "未载入"
-                                : _request.Reference.Width + "×" + _request.Reference.Height
+                                : _request.ReferenceWidth + "×" + _request.ReferenceHeight
                         )
                         + "。仅单字库质检不需要整图参考。"
                 );
@@ -150,20 +152,13 @@ public sealed partial class OpenCvInspectionBackend
                 }
             }
 
-            if (readRequired && r.Kind == ERegionKind.Barcode && _owner._barcode == null)
+            if (
+                readRequired
+                && r.Kind == ERegionKind.Barcode
+                && _owner._barcode == null
+            )
             {
                 Fail("barcode_unavailable", "需要读码数据/结构，但宿主未提供读码实现。");
-            }
-
-            if (qualityRequired && r.Kind == ERegionKind.Barcode)
-            {
-                if (!(_owner._barcodePrint is IRoiBarcodeQualityInspector))
-                {
-                    Fail(
-                        "quality_completion_unavailable",
-                        "码质检实现未提供明确完成状态，不能把空列表当成功。"
-                    );
-                }
             }
 
             if (
@@ -221,8 +216,11 @@ public sealed partial class OpenCvInspectionBackend
             )
             {
                 _located = true;
-                using var a = Gray(_request.Actual);
-                using var reference = Gray(_request.Reference!);
+                using var actualSource = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                using var referenceSource =
+                    _request.VisionReference?.Retain() ?? Bridge.ToVision(_request.Reference!);
+                using var a = Gray(actualSource);
+                using var reference = Gray(referenceSource);
                 var offset = TranslationRegistration.Translation(a, reference, _request.Recipe);
                 if (offset == null)
                 {
@@ -245,8 +243,8 @@ public sealed partial class OpenCvInspectionBackend
             if (
                 x < 0
                 || y < 0
-                || x + r.Bounds.Width > _request.Actual.Width
-                || y + r.Bounds.Height > _request.Actual.Height
+                || x + r.Bounds.Width > _request.ImageWidth
+                || y + r.Bounds.Height > _request.ImageHeight
             )
             {
                 throw new InvalidOperationException("定位后ROI超出原图。");
@@ -271,19 +269,24 @@ public sealed partial class OpenCvInspectionBackend
             token.ThrowIfCancellationRequested();
             if (r.Kind == ERegionKind.Text)
             {
+                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
                 return new RegionInspectionResult(
                     r.Name,
                     Array.Empty<InspectionFinding>(),
-                    recognition: _owner._recognizer!.Recognize(_request.Actual, r.Bounds, token)
+                    recognition: Bridge.ToLabel(
+                        _owner._recognizer!.Recognize(source, Bridge.ToVision(r.Bounds), token)
+                    )
                 );
             }
 
             if (r.Kind == ERegionKind.Barcode)
             {
+                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                var measured = _owner._barcode!.Read(source, Bridge.ToVision(r.Bounds), token);
                 return new RegionInspectionResult(
                     r.Name,
                     Array.Empty<InspectionFinding>(),
-                    barcodes: _owner._barcode!.Decode(_request.Actual, r.Bounds, token)
+                    barcodes: measured.Observations.Select(Bridge.ToLabel)
                 );
             }
 
@@ -309,15 +312,27 @@ public sealed partial class OpenCvInspectionBackend
 
             if (r.Kind == ERegionKind.Barcode)
             {
-                return ((IRoiBarcodeQualityInspector)_owner._barcodePrint).InspectQuality(
-                    _request.Actual,
-                    r,
-                    reading.Barcodes,
-                    token
+                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                bool qr = r.Field.BarcodeType == EBarcodeKind.QrCode
+                    || r.Field.BarcodeType == EBarcodeKind.Auto
+                        && reading.Barcodes.Count == 1 && reading.Barcodes[0].Format == "QR_CODE";
+                var result = qr
+                    ? _owner._qrQuality.Inspect(source, Bridge.ToVision(r.Bounds),
+                        reading.Barcodes.Select(Bridge.ToVision).ToArray(),
+                        Bridge.ToVision(r.Field.BarcodePrint), token)
+                    : _owner._linearQuality.Inspect(source, Bridge.ToVision(r.Bounds),
+                        reading.Barcodes.Select(Bridge.ToVision).ToArray(),
+                        Bridge.ToVision(r.Field.BarcodePrint), token);
+                return new RoiQualityMeasurement(
+                    new RegionInspectionResult(r.Name, result.Findings.Select(Bridge.ToLabel),
+                        barcodes: reading.Barcodes),
+                    result.Status == A.EAlgorithmStatus.Completed
                 );
             }
 
-            using var actual = Bridge.ToVision(_request.Actual.Crop(r.Bounds));
+            using var actual =
+                _request.VisionSource?.Crop(r.Bounds.X, r.Bounds.Y, r.Bounds.Width, r.Bounds.Height)
+                ?? Bridge.ToVision(_request.Actual.Crop(r.Bounds));
             var bytes = Enumerable.Repeat((byte)255, r.Bounds.Width * r.Bounds.Height).ToArray();
             foreach (var ignored in _request.Recipe.Regions.Where(o => o.Kind == ERegionKind.Ignore))
             {
@@ -360,7 +375,13 @@ public sealed partial class OpenCvInspectionBackend
             else
             {
                 var original = _request.Recipe.Regions.Single(o => o.Name == r.Name);
-                using var reference = Bridge.ToVision(_request.Reference!.Crop(original.Bounds));
+                using var reference =
+                    _request.VisionReference?.Crop(
+                        original.Bounds.X,
+                        original.Bounds.Y,
+                        original.Bounds.Width,
+                        original.Bounds.Height
+                    ) ?? Bridge.ToVision(_request.Reference!.Crop(original.Bounds));
                 measured = _owner._qualityAlgorithms.Fixed.Inspect(
                     actual,
                     reference,
@@ -513,11 +534,15 @@ public sealed partial class OpenCvInspectionBackend
                 throw new System.IO.InvalidDataException("Anomaly model metadata does not match its bytes.");
             }
 
-            if (entry.LocalRadius > 0 && r.Bounds.Fits(_request.Actual))
+            if (
+                entry.LocalRadius > 0
+                && (long)r.Bounds.X + r.Bounds.Width <= _request.ImageWidth
+                && (long)r.Bounds.Y + r.Bounds.Height <= _request.ImageHeight
+            )
             {
                 var crop = new RegionAnomalyDetector(detector) { Margin = entry.Margin }.CropFor(
-                    _request.Actual.Width,
-                    _request.Actual.Height,
+                    _request.ImageWidth,
+                    _request.ImageHeight,
                     r.Bounds
                 );
                 if (crop.Width != entry.Width || crop.Height != entry.Height)
@@ -645,14 +670,16 @@ public sealed partial class OpenCvInspectionBackend
                 || segmentation.Status != "provisional" && segmentation.Status != "explicit_cells"
             )
             {
-                segmentation = r.Field.EqualCells
-                    ? _owner._segmenter.EqualCells(_request.Actual, r.Bounds, r.Field.Expected!)
+                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                using var measured = r.Field.EqualCells
+                    ? _owner._segmenter.EqualCells(source, Bridge.ToVision(r.Bounds), r.Field.Expected!)
                     : _owner._segmenter.Segment(
-                        _request.Actual,
-                        r.Bounds,
+                        source,
+                        Bridge.ToVision(r.Bounds),
                         evidence.Recognition?.Text ?? "",
                         token
                     );
+                segmentation = Bridge.ToLabel(measured);
             }
 
             if (segmentation.Status != "provisional" && segmentation.Status != "explicit_cells")
@@ -674,14 +701,30 @@ public sealed partial class OpenCvInspectionBackend
                 );
             }
 
-            var result = new CharacterAnomalyDetector().Inspect(
-                _request.Actual,
-                segmentation.Characters,
-                r.Bounds,
-                c => models.TryGetValue(c, out var m) ? m : null,
-                token,
-                pin.InkLoss
-            );
+            Func<string, CharacterAnomalyModel?> lookup = c => models.TryGetValue(c, out var m) ? m : null;
+            CharacterAnomalyResult result;
+            var detector = new CharacterAnomalyDetector();
+            if (_request.VisionSource is { } image)
+            {
+                using var retained = image.Retain();
+                result = detector.Inspect(
+                    retained,
+                    segmentation.Characters,
+                    r.Bounds,
+                    lookup,
+                    token,
+                    pin.InkLoss
+                );
+            }
+            else
+                result = detector.Inspect(
+                    _request.Actual,
+                    segmentation.Characters,
+                    r.Bounds,
+                    lookup,
+                    token,
+                    pin.InkLoss
+                );
             var findings = result.Scores.SelectMany(s => s.Findings).ToList();
             var compared = result.Scores.Where(s => s.Status == "compared").ToArray();
             var worst = compared.OrderByDescending(s => s.Ratio).FirstOrDefault();
@@ -791,8 +834,9 @@ public sealed partial class OpenCvInspectionBackend
             }
 
             var (entry, model, detector) = bound;
+            using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
             var result = new RegionAnomalyDetector(detector) { Margin = entry.Margin }.Inspect(
-                _request.Actual,
+                source,
                 r,
                 model,
                 RegionAnomalyDetector.DetectionOptions(entry, model),
@@ -882,7 +926,6 @@ public sealed partial class OpenCvInspectionBackend
             {
                 _libraries.TryGetValue(r.Name, out var library);
                 var references = new Dictionary<string, A.GlyphTemplate>(StringComparer.Ordinal);
-                var legacy = new Dictionary<IImageSource, GlyphReference>();
                 if (library != null)
                 {
                     foreach (var entry in library.Glyphs)
@@ -893,21 +936,16 @@ public sealed partial class OpenCvInspectionBackend
                             entry.Key,
                             new A.GlyphTemplate(image, Bridge.ToVisionBinarization(entry.Value.Binarization))
                         );
-                        legacy[image] = entry.Value;
                     }
                 }
 
-                using var actual = Bridge.ToVision(_request.Actual);
+                using var actual = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
                 var strategy =
                     _owner._textQuality
                     ?? new A.TextQualityInspector(
-                        _owner._segmenter is CharacterSegmenter segmenter
-                            ? segmenter.Algorithm
-                            : new LegacySegmenter(_owner._segmenter),
+                        _owner._segmenter,
                         _owner._matcher,
-                        _owner._comparer is GlyphComparer comparer
-                            ? comparer.Algorithm
-                            : new LegacyComparer(_owner._comparer, legacy)
+                        _owner._comparer
                     );
                 string hypothesis = r.Field.EqualCells ? r.Field.Expected! : reading.Recognition?.Text ?? "";
                 using var measured = strategy.Inspect(

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
+using CharacterSegmenter = DP.LabelInspection.Tests.SnapshotSegmenter;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DP.LabelInspection.Tests;
@@ -37,6 +38,13 @@ public sealed class TouchingGlyphTests
         return new ImageFrame(130, 36, EImagePixelFormat.Gray8, p);
     }
 
+    private static async Task<GlyphCandidateExtraction> Extract(
+        InspectionEngine engine, ImageFrame frame, PixelRect roi, string text)
+    {
+        using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(frame);
+        return await engine.ExtractGlyphCandidatesAsync(source, roi, text);
+    }
+
     /// <summary>细连接按字符数在最薄处切开；制作参考的候选路径仍要求逐字复核。</summary>
     [TestMethod]
     public async Task ThinJoinIsCutAtBridge()
@@ -49,7 +57,7 @@ public sealed class TouchingGlyphTests
         Assert.AreEqual("count_guided_cuts", original.Basis);
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = await engine.ExtractGlyphCandidatesAsync(frame, roi, "WF675907");
+        var result = await Extract(engine, frame, roi, "WF675907");
         Assert.AreEqual(8, result.Segmentation.Characters.Count);
         Assert.AreEqual("review_required", result.Segmentation.Status);
         Assert.AreEqual(7, result.Segmentation.PhysicalCount);
@@ -61,8 +69,8 @@ public sealed class TouchingGlyphTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = await engine.ExtractGlyphCandidatesAsync(
-            Line(12),
+        var result = await Extract(
+            engine, Line(12),
             new PixelRect(0, 0, 130, 36),
             "WF675907"
         );
@@ -75,8 +83,8 @@ public sealed class TouchingGlyphTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = await engine.ExtractGlyphCandidatesAsync(
-            Line(0),
+        var result = await Extract(
+            engine, Line(0),
             new PixelRect(0, 0, 130, 36),
             "WF675907"
         );
@@ -90,8 +98,8 @@ public sealed class TouchingGlyphTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = await engine.ExtractGlyphCandidatesAsync(
-            Line(0),
+        var result = await Extract(
+            engine, Line(0),
             new PixelRect(0, 0, 130, 36),
             "WF6759079"
         );
@@ -104,8 +112,8 @@ public sealed class TouchingGlyphTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = await engine.ExtractGlyphCandidatesAsync(
-            Line(1),
+        var result = await Extract(
+            engine, Line(1),
             new PixelRect(0, 8, 130, 28),
             "WF675907"
         );
@@ -120,8 +128,8 @@ public sealed class TouchingGlyphTests
         var frame = Line(1);
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = await engine.ExtractGlyphCandidatesAsync(
-            frame,
+        var result = await Extract(
+            engine, frame,
             new PixelRect(0, 0, 130, 36),
             "WF675907"
         );

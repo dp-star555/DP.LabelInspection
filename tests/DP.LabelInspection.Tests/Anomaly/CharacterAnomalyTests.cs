@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
+using CharacterSegmenter = DP.LabelInspection.Tests.SnapshotSegmenter;
 using DP.LabelInspection.Storage;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OpenCvSharp;
@@ -125,7 +126,7 @@ public sealed partial class CharacterAnomalyTests
     )
     {
         var recognizer = new ScriptedRecognizer();
-        recognizer.Set(image, ocr);
+        recognizer.Set(ocr);
         using var backend = new OpenCvInspectionBackend(recognizer, anomalyModels: store.AnomalyLibraries);
         using var engine = new InspectionEngine(backend);
         return engine
@@ -155,6 +156,47 @@ public sealed partial class CharacterAnomalyTests
             new FieldSettings(expected: expected),
             pin
         ).WithTasks(new RoiInspectionTasks(expected != null, false, true));
+    }
+
+    /// <summary>Vision原图逐字检测与旧快照对同一模型产生相同的字符结果。</summary>
+    [TestMethod]
+    public void VisionCharacterInspectionMatchesSnapshot()
+    {
+        var entries = new RegionAnomalyDetector().TrainCharacters(Lines());
+        var algorithm = new DP.Vision.OpenCv.OpenCvPatchAnomalyDetector();
+        var models = entries.ToDictionary(
+            e => e.Character!,
+            e => new CharacterAnomalyModel(
+                e,
+                DP.Vision.Algorithms.PatchAnomalyModel.FromBytes(e.CopyModel()),
+                algorithm
+            )
+        );
+        var image = Label("A1B2C3", 0);
+        var segmentation = new CharacterSegmenter().Segment(image, Line, "A1B2C3");
+        Assert.AreEqual("provisional", segmentation.Status);
+        var detector = new CharacterAnomalyDetector();
+        var old = detector.Inspect(
+            image,
+            segmentation.Characters,
+            Line,
+            c => models.TryGetValue(c, out var m) ? m : null
+        );
+        using var source = DP.Vision.VisionImage.CopyFrom(
+            new DP.Vision.ImageInfo(image.Width, image.Height, DP.Vision.EPixelLayout.Gray8),
+            image.CopyPixels()
+        );
+        var vision = detector.Inspect(
+            source,
+            segmentation.Characters,
+            Line,
+            c => models.TryGetValue(c, out var m) ? m : null
+        );
+        CollectionAssert.AreEqual(
+            old.Scores.Select(s => s.Status).ToArray(),
+            vision.Scores.Select(s => s.Status).ToArray()
+        );
+        Assert.AreEqual(old.WorstRatio, vision.WorstRatio, 1e-9);
     }
 
     /// <summary>每个字符一个模型，样本来自所有行；字符模型不能用非字母数字键。</summary>

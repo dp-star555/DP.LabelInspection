@@ -29,7 +29,7 @@
 `start-ocr.cmd`优先使用`DP_LABEL_REC_MODEL`，否则找`models/rec.onnx`，再尝试当前工作区原型发行包已有的PP-OCRv4文件。只是读取模型文件，不启动Python。
 
 - `DP_LABEL_REC_MODEL`：可信的PP-OCRv4识别模型路径。
-- `DP_LABEL_DET_MODEL`：可选检测模型路径；未设置时从识别模型同目录寻找`ch_PP-OCRv4_det_infer.onnx`。
+- 文本候选模型仅供独立制作/回归工具按需加载Vision检测器；正式工作台不会因为OCR加载而暗中运行文本候选定位或宣称Discovery能力。
 - `DP_LABEL_DATA`：本地字库、报告和历史根目录，默认`%LOCALAPPDATA%\DP.LabelInspection`。
 - `DP_LABEL_SAMPLES`：可选私有生产样例目录；当前工作区可自动找到原型样例。
 
@@ -101,16 +101,13 @@ Core与控件没有Mat/HObject/ONNX类型。具体视觉适配器可以依赖其
 ```csharp
 using DP.Vision;
 using DP.LabelInspection.Adapter.Vision;
-// Runtime替代已删除的四个按厂商命名的标签程序集。
-// using DP.LabelInspection.Runtime;
-// using DP.LabelInspection.Runtime.Recognition;
-// using DP.LabelInspection.Runtime.Codes;
+// 引用DP.Vision.Onnx、DP.Vision.OpenCv、DP.Vision.Zxing及标签Runtime/Storage。
 var codec = new OpenCvImageCodec();
 var store = new InspectionStore(dataDirectory, codec);
-using var recognizer = new OnnxTextLineRecognizer(modelPath,
-    new OpenCvTextLinePreprocessor(), expectedSha256: modelHash);
-using var backend = new OpenCvInspectionBackend(recognizer,
-    libraries: store, barcode: new ZxingBarcodeDecoder());
+using var recognizer = new DP.Vision.Onnx.OnnxTextLineRecognizer(modelPath,
+    new DP.Vision.OpenCv.OpenCvTextLinePreprocessor(), expectedSha256: modelHash);
+using var backend = new OpenCvInspectionBackend(libraries: store,
+    barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(), recognizer: recognizer);
 using var engine = new InspectionEngine(backend);
 
 using var source = VisionImage.CopyFrom(info, pixels);
