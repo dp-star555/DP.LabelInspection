@@ -41,7 +41,7 @@ foreach ($target in @('net48','net8.0-windows')) {
         Set-Content -Path (Join-Path $directory 'start.cmd') -Value $launcher -Encoding ASCII
     }
 }
-Copy-Item README.md,VALIDATION.md,FULL_DELIVERY.md,DATA_BINDING.md,BARCODE_PRINT.md,QR_PRINT.md,BARCODE_INK_LOSS.md,BARCODE_EVIDENCE_GROUPS.md,HALCON_CANVAS_FEASIBILITY.md,CANVAS_BENCHMARK.md,VISION_WORKBENCH_MIGRATION.md,QUICK_GLYPH_LIBRARY.md,ROI_EVIDENCE_POLICY.md,ROI_PARAMETER_GUIDE.md,CURRENT_INSPECTION_FLOW.md (Join-Path $destination '.')
+Copy-Item README.md,VALIDATION.md,FULL_DELIVERY.md,DATA_BINDING.md,BARCODE_PRINT.md,QR_PRINT.md,BARCODE_INK_LOSS.md,BARCODE_EVIDENCE_GROUPS.md,VISION_WORKBENCH_MIGRATION.md,QUICK_GLYPH_LIBRARY.md,ROI_EVIDENCE_POLICY.md,ROI_PARAMETER_GUIDE.md,CURRENT_INSPECTION_FLOW.md (Join-Path $destination '.')
 Copy-Item ../DP.Vision/ALGORITHM_MIGRATION.md (Join-Path $destination 'DP.Vision_ALGORITHM_MIGRATION.md')
 @'
 Windows x64 only. Install .NET Framework 4.8 or .NET 8 Desktop Runtime as appropriate.

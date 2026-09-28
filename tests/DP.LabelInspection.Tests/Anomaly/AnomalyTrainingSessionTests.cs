@@ -53,7 +53,7 @@ public sealed partial class AnomalyTrainingSessionTests
     [TestMethod]
     public void FixedContentBoxesShareSizeAndSnap()
     {
-        var session = new AnomalyTrainingSession();
+        var session = new AnomalyTrainingSession { Locator = new DP.Vision.OpenCv.OpenCvTemplateLocator() };
         var a = session.AddImage(Label(0, 0, "A1", 1), "a");
         var b = session.AddImage(Label(7, -5, "A1", 2), "b");
         var logo = session.AddModel("标志", EAnomalyTrainingKind.FixedContent);

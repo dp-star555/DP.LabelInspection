@@ -67,7 +67,7 @@ var settings = new FieldSettings(
 var region = new InspectionRegion("barcode", ERegionKind.Barcode, bounds, field: settings);
 ```
 
-`IBarcodePrintInspector`为独立可替换任务接口，默认实现`OpenCvBarcodePrintInspector`。宿主可以通过`OpenCvInspectionBackend(..., barcodePrint: inspector)`替换打印检查器，而不替换读码器。
+一维码与QR印刷质量分别使用DP.Vision的`ILinearBarcodeQualityInspector`、`IQrQualityInspector`，默认实现为`DP.Vision.OpenCv.OpenCvBarcodePrintInspector`、`OpenCvQrPrintInspector`。宿主可以通过`OpenCvInspectionBackend(..., linearQuality: ..., qrQuality: ...)`分别替换，而不替换读码器；标签侧旧的`IBarcodePrintInspector`及Runtime包装类已删除。
 
 质量不足仍将外观NG候选降为REVIEW；已执行的明确码区读取失败NG保留，表示本次不可读，不代表已确认全部物理缺陷。关闭打印检查不关闭条码Expected/任务绑定。
 

@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.Vision;
-using OpenCvSharp;
 using A = DP.Vision.Algorithms;
 using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
@@ -219,17 +218,15 @@ public sealed partial class OpenCvInspectionBackend
                 using var actualSource = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
                 using var referenceSource =
                     _request.VisionReference?.Retain() ?? Bridge.ToVision(_request.Reference!);
-                using var a = Gray(actualSource);
-                using var reference = Gray(referenceSource);
-                var offset = TranslationRegistration.Translation(a, reference, _request.Recipe);
+                var offset = Register(actualSource, referenceSource, token);
                 if (offset == null)
                 {
                     _alignmentFailed = true;
                 }
                 else
                 {
-                    OffsetX = offset.Item1;
-                    OffsetY = offset.Item2;
+                    OffsetX = (int)Math.Round(offset.OffsetX);
+                    OffsetY = (int)Math.Round(offset.OffsetY);
                 }
             }
 
@@ -293,6 +290,36 @@ public sealed partial class OpenCvInspectionBackend
             throw new InvalidOperationException("ROI has no reading operation.");
         }
 
+        /// <summary>
+        /// 在配方第一个固定ROI（至少20×20）上做受限平移配准，忽略区不参与；没有合适的固定ROI或配准不可信时返回null。
+        /// </summary>
+        private A.TranslationRegistrationResult? Register(
+            IImageSource actual,
+            IImageSource reference,
+            CancellationToken token
+        )
+        {
+            var fixedRegion = _request.Recipe.Regions.FirstOrDefault(v => v.Kind == ERegionKind.Fixed);
+            if (fixedRegion == null || fixedRegion.Bounds.Width < 20 || fixedRegion.Bounds.Height < 20)
+            {
+                return null;
+            }
+
+            var bounds = Bridge.ToVision(fixedRegion.Bounds);
+            var mask = A.InspectionMask.Compose(
+                reference,
+                new Geometry[] { bounds.ToGeometry() },
+                _request
+                    .Recipe.Regions.Where(v => v.Kind == ERegionKind.Ignore)
+                    .Select(v => Bridge.ToVision(v.Bounds).Intersect(bounds))
+                    .Where(b => b != null)
+                    .Select(b => (Geometry)b!.Value.ToGeometry()),
+                token
+            );
+            var result = _owner._registrar.Register(actual, reference, bounds, mask, null, token);
+            return result.Found ? result : null;
+        }
+
         /// <summary>执行当前ROI的质量策略，保留已有实际读取及独立完成状态。</summary>
         /// <param name = "r">已定位的ROI及质量配置。</param>
         /// <param name = "reading">本轮已有真实读取证据，质量返回不能覆盖它。</param>
@@ -333,32 +360,24 @@ public sealed partial class OpenCvInspectionBackend
             using var actual =
                 _request.VisionSource?.Crop(r.Bounds.X, r.Bounds.Y, r.Bounds.Width, r.Bounds.Height)
                 ?? Bridge.ToVision(_request.Actual.Crop(r.Bounds));
-            var bytes = Enumerable.Repeat((byte)255, r.Bounds.Width * r.Bounds.Height).ToArray();
-            foreach (var ignored in _request.Recipe.Regions.Where(o => o.Kind == ERegionKind.Ignore))
-            {
-                int left = Math.Max(r.Bounds.X, ignored.Bounds.X + OffsetX),
-                    right = Math.Min(
-                        r.Bounds.X + r.Bounds.Width,
-                        ignored.Bounds.X + OffsetX + ignored.Bounds.Width
-                    );
-                int top = Math.Max(r.Bounds.Y, ignored.Bounds.Y + OffsetY),
-                    bottom = Math.Min(
-                        r.Bounds.Y + r.Bounds.Height,
-                        ignored.Bounds.Y + OffsetY + ignored.Bounds.Height
-                    );
-                for (int y = top; y < bottom; y++)
-                {
-                    token.ThrowIfCancellationRequested();
-                    for (int x = left; x < right; x++)
-                    {
-                        bytes[(y - r.Bounds.Y) * r.Bounds.Width + x - r.Bounds.X] = 0;
-                    }
-                }
-            }
-
-            using var mask = VisionImage.CopyFrom(
-                new ImageInfo(r.Bounds.Width, r.Bounds.Height, EPixelLayout.Gray8),
-                bytes
+            // 忽略区随定位平移后与本ROI的交集，在ROI局部坐标中扣除。
+            var local = new A.PixelBounds(0, 0, r.Bounds.Width, r.Bounds.Height);
+            var ignored = _request
+                .Recipe.Regions.Where(o => o.Kind == ERegionKind.Ignore)
+                .Select(o =>
+                    new A.PixelBounds(
+                        o.Bounds.X + OffsetX - r.Bounds.X,
+                        o.Bounds.Y + OffsetY - r.Bounds.Y,
+                        o.Bounds.Width,
+                        o.Bounds.Height
+                    ).Intersect(local)
+                )
+                .Where(b => b != null)
+                .Select(b => (Geometry)b!.Value.ToGeometry());
+            using var mask = A.InspectionMask.ToImage(
+                A.InspectionMask.Compose(actual, Array.Empty<Geometry>(), ignored, token),
+                local,
+                token
             );
             var options = _request.Recipe.Options;
             var parameters = new A.InkInspectionOptions(

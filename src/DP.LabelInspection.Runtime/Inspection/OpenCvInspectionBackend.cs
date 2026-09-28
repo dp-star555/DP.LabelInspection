@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Threading;
 using DP.LabelInspection.Contracts;
-using OpenCvSharp;
 using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
 namespace DP.LabelInspection.Runtime;
@@ -22,6 +20,8 @@ public sealed partial class OpenCvInspectionBackend
     private readonly IGlyphLibraryRepository? _libraries;
     private readonly DP.Vision.Algorithms.IBarcodeReader? _barcode;
     private readonly DP.Vision.Algorithms.ICharacterSegmenter _segmenter;
+    private readonly DP.Vision.Algorithms.ITranslationRegistrar _registrar =
+        new DP.Vision.OpenCv.OpenCvTranslationRegistrar();
     private readonly DP.Vision.Algorithms.IGlyphComparer _comparer;
     private readonly DP.Vision.Algorithms.ILinearBarcodeQualityInspector _linearQuality;
     private readonly DP.Vision.Algorithms.IQrQualityInspector _qrQuality;
@@ -287,37 +287,6 @@ public sealed partial class OpenCvInspectionBackend
             checked((int)bounds.Width),
             checked((int)bounds.Height)
         );
-    }
-
-    private static Mat Gray(DP.Vision.IImageSource frame)
-    {
-        var info = frame.Info;
-        if (info.Layout != DP.Vision.EPixelLayout.Gray8 && info.Layout != DP.Vision.EPixelLayout.Bgr24)
-            throw new NotSupportedException("Registration requires Gray8 or Bgr24.");
-        var bytes = new byte[info.ByteLength];
-        frame.CopyTo(0, bytes, 0, bytes.Length);
-        using var raw = new Mat(
-            info.Height,
-            info.Width,
-            info.Layout == DP.Vision.EPixelLayout.Gray8 ? MatType.CV_8UC1 : MatType.CV_8UC3
-        );
-        Marshal.Copy(bytes, 0, raw.Data, bytes.Length);
-        if (info.Layout == DP.Vision.EPixelLayout.Gray8)
-        {
-            return raw.Clone();
-        }
-
-        var output = new Mat();
-        try
-        {
-            Cv2.CvtColor(raw, output, ColorConversionCodes.BGR2GRAY);
-            return output;
-        }
-        catch
-        {
-            output.Dispose();
-            throw;
-        }
     }
 
     /// <summary>只释放明确转移的依赖，不保留原始图像帧。</summary>
