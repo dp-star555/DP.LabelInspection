@@ -17,9 +17,6 @@
 | `BarcodeObservation` | [src/DP.LabelInspection.Contracts/Codes/BarcodeObservation.cs](src/DP.LabelInspection.Contracts/Codes/BarcodeObservation.cs) |
 | `BarcodePrintOptions` | [src/DP.LabelInspection.Contracts/Codes/BarcodePrintOptions.cs](src/DP.LabelInspection.Contracts/Codes/BarcodePrintOptions.cs) |
 | `EBarcodeKind` | [src/DP.LabelInspection.Contracts/Codes/EBarcodeKind.cs](src/DP.LabelInspection.Contracts/Codes/EBarcodeKind.cs) |
-| `IBarcodePrintInspector` | [src/DP.LabelInspection.Contracts/Codes/IBarcodePrintInspector.cs](src/DP.LabelInspection.Contracts/Codes/IBarcodePrintInspector.cs) |
-| `IBarcodePrintRequirements` | [src/DP.LabelInspection.Contracts/Codes/IBarcodePrintRequirements.cs](src/DP.LabelInspection.Contracts/Codes/IBarcodePrintRequirements.cs) |
-| `IRoiBarcodeQualityInspector` | [src/DP.LabelInspection.Contracts/Codes/IRoiBarcodeQualityInspector.cs](src/DP.LabelInspection.Contracts/Codes/IRoiBarcodeQualityInspector.cs) |
 | `CanvasGeometry` | [src/DP.LabelInspection.Contracts/Geometry/CanvasGeometry.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasGeometry.cs) |
 | `CanvasPoint` | [src/DP.LabelInspection.Contracts/Geometry/CanvasPoint.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasPoint.cs) |
 | `CanvasPolyline` | [src/DP.LabelInspection.Contracts/Geometry/CanvasPolyline.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasPolyline.cs) |
@@ -97,8 +94,6 @@
 | `GlyphDraftCandidate` | [src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftCandidate.cs](src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftCandidate.cs) |
 | `GlyphDraftSession` | [src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs](src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs) |
 | `FieldBindingEvaluator` | [src/DP.LabelInspection.Core/Rules/FieldBindingEvaluator.cs](src/DP.LabelInspection.Core/Rules/FieldBindingEvaluator.cs) |
-| `OpenCvBarcodePrintInspector` | [src/DP.LabelInspection.Runtime/Codes/OpenCvBarcodePrintInspector.cs](src/DP.LabelInspection.Runtime/Codes/OpenCvBarcodePrintInspector.cs) |
-| `OpenCvQrPrintInspector` | [src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs](src/DP.LabelInspection.Runtime/Codes/OpenCvQrPrintInspector.cs) |
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
 | `AnomalyModelCache` | [src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs](src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs) |
 | `RegionAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs) |
