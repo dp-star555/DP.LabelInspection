@@ -112,7 +112,6 @@
 | `OpenCvInspectionBackend.RoiSession` | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.cs) |
 | `OpenCvInspectionBackend` | [src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.cs](src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.cs) |
 | `OpenCvInspectionBackend` | [src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.OpenCvRoiSession.cs](src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.OpenCvRoiSession.cs) |
-| `TranslationRegistration` | [src/DP.LabelInspection.Runtime/Registration/TranslationRegistration.cs](src/DP.LabelInspection.Runtime/Registration/TranslationRegistration.cs) |
 | `RegionQualityAlgorithms` | [src/DP.LabelInspection.Runtime/Surfaces/RegionQualityAlgorithms.cs](src/DP.LabelInspection.Runtime/Surfaces/RegionQualityAlgorithms.cs) |
 | `InspectionStore` | [src/DP.LabelInspection.Storage/Persistence/InspectionStore.cs](src/DP.LabelInspection.Storage/Persistence/InspectionStore.cs) |
 | `InspectionStore.FrameConverter` | [src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/FrameConverter.cs](src/DP.LabelInspection.Storage/Persistence/Internal/InspectionStore/FrameConverter.cs) |
