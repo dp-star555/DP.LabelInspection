@@ -106,6 +106,9 @@
 | `RegionAnomalyResult` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyResult.cs) |
 | `OpenCvImageCodec` | [src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs](src/DP.LabelInspection.Runtime/Imaging/OpenCvImageCodec.cs) |
 | `OpenCvInspectionBackend.RoiSession` | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.cs) |
+| `OpenCvInspectionBackend.RoiSession`（定位） | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.Location.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.Location.cs) |
+| `OpenCvInspectionBackend.RoiSession`（质量A） | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.Quality.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.Quality.cs) |
+| `OpenCvInspectionBackend.RoiSession`（质量B） | [src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.Anomaly.cs](src/DP.LabelInspection.Runtime/Inspection/Internal/OpenCvInspectionBackend/RoiSession.Anomaly.cs) |
 | `OpenCvInspectionBackend` | [src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.cs](src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.cs) |
 | `OpenCvInspectionBackend` | [src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.OpenCvRoiSession.cs](src/DP.LabelInspection.Runtime/Inspection/OpenCvInspectionBackend.OpenCvRoiSession.cs) |
 | `RegionQualityAlgorithms` | [src/DP.LabelInspection.Runtime/Surfaces/RegionQualityAlgorithms.cs](src/DP.LabelInspection.Runtime/Surfaces/RegionQualityAlgorithms.cs) |
