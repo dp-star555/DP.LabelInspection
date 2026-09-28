@@ -78,6 +78,7 @@ public sealed class LabelInspectionControl : UserControl
     private IGlyphLibraryManager? _libraryManager;
     private IAnomalyLibraryManager? _anomalyManager;
     private IAnomalyModelTrainer? _anomalyTrainer;
+    private DP.Vision.Algorithms.ITemplateLocator? _anomalyLocator;
     private InspectionOptions _options = new InspectionOptions();
     private IReadOnlyList<FieldBinding> _bindings = Array.Empty<FieldBinding>();
     private TaskDataSnapshot? _taskData;
@@ -799,14 +800,17 @@ public sealed class LabelInspectionControl : UserControl
     /// <summary>连接异常模型库（质量方法B）的管理及训练，引擎使用的模型库仍由宿主配置。</summary>
     /// <param name = "manager">宿主拥有的异常模型库管理器。</param>
     /// <param name = "trainer">宿主拥有的训练实现；null时只能管理、导入导出。</param>
+    /// <param name = "locator">批量训练中内容固定样本框自动对齐所用的模板定位实现（宿主拥有，例如DP.Vision OpenCvTemplateLocator）；null时不自动对齐。</param>
     public void AttachAnomalyLibraryManager(
         IAnomalyLibraryManager manager,
-        IAnomalyModelTrainer? trainer = null
+        IAnomalyModelTrainer? trainer = null,
+        DP.Vision.Algorithms.ITemplateLocator? locator = null
     )
     {
         EnsureIdle();
         _anomalyManager = manager ?? throw new ArgumentNullException(nameof(manager));
         _anomalyTrainer = trainer;
+        _anomalyLocator = locator;
     }
 
     /// <summary>捕获当前Vision帧租约及不可变配置；调用方负责释放返回的请求。</summary>
@@ -1344,7 +1348,12 @@ public sealed class LabelInspectionControl : UserControl
         if (_batch == null)
         {
             _batch = new AnomalyBatchTrainingControl();
-            _batch.AttachServices(_anomalyManager, _anomalyTrainer, _engine as IGlyphCandidateService);
+            _batch.AttachServices(
+                _anomalyManager,
+                _anomalyTrainer,
+                _engine as IGlyphCandidateService,
+                _anomalyLocator
+            );
             if (_actual != null)
             {
                 _batch.AddImage(_actual, "当前图像");
