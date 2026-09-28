@@ -15,6 +15,16 @@
     <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
         <Reference Include="System.IO.Compression" />
     </ItemGroup>
+    <!-- net48 下包的原生库只落在输出的 dll/x64、dll/x86 两个子目录里，而 .NET Framework 的 DllImport
+         只搜程序集同目录和 PATH，不探子目录，于是测试批量报 DllNotFoundException: OpenCvSharpExtern。
+         可执行工程（样例、工具）由 NuGet 直接平铺到输出根目录，测试工程不会，这里补上同一步。 -->
+    <Target Name="FlattenNet48NativeDependencies" AfterTargets="Build"
+            Condition="'$(TargetFramework)' == 'net48'">
+        <ItemGroup>
+            <_Net48NativeDll Include="$(OutDir)dll\x64\*.dll" />
+        </ItemGroup>
+        <Copy SourceFiles="@(_Net48NativeDll)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    </Target>
     <ItemGroup>
         <ProjectReference Include="..\..\src\DP.LabelInspection.Runtime\DP.LabelInspection.Runtime.csproj" />
     </ItemGroup>
