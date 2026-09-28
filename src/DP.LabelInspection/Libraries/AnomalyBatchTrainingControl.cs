@@ -42,6 +42,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
     };
     private readonly List<Control> _busyDisabled = new List<Control>();
     private AnomalyTrainingSession _session = new AnomalyTrainingSession();
+    private DP.Vision.Algorithms.ITemplateLocator? _locator;
     private IAnomalyLibraryManager? _manager;
     private IAnomalyModelTrainer? _trainer;
     private IGlyphCandidateService? _candidates;
@@ -325,15 +326,19 @@ public sealed class AnomalyBatchTrainingControl : UserControl
     /// <param name = "manager">异常模型库管理器。</param>
     /// <param name = "trainer">训练实现。</param>
     /// <param name = "candidates">字符候选提取服务（OCR+分割）。</param>
+    /// <param name = "locator">内容固定样本框自动对齐所用的模板定位实现（宿主拥有）；null时不自动对齐。</param>
     public void AttachServices(
         IAnomalyLibraryManager manager,
         IAnomalyModelTrainer trainer,
-        IGlyphCandidateService? candidates
+        IGlyphCandidateService? candidates,
+        DP.Vision.Algorithms.ITemplateLocator? locator = null
     )
     {
         _manager = manager ?? throw new ArgumentNullException(nameof(manager));
         _trainer = trainer ?? throw new ArgumentNullException(nameof(trainer));
         _candidates = candidates;
+        _locator = locator;
+        _session.Locator = locator;
         Reload();
     }
 
@@ -674,6 +679,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
 
         var (session, excluded) = load(d.FileName);
         _session = session;
+        _session.Locator = _locator;
         _restoreExcluded.Clear();
         foreach (var pair in excluded)
         {

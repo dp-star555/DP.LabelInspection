@@ -19,6 +19,8 @@
 7. 样本导出对带矩阵的新报告核对与旧整数偏移的一致性，拒绝旋转/缩放/剪切，避免生成错误的训练裁图；没有矩阵的历史报告继续按旧平移字段导出。WinForms/WPF 工作台遇到非整数平移矩阵时隐藏轴对齐ROI叠加，WinForms也拒绝用偏移反算编辑坐标；目前尚未实现仿射ROI的直接交互显示。
 8. OCR预处理和CTC回归改为直接测Vision实现；删除标签侧OCR模型/预处理委托、旧 `ITextLineRecognizer`、仅供适配器使用的输入类型及重复CTC解码委托。生产OCR只注入Vision `ITextLineRecognizer`；生产文字质检及逐字异常分割/单字比较也只注入Vision `ICharacterSegmenter` / `IGlyphComparer`，已删除 `LegacySegmenter` / `LegacyComparer` 的反向图像复制适配。Core无论采用分阶段还是旧后台，配方/参考/ROI校验均只读Vision元数据，不因验证而复制像素。候选提取服务/后台现只接受借用的Vision `IImageSource`，异步入口在调度前独立Retain、结束后释放，OCR与分割无需再复制整帧；UI及训练存量旧快照会在调用边界转成Vision源。文本候选定位器由制作工具直接用Vision实现；删除标签侧 `ITextRegionDetector` / `TextRegionDetector`，未调用定位器的正式检测后台不再虚报Discovery能力。旧 `ICharacterSegmenter` / `IGlyphCandidateSegmenter` / `IGlyphComparer` 及Runtime转发类均已删除；仍需长期保存的字符图块和报告证据才复制为标签侧像素快照。其他旧图像策略仍在。
 
+9. 算子下沉到DP.Vision（需与DP.Vision分支 `claude/vision-operators` 一起合并）：逐字符异常检测（字符归一化、逐字局部块比较、缺墨检查、多样性选样、热力图）改为Vision `ICharacterAnomalyDetector` / `OpenCvCharacterAnomalyDetector`，标签侧只保留字符组键、库条目、组内阈值下限和报告措辞；受限ECC平移改为Vision `ITranslationRegistrar` / `OpenCvTranslationRegistrar`，忽略区掩码由 `InspectionMask.Compose` 生成（固定/空白质检掩码图用 `InspectionMask.ToImage`）；批量训练样本框对齐改为注入Vision `ITemplateLocator`。删除 `CharacterCells` / `CharacterLine` / `CharacterCell` / `CharacterInkLoss` / `TranslationRegistration`、后台 `Gray` 副本、训练会话手写NCC与灰度缓存、无调用的标签侧码质检接口（`IBarcodePrintInspector` 等）及Runtime包装类。实拍标签回归转储与迁移前逐字节一致；ECC在随机平移/忽略区上与旧实现逐次一致。
+
 ## 尚未完成（阻止删除旧类型/发布标准化SDK）
 
 - 将Core的剩余图像任务、码质量、异常模型训练/检测等接口逐项迁入Vision租约，不让运行中任务访问旧 `ImageFrame`；字库候选后台已直接使用Vision，制作UI和训练库存量旧快照仍需转换。

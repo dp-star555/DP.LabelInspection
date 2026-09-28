@@ -75,10 +75,10 @@
 ## 6. 当前代码取证与差距
 
 - `Contracts/CharacterServices.cs` 已有 `ICharacterSegmenter` 和 `IGlyphComparer`。现有分割接口同时接受文字并产生身份关联；若要独立替换纯分割和配对，需要兼容适配，而不是直接删除旧签名。
-- `OpenCvInspectionBackend` 已支持注入上述接口及 `IBarcodePrintInspector`，但其大后端仍承担大量流程职责。
+- `OpenCvInspectionBackend` 已支持注入上述接口及DP.Vision `ILinearBarcodeQualityInspector` / `IQrQualityInspector`，但其大后端仍承担大量流程职责。
 - `OpenCvBarcodePrintInspector.Inspect` 原来在发现QR时直接 `new OpenCvQrPrintInspector()`；首批已改为构造注入QR检查器。后续批次已迁入中立码质检契约，一维码和QR分别可替换。
 - `TextAppearanceInspection.Run` 同时执行OCR、内容规则、分割、字库加载和比较，须按读取/业务比较/文字质量职责拆开。
-- 现有 `IBarcodePrintInspector` 只返回缺陷列表，不能独立证明执行完整性；后续通过兼容适配演进为明确的执行与质量结果。
+- 标签侧旧 `IBarcodePrintInspector`（只返回缺陷列表）及其Runtime包装类已删除；码质检改用DP.Vision质量结果（带执行状态）。
 
 ## 7. 后续实施验收条件
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DP.LabelInspection.Contracts;
+using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
 namespace DP.LabelInspection.Core;
 
@@ -22,8 +23,12 @@ public sealed class AnomalyTrainingSession
     private readonly List<AnomalyTrainingImage> _images = new List<AnomalyTrainingImage>();
     private readonly List<AnomalyTrainingModel> _models = new List<AnomalyTrainingModel>();
     private readonly List<AnomalyTrainingSample> _samples = new List<AnomalyTrainingSample>();
-    private readonly Dictionary<ImageFrame, byte[]> _gray = new Dictionary<ImageFrame, byte[]>();
     private readonly HashSet<string> _dismissed = new HashSet<string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 内容固定模型样本自动对齐所用的模板定位实现（宿主提供，例如DP.Vision的OpenCvTemplateLocator，宿主拥有）；null时不对齐。
+    /// </summary>
+    public DP.Vision.Algorithms.ITemplateLocator? Locator { get; set; }
 
     /// <summary>内容固定模型样本自动对齐的搜索半径（原图像素），0–64，默认16；0表示不对齐。</summary>
     public int SnapRadius { get; set; } = 16;
@@ -54,7 +59,6 @@ public sealed class AnomalyTrainingSession
     {
         _samples.RemoveAll(s => s.Image == image);
         _images.Remove(image);
-        _gray.Remove(image.Image);
     }
 
     /// <summary>新建模型。</summary>
@@ -680,133 +684,40 @@ public sealed class AnomalyTrainingSession
         }
     }
 
-    /// <summary>在±SnapRadius内寻找与模型第一个样本归一化相关最高的位置。</summary>
+    /// <summary>
+    /// 在±SnapRadius内用<see cref = "Locator"/>寻找与模型第一个样本最相似的位置；最佳位置不比手画位置更相似时（例如均匀区域）保留手画位置。
+    /// </summary>
     private PixelRect Snap(AnomalyTrainingImage image, AnomalyTrainingModel model, PixelRect box)
     {
         var reference = _samples.FirstOrDefault(s => s.Model == model);
-        if (reference == null || SnapRadius <= 0)
+        if (reference == null || SnapRadius <= 0 || Locator == null)
         {
             return box;
         }
 
-        var template = Gray(reference.Image.Image);
-        var target = Gray(image.Image);
-        int tw = reference.Image.Image.Width,
-            iw = image.Image.Width,
-            ih = image.Image.Height,
-            w = box.Width,
-            h = box.Height,
-            step = (long)w * h > 40000 ? 2 : 1;
-        double tMean = 0,
-            tVar = 0;
-        int n = 0;
-        for (int y = 0; y < h; y += step)
-        {
-            for (int x = 0; x < w; x += step)
-            {
-                tMean += template[(reference.Bounds.Y + y) * tw + reference.Bounds.X + x];
-                n++;
-            }
-        }
-
-        tMean /= n;
-        for (int y = 0; y < h; y += step)
-        {
-            for (int x = 0; x < w; x += step)
-            {
-                double t = template[(reference.Bounds.Y + y) * tw + reference.Bounds.X + x] - tMean;
-                tVar += t * t;
-            }
-        }
-
-        if (tVar <= 0)
+        int r = Math.Min(64, SnapRadius),
+            left = Math.Max(0, box.X - r),
+            top = Math.Max(0, box.Y - r),
+            right = Math.Min(image.Image.Width, box.X + box.Width + r),
+            bottom = Math.Min(image.Image.Height, box.Y + box.Height + r);
+        using var targetImage = Bridge.ToVision(image.Image);
+        using var target = new DP.Vision.ImageFrame("snap-target", targetImage);
+        using var templateImage = Bridge.ToVision(reference.Image.Image);
+        using var template = new DP.Vision.ImageFrame("snap-template", templateImage);
+        var templateBounds = Bridge.ToVision(reference.Bounds);
+        var best = Locator.Locate(
+            target,
+            new DP.Vision.Algorithms.PixelBounds(left, top, right - left, bottom - top),
+            template,
+            templateBounds,
+            0
+        );
+        if (!best.Found)
         {
             return box;
         }
 
-        double best = double.MinValue;
-        var result = box;
-        int r = Math.Min(64, SnapRadius);
-        for (int dy = -r; dy <= r; dy++)
-        {
-            int oy = box.Y + dy;
-            if (oy < 0 || oy + h > ih)
-            {
-                continue;
-            }
-
-            for (int dx = -r; dx <= r; dx++)
-            {
-                int ox = box.X + dx;
-                if (ox < 0 || ox + w > iw)
-                {
-                    continue;
-                }
-
-                double sum = 0,
-                    sumSq = 0,
-                    cross = 0;
-                for (int y = 0; y < h; y += step)
-                {
-                    int trow = (reference.Bounds.Y + y) * tw + reference.Bounds.X,
-                        irow = (oy + y) * iw + ox;
-                    for (int x = 0; x < w; x += step)
-                    {
-                        double v = target[irow + x];
-                        sum += v;
-                        sumSq += v * v;
-                        cross += v * (template[trow + x] - tMean);
-                    }
-                }
-
-                double variance = sumSq - sum * sum / n;
-                if (variance <= 0)
-                {
-                    continue;
-                }
-
-                double score = cross / Math.Sqrt(variance * tVar);
-                // 同分时取离手画位置最近的，避免均匀区域漂移。
-                if (
-                    score > best + 1e-9
-                    || Math.Abs(score - best) <= 1e-9
-                        && Math.Abs(dx) + Math.Abs(dy)
-                            < Math.Abs(result.X - box.X) + Math.Abs(result.Y - box.Y)
-                )
-                {
-                    best = score;
-                    result = new PixelRect(ox, oy, w, h);
-                }
-            }
-        }
-
-        return result;
-    }
-
-    private byte[] Gray(ImageFrame frame)
-    {
-        if (_gray.TryGetValue(frame, out var cached))
-        {
-            return cached;
-        }
-
-        var pixels = frame.CopyPixels();
-        byte[] gray;
-        if (frame.Format == EImagePixelFormat.Gray8)
-        {
-            gray = pixels;
-        }
-        else
-        {
-            gray = new byte[frame.Width * frame.Height];
-            for (int i = 0; i < gray.Length; i++)
-            {
-                gray[i] = (byte)(
-                    (pixels[i * 3] * 29 + pixels[i * 3 + 1] * 150 + pixels[i * 3 + 2] * 77) >> 8
-                );
-            }
-        }
-
-        return _gray[frame] = gray;
+        var drawn = Locator.Locate(target, Bridge.ToVision(box), template, templateBounds, 0);
+        return best.Score > drawn.Score + 1e-9 ? Bridge.ToLabel(best.Bounds!.Value) : box;
     }
 }

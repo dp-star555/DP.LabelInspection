@@ -92,8 +92,8 @@ python tools\generate_ocr_baseline.py `
 - 取消是合作式，不能硬杀原生算子；关闭前异步等待任务，避免在UI线程Wait/Result。
 - SDK持久化方法为同步任务，工作台在后台执行报告保存；宿主应按自己的线程策略调度。
 - 框架没有现成宿主插件基类，因此入口是普通DLL接口，不虚构MEF/宿主协议。
-- `ICharacterSegmenter`、`IGlyphComparer`也能单独注入替换，复用OCR/字库/业务流程；默认是OpenCV实现，不等于已提供HALCON实现。
+- 字符分割与单字比较使用DP.Vision的`ICharacterSegmenter`、`IGlyphComparer`，可单独注入替换，复用OCR/字库/业务流程；标签侧同名接口已删除。默认是OpenCV实现，不等于已提供HALCON实现。
 - 原生库版本冲突、HALCON许可/版本选择、热卸载/进程隔离仍需真实宿主条件，当前没有保证。
 - 单行水平/ASCII字符分割、归一尺寸与试验阈值限制仍存在；不保证绝对印刷尺寸、缺整行或未知字符的业务真值。
 - WPF编辑器UI不与WinForms全等；所需业务操作可通过同一SDK调用，不能把它描述成完整双UI工作台。
-- `OCR_MIGRATION.md`为0.1阶段历史记录；当前能力以本文件、README和VALIDATION为准。
+- `docs/archive/OCR_MIGRATION.md`为0.1阶段历史记录；当前能力以本文件、README和VALIDATION为准。

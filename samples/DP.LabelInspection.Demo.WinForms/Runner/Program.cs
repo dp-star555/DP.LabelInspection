@@ -105,7 +105,8 @@ internal static class Program
 
         control.AttachAnomalyLibraryManager(
             store.AnomalyLibraries,
-            cnn == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(cnn)
+            cnn == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(cnn),
+            new DP.Vision.OpenCv.OpenCvTemplateLocator()
         );
         control.AttachAnomalyTrainingProjects(
             (session, path) => AnomalyTrainingProject.Save(session, path, codec),
