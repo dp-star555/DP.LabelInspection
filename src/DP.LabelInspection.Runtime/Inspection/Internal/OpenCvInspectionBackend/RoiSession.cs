@@ -176,7 +176,11 @@ public sealed partial class OpenCvInspectionBackend
                 }
                 else
                 {
-                    var library = _owner._libraries.Load(r.Field.LibraryId, r.Field.LibraryRevision!.Value);
+                    // 固定版本不可变：同一后台内按“库+版本”缓存，不再每次检测都从存储重新载入。
+                    var libraries = _owner._libraries;
+                    string id = r.Field.LibraryId;
+                    int revision = r.Field.LibraryRevision!.Value;
+                    var library = _owner._glyphLibraries.Get(id, revision, () => libraries.Load(id, revision));
                     if (library.Id != r.Field.LibraryId || library.Revision != r.Field.LibraryRevision)
                     {
                         throw new InvalidOperationException(

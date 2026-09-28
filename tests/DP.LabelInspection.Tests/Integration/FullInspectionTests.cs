@@ -108,7 +108,7 @@ public sealed partial class FullInspectionTests
         );
     }
 
-    /// <summary>明确重复的等格字符复用同一参考，不受字典顺序影响。</summary>
+    /// <summary>明确重复的等格字符复用同一参考，不受字典顺序影响；同一后台内固定版本字库只从存储载入一次。</summary>
     [TestMethod]
     public void EqualCellsReusePinnedCharacterAndDetectMissingInk()
     {
@@ -141,7 +141,8 @@ public sealed partial class FullInspectionTests
             new PixelRect(0, 0, 90, 40),
             field: new FieldSettings(id, revision, "AAA", equalCells: true)
         );
-        using var backend = new OpenCvInspectionBackend(libraries: temp.Store);
+        var libraries = new CountingGlyphLibraries(temp.Store);
+        using var backend = new OpenCvInspectionBackend(libraries: libraries);
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
             new InspectionRequest(
@@ -170,6 +171,27 @@ public sealed partial class FullInspectionTests
         Assert.AreEqual(EInspectionVerdict.Ok, summary.Verdict);
         StringAssert.Contains(summary.Message, "字符假设=[AAA]，来源：引导值（等宽单元）");
         StringAssert.Contains(summary.Message, "3字中1字未通过");
+
+        var again = engine.Inspect(
+            new InspectionRequest(
+                frame,
+                new InspectionRecipe(
+                    "cells",
+                    90,
+                    40,
+                    EInspectionMode.Free,
+                    EAlignmentMode.AssumeAligned,
+                    new[] { region },
+                    new InspectionOptions(minimumContrast: 0, minimumSharpness: 0)
+                )
+            )
+        );
+        Assert.AreEqual(EInspectionVerdict.Ng, again.Verdict);
+        CollectionAssert.AreEqual(
+            findings.Select(f => f.Message).ToArray(),
+            again.Analysis.Regions[0].Findings.Select(f => f.Message).ToArray()
+        );
+        Assert.AreEqual(1, libraries.Loads);
     }
 
     /// <summary>真实ECC仅从固定内容估计有界平移，并比较实际原图坐标像素。</summary>
