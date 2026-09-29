@@ -20,26 +20,20 @@ internal static class Program
     private static void Main(string[] args)
     {
         bool smoke = args.Length == 2 && args[0] == "--smoke";
-        var codec = new OpenCvImageCodec();
-        var store = new InspectionStore(
-            Environment.GetEnvironmentVariable("DP_LABEL_DATA")
-                ?? Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "DP.LabelInspection"
-                ),
-            codec
+        using var host = LabelInspectionHost.Create(
+            new LabelInspectionHostOptions(
+                Environment.GetEnvironmentVariable("DP_LABEL_DATA")
+                    ?? Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                        "DP.LabelInspection"
+                    )
+            )
+            {
+                RecognitionModel = Environment.GetEnvironmentVariable("DP_LABEL_REC_MODEL"),
+            }
         );
-        string? model = Environment.GetEnvironmentVariable("DP_LABEL_REC_MODEL");
-        using var recognizer = string.IsNullOrWhiteSpace(model)
-            ? null
-            : new DP.Vision.Onnx.OnnxTextLineRecognizer(
-                model!, new DP.Vision.OpenCv.OpenCvTextLinePreprocessor());
-        using var backend = new OpenCvInspectionBackend(
-            libraries: store,
-            barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
-            recognizer: recognizer
-        );
-        using var engine = new InspectionEngine(backend);
+        var codec = host.Codec;
+        using var engine = host.CreateEngine();
         var app = new Application();
         var window = new Window
         {

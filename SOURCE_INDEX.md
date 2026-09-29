@@ -95,6 +95,8 @@
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
 | `AnomalyModelCache` | [src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs](src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs) |
 | `PinnedRevisionCache<T>` | [src/DP.LabelInspection.Runtime/Libraries/PinnedRevisionCache.cs](src/DP.LabelInspection.Runtime/Libraries/PinnedRevisionCache.cs) |
+| `LabelInspectionHost` | [src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHost.cs](src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHost.cs) |
+| `LabelInspectionHostOptions` | [src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHostOptions.cs](src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHostOptions.cs) |
 | `RegionAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/RegionAnomalyDetector.cs) |
 | `CharacterAnomalyCell` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyCell.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyCell.cs) |
 | `CharacterAnomalyDetector` | [src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyDetector.cs](src/DP.LabelInspection.Runtime/Anomaly/CharacterAnomalyDetector.cs) |
@@ -173,6 +175,7 @@
 | `CanvasGeometryTests` | [tests/DP.LabelInspection.Tests/Geometry/CanvasGeometryTests.cs](tests/DP.LabelInspection.Tests/Geometry/CanvasGeometryTests.cs) |
 | `FullInspectionTests` | [tests/DP.LabelInspection.Tests/Integration/FullInspectionTests.cs](tests/DP.LabelInspection.Tests/Integration/FullInspectionTests.cs) |
 | `InspectionTests` | [tests/DP.LabelInspection.Tests/Integration/InspectionTests.cs](tests/DP.LabelInspection.Tests/Integration/InspectionTests.cs) |
+| `LabelInspectionHostTests` | [tests/DP.LabelInspection.Tests/Integration/LabelInspectionHostTests.cs](tests/DP.LabelInspection.Tests/Integration/LabelInspectionHostTests.cs) |
 | `SourceInspectionTests` | [tests/DP.LabelInspection.Tests/Integration/SourceInspectionTests.cs](tests/DP.LabelInspection.Tests/Integration/SourceInspectionTests.cs) |
 | `FullInspectionTests.CountingCharacterTasks` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingCharacterTasks.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingCharacterTasks.cs) |
 | `FullInspectionTests.CountingGlyphLibraries` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingGlyphLibraries.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingGlyphLibraries.cs) |
