@@ -371,6 +371,24 @@ Vision 算法测试 `net8.0` **109/109**（`net48` 65 例失败为**既有原生
 > 其中**"字库参考图每次检测整帧复制"已在 4.8 处理**：参考图现在按固定版本只转换一次，
 > 借出方各自持独立租约。字库字段本身仍是快照（缓存从它转换），这一层没有变。
 
+### 4.9 第 3 步设计稿：报告证据的"热态租约 + 归档字节"（2026-09-29，待评审）
+
+设计写在独立文件 **`REPORT_EVIDENCE_OWNERSHIP.md`**，本轮**不动代码**。三条会改变设计的实测结论：
+
+1. **显示路径本来就是同步转位图**（WinForms `AddPreview` → `DrawingImageConverter.ToBitmap`；
+   WPF `Preview` → `Source` + `Freeze()`），解码像素只在"用户展开卡片那一瞬"被需要，
+   不需要在报告生命周期里常驻。
+2. **归档态已经是编码字节**：`FrameConverter : JsonConverter<PixelSnapshot>`（`InspectionStore.cs:39`）
+   把每个快照写成 `{"png_base64": "..."}`。所以"归档字节"不是新能力，
+   而"改动前后 `report.json` 逐字节不变"可以当作回归锚点。
+3. **算法结果自己拥有证据租约**（Vision 侧 `TextQualityResult` / `CharacterSegmentation` /
+   `CharacterPatch` / `GlyphComparisonResult` 全是 `IDisposable`，且 `CharacterPatch.Patch` 文档明写
+   "若需超出本对象生命周期，应另行Retain"），而标签侧现在是 `using var measured = ...`。
+   所以热态方案只需在 `measured` 释放前 `Retain` 一次——**Retain 是引用计数，不是复制**。
+
+待签字决策 6 项（载体形态 / 归还责任 / 归档格式 / 归档态显示 / `BarcodeComparisonControl` 跨时间持有 /
+契约破坏性）见该文件 §6。
+
 ### 4.8 第 2 步样板：文字质检参考图按固定版本只转换一次（2026-09-29，已完成）
 
 **动机（实测）**：`RoiSession.Quality.TextQuality` 原本**每个 ROI、每次检测**把字库里**每一个字**
