@@ -1,10 +1,12 @@
 using System;
 using System.IO;
 using System.Linq;
+using DP.LabelInspection.Adapter.Vision;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
 using DP.LabelInspection.Storage;
+using V = DP.Vision;
 
 namespace DP.LabelInspection.BarcodeRegression;
 
@@ -44,7 +46,10 @@ internal static class Program
             );
             using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
             using var engine = new InspectionEngine(backend);
-            var request = new InspectionRequest(frame, recipe);
+            // 检测输入统一走Vision租约：解码得到的标签快照只在此转换一次，各ROI不再重复整帧复制。
+            using var actualSource = AlgorithmContractAdapter.ToVision(frame);
+            using var actualFrame = new V.ImageFrame(Guid.NewGuid().ToString("N"), actualSource);
+            using var request = InspectionRequest.FromVision(actualFrame, recipe);
             var report = engine.Inspect(request);
             var annotated = codec.Annotate(frame, report);
             string job = store.SaveReport(request, report, annotated);

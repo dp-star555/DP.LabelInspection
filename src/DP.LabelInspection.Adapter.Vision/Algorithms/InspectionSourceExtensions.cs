@@ -3,15 +3,16 @@ using System.Threading;
 using System.Threading.Tasks;
 using DP.LabelInspection.Contracts;
 using DP.Vision;
+using V = DP.Vision;
 
 namespace DP.LabelInspection.Adapter.Vision;
 
-/// <summary>以统一图像源调用现有检测引擎，封装输入保留及不可变业务快照转换，不替换分阶段检测策略。</summary>
+/// <summary>以统一图像源调用现有检测引擎，封装输入保留及检测请求的租约生命周期，不替换分阶段检测策略。</summary>
 public static class InspectionSourceExtensions
 {
     /// <summary>
     /// 返回任务前保留实际图和可选参考图，调用方随后可释放自己的源。
-    /// 内部仍复制为标签快照，支持Gray8/Bgr24并遵守标签尺寸限制；不是零复制入口。
+    /// 检测请求直接借用这两个租约，不再复制为标签快照；帧身份由本入口生成，像素布局与尺寸校验仍由请求入口执行。
     /// </summary>
     /// <param name="engine">宿主注入的检测引擎，任务完成前不得释放引擎。</param>
     /// <param name="actual">借用的实际图像源。</param>
@@ -54,17 +55,14 @@ public static class InspectionSourceExtensions
                         async (lease, token) =>
                         {
                             token.ThrowIfCancellationRequested();
-                            var actualSnapshot = AlgorithmContractAdapter.ToLabel(lease);
-                            token.ThrowIfCancellationRequested();
-                            var referenceSnapshot =
-                                referenceLease == null
-                                    ? null
-                                    : AlgorithmContractAdapter.ToLabel(referenceLease);
-                            token.ThrowIfCancellationRequested();
-                            var request = new InspectionRequest(
-                                actualSnapshot,
+                            // 帧与请求都在本作用域内建立；成功、取消和异常都由using归还租约。
+                            using var actualFrame = new V.ImageFrame(NewFrameId(), lease);
+                            using var referenceFrame =
+                                referenceLease == null ? null : new V.ImageFrame(NewFrameId(), referenceLease);
+                            using var request = InspectionRequest.FromVision(
+                                actualFrame,
                                 recipe,
-                                referenceSnapshot,
+                                referenceFrame,
                                 cycleId,
                                 taskData
                             );
@@ -76,4 +74,7 @@ public static class InspectionSourceExtensions
             }
         }
     }
+
+    /// <summary>生成本次调用的帧身份；与旧请求在未提供外部身份时的行为一致。</summary>
+    private static string NewFrameId() => Guid.NewGuid().ToString("N");
 }

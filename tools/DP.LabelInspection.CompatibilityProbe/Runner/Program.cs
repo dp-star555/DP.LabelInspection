@@ -1,10 +1,12 @@
 using System;
 using System.Linq;
+using DP.LabelInspection.Adapter.Vision;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
+using V = DP.Vision;
 
 namespace DP.LabelInspection.CompatibilityProbe;
 
@@ -39,7 +41,11 @@ internal static class Program
                 EAlignmentMode.AssumeAligned,
                 new[] { new InspectionRegion("blank", ERegionKind.Blank, new PixelRect(10, 10, 100, 60)) }
             );
-            var report = engine.Inspect(new InspectionRequest(actual, recipe));
+            // 检测输入统一走Vision租约，不再以标签快照建请求。
+            using var actualSource = AlgorithmContractAdapter.ToVision(actual);
+            using var actualFrame = new V.ImageFrame(Guid.NewGuid().ToString("N"), actualSource);
+            using var request = InspectionRequest.FromVision(actualFrame, recipe);
+            var report = engine.Inspect(request);
             if (report.Verdict != EInspectionVerdict.Ng)
             {
                 throw new InvalidOperationException(

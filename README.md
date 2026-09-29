@@ -96,7 +96,7 @@ Core与控件没有Mat/HObject/ONNX类型。具体视觉适配器可以依赖其
 
 ## 最小SDK组合
 
-客户图像入口统一为`DP.Vision.IImageSource`。两个工作台的`SetActualImage/SetReferenceImage`也接受源；内部业务快照和持久化格式仍保留，转换会复制。见[统一图像源、所有权和迁移说明](../DP.Vision/UNIFIED_IMAGE_SOURCE.md)。
+客户图像入口统一为`DP.Vision.IImageSource`。两个工作台的`SetActualImage/SetReferenceImage`也接受源；**检测输入不再复制为标签快照**，但报告证据、持久化格式（PNG与`png_base64`）及训练/字库资产仍以标签快照表示，二者之间转换会复制。见[统一图像源、所有权和迁移说明](../DP.Vision/UNIFIED_IMAGE_SOURCE.md)。
 
 ```csharp
 using DP.Vision;

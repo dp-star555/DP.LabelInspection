@@ -29,21 +29,74 @@ public sealed class SourceInspectionTests
         );
     }
 
-    /// <summary>真实分阶段引擎可以直接接收源；客户立即释放输入不会破坏检测。</summary>
+    /// <summary>两个互不重叠的固定区，用于确认多ROI不会逐ROI重复整帧复制。</summary>
+    private static InspectionRecipe TwoRegionRecipe()
+    {
+        return new InspectionRecipe(
+            "source-two",
+            32,
+            16,
+            EInspectionMode.Template,
+            EAlignmentMode.AssumeAligned,
+            new[]
+            {
+                new InspectionRegion("left", ERegionKind.Fixed, new PixelRect(0, 0, 16, 16)),
+                new InspectionRegion("right", ERegionKind.Fixed, new PixelRect(16, 0, 16, 16)),
+            },
+            new InspectionOptions(tolerancePixels: 0, minimumContrast: 0, minimumSharpness: 0)
+        );
+    }
+
+    private static byte[] Pixels(byte value) => Enumerable.Repeat(value, 512).ToArray();
+
+    /// <summary>真实分阶段引擎可以直接接收源；客户立即释放输入不会破坏检测，且全程不物化标签整帧。</summary>
     [TestMethod]
     public async Task RealEngineAcceptsUnifiedSource()
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var source = VisionImage.CopyFrom(
-            new ImageInfo(32, 16, EPixelLayout.Gray8),
-            Enumerable.Repeat((byte)255, 512).ToArray()
-        );
-        var work = engine.InspectAsync(source, Recipe(), source);
-        source.Dispose();
+        using var probe = new LeaseProbe(VisionImage.CopyFrom(new ImageInfo(32, 16, EPixelLayout.Gray8), Pixels(255)));
+        var work = engine.InspectAsync(probe, Recipe(), probe);
+        probe.Dispose();
         var report = await work;
         Assert.AreEqual(EInspectionVerdict.Ok, report.Verdict);
         Assert.AreEqual(1, report.Analysis.Regions.Count);
+        Assert.AreEqual(0, probe.WholeFrameCopies, "统一源入口不得再复制标签整帧。");
+        Assert.IsTrue(probe.RowCopies > 0, "运行期必须真的通过租约读到像素，否则本用例只是空转。");
+        Assert.AreEqual(0, probe.LiveLeases, "任务结束后输入租约必须全部归还。");
+    }
+
+    /// <summary>多ROI时整帧复制仍为0；每个ROI各自借用租约，不重复复制原图。</summary>
+    [TestMethod]
+    public async Task MultipleRoisDoNotMaterializeLabelWholeFrame()
+    {
+        using var backend = new OpenCvInspectionBackend();
+        using var engine = new InspectionEngine(backend);
+        using var probe = new LeaseProbe(VisionImage.CopyFrom(new ImageInfo(32, 16, EPixelLayout.Gray8), Pixels(255)));
+        var work = engine.InspectAsync(probe, TwoRegionRecipe(), probe);
+        probe.Dispose();
+        var report = await work;
+
+        Assert.AreEqual(2, report.Analysis.Regions.Count, "两个ROI都必须真的跑完。");
+        Assert.AreEqual(0, probe.WholeFrameCopies, "多ROI不得逐ROI重复整帧复制。");
+        Assert.IsTrue(probe.RowCopies > 0, "运行期必须真的通过租约读到像素。");
+        Assert.AreEqual(0, probe.LiveLeases, "任务结束后输入租约必须全部归还。");
+    }
+
+    /// <summary>报告证据是独立业务快照，不借用输入源；输入释放后报告仍完整可读。</summary>
+    [TestMethod]
+    public async Task ReportEvidenceDoesNotHoldInputLease()
+    {
+        using var backend = new OpenCvInspectionBackend();
+        using var engine = new InspectionEngine(backend);
+        using var probe = new LeaseProbe(VisionImage.CopyFrom(new ImageInfo(32, 16, EPixelLayout.Gray8), Pixels(255)));
+        var report = await engine.InspectAsync(probe, Recipe(), probe);
+
+        probe.Dispose();
+        Assert.AreEqual(0, probe.LiveLeases, "报告不得持有输入租约；证据必须是独立快照。");
+        Assert.AreEqual(EInspectionVerdict.Ok, report.Verdict);
+        Assert.AreEqual(1, report.Analysis.Regions.Count, "输入源释放后报告仍须完整。");
+        Assert.AreEqual("fixed", report.Analysis.Regions[0].RegionName);
     }
 
     /// <summary>实际和参考源在排队前都已保留，完成、异常和取消均归还全部池化槽位。</summary>
@@ -60,8 +113,8 @@ public sealed class SourceInspectionTests
         pool.TryRent(out var second);
         using var firstWriter = first!;
         using var secondWriter = second!;
-        firstWriter.Write(0, Enumerable.Repeat((byte)11, 512).ToArray(), 0, 512);
-        secondWriter.Write(0, Enumerable.Repeat((byte)22, 512).ToArray(), 0, 512);
+        firstWriter.Write(0, Pixels(11), 0, 512);
+        secondWriter.Write(0, Pixels(22), 0, 512);
         var actual = firstWriter.Publish();
         var reference = secondWriter.Publish();
         using var cancellation = new CancellationTokenSource();
@@ -72,8 +125,11 @@ public sealed class SourceInspectionTests
             {
                 entered.TrySetResult(true);
                 await gate.Task.ConfigureAwait(false);
-                Assert.AreEqual((byte)11, request.Actual.CopyPixels()[0]);
-                Assert.AreEqual((byte)22, request.Reference!.CopyPixels()[0]);
+                // 输入像素只能经Vision租约读取；检测请求不再暴露标签快照。
+                Assert.IsNotNull(request.VisionSource, "检测请求必须持有Vision原图租约。");
+                Assert.IsNotNull(request.VisionReference, "检测请求必须持有Vision参考租约。");
+                Assert.AreEqual((byte)11, FirstByte(request.VisionSource));
+                Assert.AreEqual((byte)22, FirstByte(request.VisionReference));
                 Assert.AreEqual("cycle-source", request.CycleId);
                 token.ThrowIfCancellationRequested();
                 if (outcome == 1)
@@ -154,5 +210,13 @@ public sealed class SourceInspectionTests
         await Assert.ThrowsExactlyAsync<NotSupportedException>(async () => await task);
         Assert.IsTrue(pool.TryRent(out var returned));
         returned!.Dispose();
+    }
+
+    /// <summary>从Vision租约读取首字节，替代原先经标签快照取像素的做法。</summary>
+    private static byte FirstByte(IImageSource source)
+    {
+        var buffer = new byte[1];
+        source.CopyTo(0, buffer, 0, 1);
+        return buffer[0];
     }
 }

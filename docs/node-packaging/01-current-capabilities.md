@@ -33,9 +33,9 @@
 | 类型/入口 | 实际作用 | 所有权与注意事项 |
 |---|---|---|
 | `InspectionRecipe` | 尺寸、参考模式、对齐、Regions、Options、Bindings的不可变配置 | 不包含参考图像、模型文件或字库文件实体 |
-| `InspectionRequest` | Actual、Recipe、Reference、CycleId、TaskData | Actual/Reference是标签自己的不可变图像快照，不是DP.Vision.ImageFrame |
+| `InspectionRequest` | Recipe、CycleId、TaskData，以及原图/参考 | `FromVision` 只保留 `DP.Vision.ImageFrame` 租约，不复制像素；旧构造器仍以标签快照为输入（迁移中，待第 2 批移除） |
 | `IInspectionEngine.InspectAsync(InspectionRequest, token)` | 正式无UI执行入口 | 不调用工作台；依赖引擎由宿主装配 |
-| `InspectionSourceExtensions.InspectAsync(engine, IImageSource, recipe, reference, cycleId, taskData, token)` | 更适合节点的统一图像源入口 | 返回任务前保留输入源，内部复制为标签快照；任务结束释放内部租约 |
+| `InspectionSourceExtensions.InspectAsync(engine, IImageSource, recipe, reference, cycleId, taskData, token)` | 更适合节点的统一图像源入口 | 返回任务前保留输入源；任务内以 `InspectionRequest.FromVision` 借用租约，**不再复制为标签快照**；任务结束释放内部租约 |
 | `InspectionEngine(backend, ownsBackend=false)` | 请求校验、同引擎串行执行和Core判定 | 引擎可共享，但同实例的多个请求不并行（单次检测内可设 `MaximumParallelRois` 并行互不依赖的ROI）；Dispose可能等待执行结束 |
 | `OpenCvInspectionBackend` / `WithQualityAlgorithms` | 装配识别器、读码、字库、候选及质量策略 | 默认不拥有注入识别器/检测器，只有明确owns参数才转移释放责任 |
 | `InspectionReport` | Verdict、Analysis、Findings、EvidenceGroups、耗时和后端名 | 没有一个已经定义好的全局“检测完全执行”布尔字段 |
