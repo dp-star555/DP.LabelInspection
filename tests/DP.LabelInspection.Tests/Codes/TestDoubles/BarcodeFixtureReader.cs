@@ -18,7 +18,7 @@ public sealed class BarcodeFixtureReader
     {
         using var image = Bridge.ToVision(frame);
         return new DP.Vision.Zxing.ZxingBarcodeDecoder()
-            .Read(image, Bridge.ToVision(bounds), token)
+            .Read(image, bounds, token)
             .Observations.Select(Bridge.ToLabel).ToArray();
     }
 }

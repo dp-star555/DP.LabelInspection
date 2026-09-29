@@ -704,7 +704,7 @@ public sealed class AnomalyTrainingSession
         using var target = new DP.Vision.ImageFrame("snap-target", targetImage);
         using var templateImage = Bridge.ToVision(reference.Image.Image);
         using var template = new DP.Vision.ImageFrame("snap-template", templateImage);
-        var templateBounds = Bridge.ToVision(reference.Bounds);
+        var templateBounds = reference.Bounds;
         var best = Locator.Locate(
             target,
             new DP.Vision.Algorithms.PixelBounds(left, top, right - left, bottom - top),
@@ -717,7 +717,7 @@ public sealed class AnomalyTrainingSession
             return box;
         }
 
-        var drawn = Locator.Locate(target, Bridge.ToVision(box), template, templateBounds, 0);
-        return best.Score > drawn.Score + 1e-9 ? Bridge.ToLabel(best.Bounds!.Value) : box;
+        var drawn = Locator.Locate(target, box, template, templateBounds, 0);
+        return best.Score > drawn.Score + 1e-9 ? best.Bounds!.Value : box;
     }
 }

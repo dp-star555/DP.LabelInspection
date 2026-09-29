@@ -90,8 +90,5 @@ public sealed partial class IndependentTextQualityTests
             Assert.IsTrue(result.Findings.Single(f => f.Code == "custom_blocker").IsExecutionBlocker);
         }
 
-        var direct = backend.Analyze(request, default);
-        Assert.IsNotNull(direct.Regions.Single().Execution, "Compatibility entry must use the same stages.");
-        Assert.AreEqual(2, strategy.Calls);
     }
 }

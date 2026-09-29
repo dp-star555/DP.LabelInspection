@@ -29,6 +29,18 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
     /// <inheritdoc/>
     public EInspectionCapabilities Capabilities => _backend.Capabilities;
 
+    private int _maximumParallelRois = 1;
+
+    /// <summary>
+    /// 一次检测内最多并行执行的ROI数（默认1，即按配方顺序串行）。大于1时，不从其他ROI取引导值的ROI并行执行，
+    /// 前提是后台会话实现 <see cref = "IConcurrentRoiSession"/>；报告仍按配方顺序输出，判定与串行相同。
+    /// </summary>
+    public int MaximumParallelRois
+    {
+        get => _maximumParallelRois;
+        set => _maximumParallelRois = value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
+
     /// <inheritdoc/>
     public Task<InspectionReport> InspectAsync(
         InspectionRequest request,
@@ -57,185 +69,12 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
             }
 
             cancellationToken.ThrowIfCancellationRequested();
-            if (_backend is IRoiWorkflowBackend staged)
+            if (request.ImageWidth != request.Recipe.Width || request.ImageHeight != request.Recipe.Height)
             {
-                if (
-                    request.ImageWidth != request.Recipe.Width
-                    || request.ImageHeight != request.Recipe.Height
-                )
-                {
-                    throw new ArgumentException("Recipe and image dimensions differ.");
-                }
-
-                return RoiWorkflow.Run(request, _backend, staged, cancellationToken);
+                throw new ArgumentException("Recipe and image dimensions differ.");
             }
 
-            Validate(request);
-            var evaluatedAt = DateTimeOffset.UtcNow;
-            var watch = Stopwatch.StartNew();
-            var analysis =
-                _backend.Analyze(request, cancellationToken)
-                ?? throw new InvalidOperationException("Backend returned no analysis.");
-            cancellationToken.ThrowIfCancellationRequested();
-            var global = new List<InspectionFinding>();
-            var expected = request
-                .Recipe.Regions.Where(r => r.Kind != ERegionKind.Ignore)
-                .Select(r => r.Name)
-                .ToArray();
-            bool discovery =
-                request.Recipe.Mode == EInspectionMode.Free
-                && request.Recipe.Regions.Count == 0
-                && Capabilities.HasFlag(EInspectionCapabilities.Discovery);
-            if (
-                !discovery
-                && (
-                    analysis.Regions.Count != expected.Length
-                    || !analysis
-                        .Regions.Select(r => r.RegionName)
-                        .OrderBy(n => n)
-                        .SequenceEqual(expected.OrderBy(n => n))
-                )
-            )
-            {
-                global.Add(
-                    new InspectionFinding(
-                        "incomplete_backend_result",
-                        "Backend did not account for every requested region.",
-                        EInspectionVerdict.Review
-                    )
-                );
-            }
-
-            foreach (var region in request.Recipe.Regions.Where(r => r.Kind != ERegionKind.Ignore))
-            {
-                var required =
-                    region.Kind == ERegionKind.Fixed ? EInspectionCapabilities.FixedDifference
-                    : region.Kind == ERegionKind.Blank ? EInspectionCapabilities.BlankSpots
-                    : region.Kind == ERegionKind.Text
-                        ? (
-                            region.Field.EqualCells
-                                ? EInspectionCapabilities.None
-                                : EInspectionCapabilities.Ocr
-                        )
-                            | (
-                                (region.Field.LibraryId != null || region.Field.EqualCells)
-                                    ? EInspectionCapabilities.CharacterSegmentation
-                                        | EInspectionCapabilities.GlyphComparison
-                                    : EInspectionCapabilities.None
-                            )
-                    : EInspectionCapabilities.BarcodeDecode
-                        | (
-                            region.Field.BarcodePrint.Enabled
-                                ? EInspectionCapabilities.BarcodeStructure
-                                : EInspectionCapabilities.None
-                        );
-                if ((Capabilities & required) != required)
-                {
-                    global.Add(
-                        new InspectionFinding(
-                            "capability_unavailable",
-                            region.Name + ": adapter does not implement all requested checks.",
-                            EInspectionVerdict.Review
-                        )
-                    );
-                }
-            }
-
-            if (
-                request.Recipe.Mode == EInspectionMode.Template
-                && request.Recipe.Alignment == EAlignmentMode.Translation
-                && !Capabilities.HasFlag(EInspectionCapabilities.TranslationAlignment)
-            )
-            {
-                global.Add(
-                    new InspectionFinding(
-                        "alignment_unavailable",
-                        "Requested translation registration is not implemented by this adapter.",
-                        EInspectionVerdict.Review
-                    )
-                );
-            }
-
-            var options = request.Recipe.Options;
-            bool finite =
-                !double.IsNaN(analysis.Contrast)
-                && !double.IsInfinity(analysis.Contrast)
-                && !double.IsNaN(analysis.Sharpness)
-                && !double.IsInfinity(analysis.Sharpness);
-            bool qualityPassed =
-                Capabilities.HasFlag(EInspectionCapabilities.Quality)
-                && finite
-                && analysis.Contrast >= options.MinimumContrast
-                && analysis.Sharpness >= options.MinimumSharpness;
-            analysis = FieldBindingEvaluator.Apply(
-                request,
-                analysis,
-                qualityPassed,
-                evaluatedAt,
-                Capabilities
-            );
-            if (!qualityPassed)
-            {
-                global.Add(
-                    new InspectionFinding(
-                        "image_quality_review",
-                        "Quality assessment is absent or below configured thresholds; defect candidates require review.",
-                        EInspectionVerdict.Review
-                    )
-                );
-                analysis = new BackendAnalysis(
-                    analysis.Contrast,
-                    analysis.Sharpness,
-                    analysis.Regions.Select(r => new RegionInspectionResult(
-                        r.RegionName,
-                        r.Findings.Select(f => new InspectionFinding(
-                            f.Code,
-                            f.Message,
-                            f.Verdict == EInspectionVerdict.Ng
-                            && !(
-                                f.Code == "barcode_not_decoded"
-                                && Capabilities.HasFlag(EInspectionCapabilities.BarcodeDecode)
-                            )
-                                ? EInspectionVerdict.Review
-                                : f.Verdict,
-                            f.Bounds,
-                            f.AreaPixels
-                        )),
-                        r.Recognition,
-                        r.Segmentation,
-                        r.Glyphs,
-                        r.Barcodes
-                    )),
-                    analysis.OffsetX,
-                    analysis.OffsetY
-                );
-            }
-
-            // 即使外观证据因图像质量而降级，执行未完成仍须保持NG，不能当作通过。
-            analysis = RequiredAppearancePolicy.Apply(request, analysis);
-            if (request.Recipe.Mode == EInspectionMode.Free || expected.Length == 0)
-            {
-                global.Add(
-                    new InspectionFinding(
-                        "uncovered_scope",
-                        "No full-label release guarantee; only declared regions were considered.",
-                        EInspectionVerdict.Review
-                    )
-                );
-            }
-
-            var all = global.Concat(analysis.Regions.SelectMany(r => r.Findings)).ToArray();
-            var verdict =
-                all.Any(f => f.Verdict == EInspectionVerdict.Ng) ? EInspectionVerdict.Ng
-                : all.Any(f => f.Verdict == EInspectionVerdict.Review) ? EInspectionVerdict.Review
-                : EInspectionVerdict.Ok;
-            return new InspectionReport(
-                _backend.Name,
-                verdict,
-                analysis,
-                global,
-                watch.Elapsed.TotalMilliseconds
-            );
+            return RoiWorkflow.Run(request, _backend, _maximumParallelRois, cancellationToken);
         }
     }
 
@@ -286,72 +125,6 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
             },
             token
         ).ConfigureAwait(false);
-    }
-
-    private static void Validate(InspectionRequest request)
-    {
-        var recipe = request.Recipe;
-        if (request.ImageWidth != recipe.Width || request.ImageHeight != recipe.Height)
-        {
-            throw new ArgumentException("Recipe and image dimensions differ.");
-        }
-
-        if (
-            recipe.Mode == EInspectionMode.Template
-            && (
-                !request.HasReference
-                || request.ReferenceWidth != recipe.Width
-                || request.ReferenceHeight != recipe.Height
-            )
-        )
-        {
-            throw new ArgumentException(
-                "当前为整图模板模式，参考整图必须与待检图同尺寸。待检/配方："
-                    + recipe.Width
-                    + "×"
-                    + recipe.Height
-                    + "；参考："
-                    + (
-                        !request.HasReference
-                            ? "未载入"
-                            : request.ReferenceWidth + "×" + request.ReferenceHeight
-                    )
-                    + "。单字库图块不需要与整图同尺寸；若仅做单字库检查，请切换“无整图参考（可用单字库）”（SDK使用Free模式且Reference=null），ROI中的字库绑定保留。若需要整图模板检查，请载入匹配尺寸的参考整图，不要拉伸单字图块。"
-            );
-        }
-
-        foreach (var region in recipe.Regions)
-        {
-            if (!region.Bounds.Fits(request.ImageWidth, request.ImageHeight))
-            {
-                throw new ArgumentException("ROI lies outside the image: " + region.Name);
-            }
-
-            if (recipe.Mode == EInspectionMode.Free && region.Kind == ERegionKind.Fixed)
-            {
-                throw new ArgumentException("Fixed-region checks require template mode.");
-            }
-        }
-
-        var checks = recipe.Regions.Where(r => r.Kind != ERegionKind.Ignore).ToArray();
-        for (int i = 0; i < checks.Length; i++)
-        {
-            for (int j = i + 1; j < checks.Length; j++)
-            {
-                var a = checks[i];
-                var b = checks[j];
-                bool textAndBarcode =
-                    (a.Kind == ERegionKind.Text && b.Kind == ERegionKind.Barcode)
-                    || (a.Kind == ERegionKind.Barcode && b.Kind == ERegionKind.Text);
-                // 条码ROI可能同时包含人眼可读文字；码解码与OCR各自保留独立结果。
-                if (a.Bounds.Intersects(b.Bounds) && !textAndBarcode)
-                {
-                    throw new ArgumentException(
-                        $"ROI区域冲突：{a.Name}（{a.Kind}，{a.Bounds}）与 {b.Name}（{b.Kind}，{b.Bounds}）重叠。仅允许文字与条码交叠；固定内容、空白检查及同类型ROI请分开。忽略区可覆盖检查区域。"
-                    );
-                }
-            }
-        }
     }
 
     /// <summary>等待当前工作结束后释放引擎拥有的后台；可安全重复调用。</summary>

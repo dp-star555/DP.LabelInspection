@@ -25,6 +25,11 @@
           "System.Memory": "4.5.5"
         }
       },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "13.0.3",
+        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
+      },
       "OpenCvSharp4": {
         "type": "Transitive",
         "resolved": "4.10.0.20240616",
@@ -101,10 +106,19 @@
         "dependencies": {
           "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Storage": "[0.2.0-preview.1, )",
           "DP.Vision.Onnx": "[0.1.0-preview.2, )",
           "DP.Vision.OnnxDetection": "[0.1.0-preview.2, )",
           "DP.Vision.OpenCv": "[0.1.0-preview.2, )",
           "DP.Vision.Zxing": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.labelinspection.storage": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
+          "Newtonsoft.Json": "[13.0.3, )"
         }
       },
       "dp.vision": {
@@ -183,6 +197,11 @@
           "System.Numerics.Tensors": "9.0.0"
         }
       },
+      "Newtonsoft.Json": {
+        "type": "Transitive",
+        "resolved": "13.0.3",
+        "contentHash": "HrC5BXdl00IP9zeV+0Z848QWPAoCr9P3bDEZguI+gkLcBKAOxix/tLEAAHC+UvDNPv4a2d18lOReHMOagPa+zQ=="
+      },
       "OpenCvSharp4": {
         "type": "Transitive",
         "resolved": "4.10.0.20240616",
@@ -243,10 +262,19 @@
         "dependencies": {
           "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Storage": "[0.2.0-preview.1, )",
           "DP.Vision.Onnx": "[0.1.0-preview.2, )",
           "DP.Vision.OnnxDetection": "[0.1.0-preview.2, )",
           "DP.Vision.OpenCv": "[0.1.0-preview.2, )",
           "DP.Vision.Zxing": "[0.1.0-preview.2, )"
+        }
+      },
+      "dp.labelinspection.storage": {
+        "type": "Project",
+        "dependencies": {
+          "DP.LabelInspection.Contracts": "[0.2.0-preview.1, )",
+          "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
+          "Newtonsoft.Json": "[13.0.3, )"
         }
       },
       "dp.vision": {

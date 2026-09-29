@@ -23,7 +23,7 @@ public sealed partial class AnomalyTrainingSessionTests
             Calls++;
             string text = confirmedText ?? throw new InvalidOperationException("测试须先设置确认文本。");
             using var measured = new DP.Vision.OpenCv.OpenCvCharacterSegmenter().Segment(
-                frame, DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(bounds), text, token);
+                frame, bounds, text, token);
             return Task.FromResult(new GlyphCandidateExtraction(
                 null, confirmedText, DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(measured)
             ));

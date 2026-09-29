@@ -80,7 +80,7 @@ WinForms工作台“批量训练(B)”：载入多张良品图，每张图为若
 ## 正式入口
 
 `InspectionEngine.Inspect` → `IRoiWorkflowBackend.OpenSession` → `Core/RoiWorkflow.Run`。
-内置 `OpenCvInspectionBackend.Analyze` 兼容入口也委托同一逐ROI流程，不再维护另一套文字/码混合检测流程。
+旧的整图 `Analyze` 入口已移除：`IInspectionBackend` 继承 `IRoiWorkflowBackend`，所有后台（包括第三方）都必须提供逐ROI会话，引擎只走这一条流程。
 
 对每个非 Ignore ROI：
 
@@ -128,7 +128,7 @@ WinForms工作台“批量训练(B)”：载入多张良品图，每张图为若
 - 中立接口在 `DP.Vision.Algorithms`，真实实现位于 `DP.Vision.OpenCv / Onnx / Zxing`。
 - `WithQualityAlgorithms(...)` 装配固定/空白策略，支持整段文字策略和匹配器；分割、单字比较、读码、QR与一维码质量仍可分别注入。
 - 算法选择由宿主代码装配；当前配方持久化数据/质量项目和参数，不包含任意插件加载器或通用模型选择UI。
-- 标签业务类型仍需与中立视觉证据转换，但不再为被删除的旧工程提供程序集/命名空间兼容。**第三方仅实现旧 `IInspectionBackend` 的后端仍走历史兼容通道**；必须实现 `IRoiWorkflowBackend` 才具有这里的前置读取/质量门控保证。
+- 标签业务类型仍需与中立视觉证据转换，但不再为被删除的旧工程提供程序集/命名空间兼容。第三方后台必须实现 `IInspectionBackend.OpenSession`（逐ROI会话），因此都具有这里的前置读取/质量门控保证；不再有历史兼容通道。
 - 单字库独立、ASCII大小写敏感、固定修订；补录必须人工核对发布，不自动替换参考。制库候选补切不进入正式分割。
 - HALCON算法实现、ISO码评级、通用深度质量模型未提供；接口可替换不等于这些算法已经交付。
 
@@ -145,6 +145,6 @@ WinForms中文ROI编辑器提供读取、A规则质检、B异常检测开关及�
 ## 验证入口
 
 - `tests/DP.LabelInspection.Tests/Workflow/RoiWorkflowTests.cs`：调用顺序、当前ROI早停、后续ROI继续、依赖、未完成、配置往返。
-- `tests/DP.LabelInspection.Tests/Text/IndependentTextQualityTests.cs`：无字库/无OCR的替代质量策略以及旧Analyze入口同流程。
+- `tests/DP.LabelInspection.Tests/Text/IndependentTextQualityTests.cs`：无字库/无OCR的替代质量策略。
 - `../DP.Vision/tests/DP.Vision.Algorithms.Tests/Text/TextQualityTests.cs`：真实分割/比较组合、替代匹配器、整段质量完成状态。
 - 完整验收：两项目 `verify.ps1`；最新结果见各自 `VALIDATION.md`。

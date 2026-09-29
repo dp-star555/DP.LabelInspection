@@ -4,6 +4,7 @@
     </PropertyGroup>
     <ItemGroup>
         <ProjectReference Include="../DP.LabelInspection.Core/DP.LabelInspection.Core.csproj" />
+        <ProjectReference Include="../DP.LabelInspection.Storage/DP.LabelInspection.Storage.csproj" />
         <ProjectReference Include="../DP.LabelInspection.Adapter.Vision/DP.LabelInspection.Adapter.Vision.csproj" />
         <ProjectReference Include="../../../DP.Vision/src/DP.Vision.OpenCv/DP.Vision.OpenCv.csproj" />
         <ProjectReference Include="../../../DP.Vision/src/DP.Vision.Onnx/DP.Vision.Onnx.csproj" />

@@ -401,16 +401,15 @@ public sealed partial class InspectionTests
         }
     }
 
-    /// <summary>第二种非原生适配器证明Core可通过公开接口替换后台。</summary>
+    /// <summary>第二种非原生适配器证明Core可通过公开接口替换后台；引擎拥有后台时只释放一次，释放后拒绝检测。</summary>
     [TestMethod]
-    public void MissingBackendCoverageCannotPass()
+    public void ContractBackendReplacesNativeBackend()
     {
-        var backend = new IncompleteBackend();
+        var backend = new ContractBackend();
         using var engine = new InspectionEngine(backend, ownsBackend: true);
-        Assert.AreEqual(
-            EInspectionVerdict.Review,
-            engine.Inspect(Request(Pixels(), Pixels(), new[] { Fixed() })).Verdict
-        );
+        var report = engine.Inspect(Request(Pixels(), Pixels(), new[] { Fixed() }));
+        Assert.AreEqual("contract test adapter", report.Backend);
+        Assert.AreEqual(1, backend.Sessions);
         engine.Dispose();
         engine.Dispose();
         Assert.AreEqual(1, backend.DisposeCalls);

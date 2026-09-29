@@ -30,6 +30,8 @@ public sealed partial class OpenCvInspectionBackend
     private readonly DP.Vision.Algorithms.ICharacterMatcher _matcher;
     private readonly IAnomalyLibraryRepository? _anomalyModels;
     private readonly AnomalyModelCache _anomalyCache = new AnomalyModelCache();
+    private readonly PinnedRevisionCache<GlyphLibrarySnapshot> _glyphLibraries =
+        new PinnedRevisionCache<GlyphLibrarySnapshot>(8);
     private readonly Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector> _anomalyDetectors;
 
     /// <summary>除非明确转移所有权，参考及算法均为借用。</summary>
@@ -209,13 +211,13 @@ public sealed partial class OpenCvInspectionBackend
             var reader = _recognizer ?? throw new InvalidOperationException(
                 "请先加载OCR模型，或输入人工确认的单行文字后重新切割。 "
             );
-            recognition = Bridge.ToLabel(reader.Recognize(frame, Bridge.ToVision(bounds), token));
+            recognition = reader.Recognize(frame, bounds, token);
         }
 
         string text = confirmedText ?? recognition!.Text;
         using var measured = _segmenter is DP.Vision.Algorithms.IGlyphCandidateSegmenter candidates
-            ? candidates.SegmentCandidates(frame, Bridge.ToVision(bounds), text, token)
-            : _segmenter.Segment(frame, Bridge.ToVision(bounds), text, token);
+            ? candidates.SegmentCandidates(frame, bounds, text, token)
+            : _segmenter.Segment(frame, bounds, text, token);
         token.ThrowIfCancellationRequested();
         return new GlyphCandidateExtraction(recognition, confirmedText, Bridge.ToLabel(measured));
     }
@@ -240,26 +242,6 @@ public sealed partial class OpenCvInspectionBackend
         | (
             _recognizer == null ? EInspectionCapabilities.None : EInspectionCapabilities.Ocr
         );
-
-    /// <summary>既有分析入口委托到同一分阶段Core，不另建第二套单体流程。</summary>
-    /// <param name = "request">不可变检测请求，交由Core执行相同的分阶段流程。</param>
-    /// <param name = "cancellationToken">协作式取消标记。</param>
-    public BackendAnalysis Analyze(InspectionRequest request, CancellationToken cancellationToken)
-    {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(OpenCvInspectionBackend));
-        }
-
-        if (request == null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        using var engine = new DP.LabelInspection.Core.InspectionEngine(this, ownsBackend: false);
-        return engine.Inspect(request, cancellationToken).Analysis;
-    }
 
     private static PixelRect LegacyBounds(DP.Vision.RectD bounds, PixelRect scope)
     {

@@ -1,26 +1,21 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Threading;
 using DP.LabelInspection.Contracts;
-using DP.LabelInspection.Core;
-using DP.LabelInspection.Runtime;
-using DP.LabelInspection.Storage;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DP.LabelInspection.Tests;
 
-public sealed partial class FieldBindingTests
+public sealed partial class RoiWorkflowTests
 {
-    /// <summary>按ROI返回受控实际读数的会话后台：文字ROI返回OCR，码ROI返回指定数量的码。</summary>
-    private sealed class Backend(string text = "A", string barcode = "A", int count = 1, double confidence = .99)
-        : IInspectionBackend,
-            IRoiInspectionSession
+    /// <summary>读取阶段短暂占用并记录同时执行的ROI数及各ROI读取次数；本身不声明可并发。</summary>
+    private class OverlapProbe : IInspectionBackend, IRoiInspectionSession
     {
-        public string Name => "controlled observations";
-        public EInspectionCapabilities Capabilities =>
-            EInspectionCapabilities.Ocr | EInspectionCapabilities.BarcodeDecode;
+        private int _active;
+        internal int MaximumActive;
+        internal readonly ConcurrentDictionary<string, int> Reads = new ConcurrentDictionary<string, int>();
+        public string Name => "overlap probe";
+        public EInspectionCapabilities Capabilities => EInspectionCapabilities.Ocr;
         public int OffsetX => 0;
         public int OffsetY => 0;
 
@@ -39,27 +34,22 @@ public sealed partial class FieldBindingTests
 
         public RegionInspectionResult Read(InspectionRegion region, CancellationToken token)
         {
-            if (region.Kind == ERegionKind.Barcode)
-            {
-                return new RegionInspectionResult(
-                    region.Name,
-                    Array.Empty<InspectionFinding>(),
-                    barcodes: Enumerable
-                        .Range(0, count)
-                        .Select(_ => new BarcodeObservation(barcode, "CODE128", region.Bounds))
-                );
-            }
-
+            int now = Interlocked.Increment(ref _active);
+            int seen;
+            while ((seen = MaximumActive) < now && Interlocked.CompareExchange(ref MaximumActive, now, seen) != seen) { }
+            Thread.Sleep(40);
+            Interlocked.Decrement(ref _active);
+            Reads.AddOrUpdate(region.Name, 1, (_, n) => n + 1);
             return new RegionInspectionResult(
                 region.Name,
                 Array.Empty<InspectionFinding>(),
                 new TextLineRecognition(
                     region.Bounds,
-                    "test",
+                    "probe",
                     320,
                     48,
-                    new[] { new CtcStep(1, (float)confidence) },
-                    new[] { new CtcToken(text, 0, 1, (float)confidence) }
+                    new[] { new CtcStep(1, .99f) },
+                    new[] { new CtcToken(region.Name == "odd" ? "Y" : "X", 0, 1, .99f) }
                 )
             );
         }

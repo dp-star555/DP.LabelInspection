@@ -1,9 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using System.Text.RegularExpressions;
+using System.Runtime.ExceptionServices;
 using System.Threading;
+using System.Threading.Tasks;
 using DP.LabelInspection.Contracts;
 
 namespace DP.LabelInspection.Core;
@@ -13,23 +15,37 @@ internal static class RoiWorkflow
 {
     /// <summary>调度本轮检测，按依赖顺序处理引导源，再按配方顺序返回区域结果。</summary>
     /// <param name = "request">本轮不可变原图、配方、引导数据及参考资源。</param>
-    /// <param name = "backend">提供能力和模型元数据的后台，应与staged对应同一实现。</param>
-    /// <param name = "staged">用于创建本轮算法会话的分阶段后台。</param>
+    /// <param name = "backend">创建本轮算法会话并提供名称与能力的后台。</param>
+    /// <param name = "parallelism">最多并行执行的ROI数；会话实现 <see cref = "IConcurrentRoiSession"/> 时才生效。</param>
     /// <param name = "token">协作式取消标记；取消传播到调用方，不转换成局部缺陷。</param>
     /// <returns>包含全部配置ROI结果和明确执行状态的报告；无有效项目不能放行。</returns>
     internal static InspectionReport Run(
         InspectionRequest request,
         IInspectionBackend backend,
-        IRoiWorkflowBackend staged,
+        int parallelism,
         CancellationToken token
     )
     {
         var watch = Stopwatch.StartNew();
         var configured = request.Recipe.Regions.Where(r => r.Kind != ERegionKind.Ignore).ToArray();
-        using var session = staged.OpenSession(request);
-        var results = new Dictionary<string, RegionInspectionResult>(StringComparer.Ordinal);
-        var active = new HashSet<string>(StringComparer.Ordinal);
+        using var session = backend.OpenSession(request);
+        var results = new ConcurrentDictionary<string, RegionInspectionResult>(StringComparer.Ordinal);
+        var active = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
         bool measuredAlignment = false;
+        if (parallelism > 1 && session is IConcurrentRoiSession)
+        {
+            // 不从其他ROI取引导值的ROI互不依赖，先并行执行；其余ROI随后按配方顺序执行并复用已缓存的来源结果。
+            var independent = configured
+                .Where(r =>
+                    !request.Recipe.Bindings.Any(b => b.Target == r.Name && b.Source == EBindingSource.Region)
+                )
+                .ToArray();
+            if (independent.Length > 1)
+            {
+                RunParallel(independent, parallelism, roi => Process(roi), token);
+            }
+        }
+
         foreach (var roi in configured)
         {
             token.ThrowIfCancellationRequested();
@@ -133,7 +149,7 @@ internal static class RoiWorkflow
                 findings.Add(new InspectionFinding(code, message, EInspectionVerdict.Ng, region.Bounds));
             }
 
-            if (!active.Add(config.Name))
+            if (!active.TryAdd(config.Name, 0))
             {
                 Fail("binding_cycle", "ROI引导值依赖循环，不能取得独立先行读数。");
                 pre = ERoiStageState.Failed;
@@ -174,7 +190,7 @@ internal static class RoiWorkflow
 
                 foreach (var binding in bindings.Where(b => b.Source == EBindingSource.TaskData))
                 {
-                    if (!TaskValue(binding.Key, out _, out var reason))
+                    if (!ContentVerification.TryGetTaskValue(request, binding.Key, DateTimeOffset.UtcNow, out _, out var reason))
                     {
                         Fail("binding_unavailable", reason);
                     }
@@ -207,7 +223,7 @@ internal static class RoiWorkflow
                 {
                     if (binding.Source == EBindingSource.TaskData)
                     {
-                        TaskValue(binding.Key, out var value, out _);
+                        ContentVerification.TryGetTaskValue(request, binding.Key, DateTimeOffset.UtcNow, out var value, out _);
                         guides.Add(value!);
                         continue;
                     }
@@ -229,7 +245,7 @@ internal static class RoiWorkflow
                     if (
                         !source.Tasks.ReadData
                         || sourceResult.Execution?.Data != ERoiStageState.Passed
-                        || !TryValue(sourceResult, out var guide)
+                        || !ContentVerification.TryGetValue(sourceResult, out var guide)
                     )
                     {
                         Fail("binding_unavailable", "来源ROI未取得可靠实际数据：" + binding.Key);
@@ -259,7 +275,7 @@ internal static class RoiWorkflow
                     evidence = session.Read(region, token);
                     EnsureName(evidence, config.Name);
                     findings.AddRange(evidence.Findings.Select(NgUnlessInfo));
-                    bool good = TryValue(evidence, out var value);
+                    bool good = ContentVerification.TryGetValue(evidence, out var value);
                     if (config.Kind == ERegionKind.Text)
                     {
                         good &=
@@ -270,7 +286,7 @@ internal static class RoiWorkflow
                     if (
                         config.Kind == ERegionKind.Barcode
                         && evidence.Barcodes.Count == 1
-                        && !Matches(evidence.Barcodes[0].Format, config.Field.BarcodeType)
+                        && !ContentVerification.BarcodeKindMatches(evidence.Barcodes[0].Format, config.Field.BarcodeType)
                     )
                     {
                         good = false;
@@ -291,25 +307,16 @@ internal static class RoiWorkflow
                     if (data)
                     {
                         phase = "comparison";
-                        Rules(value!, config.Field, Fail);
+                        findings.AddRange(ContentVerification.CheckRules(value!, config.Field, region.Bounds));
                         foreach (var binding in bindings.Where(b => b.Source == EBindingSource.TaskData))
                         {
-                            if (!TaskValue(binding.Key, out _, out var reason))
+                            if (!ContentVerification.TryGetTaskValue(request, binding.Key, DateTimeOffset.UtcNow, out _, out var reason))
                             {
                                 Fail("binding_unavailable", reason);
                             }
                         }
 
-                        foreach (var guide in guides)
-                        {
-                            if (!string.Equals(value, guide, StringComparison.Ordinal))
-                            {
-                                Fail(
-                                    "binding_mismatch",
-                                    $"实际=[{value}]，引导值=[{guide}]；未执行后续质量检查。"
-                                );
-                            }
-                        }
+                        findings.AddRange(ContentVerification.CompareGuides(value!, guides, region.Bounds));
 
                         if (findings.Any(f => f.Verdict == EInspectionVerdict.Ng))
                         {
@@ -458,44 +465,37 @@ internal static class RoiWorkflow
             }
             finally
             {
-                active.Remove(config.Name);
+                active.TryRemove(config.Name, out _);
             }
         }
+    }
 
-        bool TaskValue(string key, out string? value, out string reason)
+    /// <summary>并行执行各ROI；ROI内的算法异常已转为该ROI的发现，这里只可能传出取消或不可恢复的异常，原样抛出。</summary>
+    private static void RunParallel(
+        IReadOnlyList<InspectionRegion> regions,
+        int parallelism,
+        Action<InspectionRegion> process,
+        CancellationToken token
+    )
+    {
+        try
         {
-            value = null;
-            var data = request.TaskData;
-            var now = DateTimeOffset.UtcNow;
-            if (data == null)
+            Parallel.ForEach(
+                regions,
+                new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
+                process
+            );
+        }
+        catch (AggregateException error)
+        {
+            var inner = error.Flatten().InnerExceptions;
+            if (token.IsCancellationRequested && inner.All(e => e is OperationCanceledException))
             {
-                reason = "未提供本周期任务引导数据。";
-                return false;
+                throw new OperationCanceledException(token);
             }
 
-            if (
-                string.IsNullOrWhiteSpace(request.CycleId)
-                || !string.Equals(request.CycleId, data.CycleId, StringComparison.Ordinal)
-            )
-            {
-                reason = "图像与引导数据的周期不一致。";
-                return false;
-            }
-
-            if (now < data.CapturedAt || now > data.ValidUntil)
-            {
-                reason = "引导数据尚未生效或已经过期。";
-                return false;
-            }
-
-            if (!data.Values.TryGetValue(key, out value))
-            {
-                reason = "缺少任务引导字段：" + key;
-                return false;
-            }
-
-            reason = "";
-            return true;
+            ExceptionDispatchInfo.Capture(inner[0]).Throw();
+            throw;
         }
     }
 
@@ -518,80 +518,5 @@ internal static class RoiWorkflow
                 f.AreaPixels
             ).WithExecutionBlocker(f.IsExecutionBlocker)
             : f;
-    }
-
-    private static bool TryValue(RegionInspectionResult result, out string? value)
-    {
-        value = result.Recognition?.Text ?? (result.Barcodes.Count == 1 ? result.Barcodes[0].Text : null);
-        return !string.IsNullOrEmpty(value);
-    }
-
-    private static bool Matches(string format, EBarcodeKind kind)
-    {
-        return kind == EBarcodeKind.Auto
-            || (
-                kind == EBarcodeKind.QrCode
-                    ? format == "QR_CODE"
-                    : new[]
-                    {
-                        "CODE_128",
-                        "CODE_39",
-                        "CODE_93",
-                        "EAN_13",
-                        "EAN_8",
-                        "UPC_A",
-                        "UPC_E",
-                        "ITF",
-                        "CODABAR",
-                        "MSI",
-                        "PLESSEY",
-                        "RSS_14",
-                        "RSS_EXPANDED",
-                    }.Contains(format)
-            );
-    }
-
-    private static void Rules(string text, FieldSettings field, Action<string, string> fail)
-    {
-        if (field.Expected != null && !string.Equals(text, field.Expected, StringComparison.Ordinal))
-        {
-            fail("content_mismatch", $"实际=[{text}]，引导值=[{field.Expected}]；原始读数未修改。");
-            if (text.Length == field.Expected.Length)
-            {
-                for (int i = 0; i < text.Length; i++)
-                {
-                    if (text[i] != field.Expected[i])
-                    {
-                        fail(
-                            "content_character_mismatch",
-                            $"文本偏移{i}：实际=[{text[i]}]，引导=[{field.Expected[i]}]。这是原始字符串位置，不是物理字符缺陷框。"
-                        );
-                    }
-                }
-            }
-        }
-
-        if (text.Length < field.MinimumLength || text.Length > field.MaximumLength)
-        {
-            fail("length_mismatch", "实际数据长度不符合配置。");
-        }
-
-        if (field.AllowedCharacters != null && text.Any(c => !field.AllowedCharacters.Contains(c)))
-        {
-            fail("charset_mismatch", "实际数据包含不允许字符。");
-        }
-
-        if (
-            field.Pattern != null
-            && !Regex.IsMatch(
-                text,
-                "\\A(?:" + field.Pattern + ")\\z",
-                RegexOptions.CultureInvariant,
-                TimeSpan.FromMilliseconds(100)
-            )
-        )
-        {
-            fail("pattern_mismatch", "实际数据不符合整段格式。");
-        }
     }
 }

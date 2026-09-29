@@ -24,9 +24,9 @@
 - 标签源入口支持Gray8/Bgr24，边长≤12000、总像素≤1600万；不静默降位深或缩放。需要转换时由外层显式处理。
 - 配方绑定固定宽高，最多128个具名区域、最多256个字段绑定。
 - 当前单字库面向ASCII字母/数字，每字符每类别一个参考，字块4～512像素；这与OCR模型自身支持的字符集是不同限制。
-- 标签业务ROI仍是`PixelRect`。不要从通用Region/旋转多边形取外接矩形，冒充原范围已经支持。
+- 标签业务ROI仍是`PixelRect`（现为DP.Vision `PixelBounds`的全局别名，见`Directory.Build.props`；JSON仍为`[x,y,w,h]`）。不要从通用Region/旋转多边形取外接矩形，冒充原范围已经支持。
 - `RoiInspectionTasks.ReadData/CheckQuality`是正式项目选择；不能因为旧Enabled开关或缺少算法而悄悄撤销已选任务。
-- 内置后端进入Core分阶段流程；第三方仅实现旧`IInspectionBackend`时仍可能走兼容路径，不能宣称所有后端语义完全相同。
+- 所有后端（内置及第三方）都经Core逐ROI分阶段流程；`IInspectionBackend`要求实现逐ROI会话，旧整图`Analyze`兼容路径已移除。
 
 ## 2. 无界面SDK入口：已有
 
@@ -36,7 +36,7 @@
 | `InspectionRequest` | Actual、Recipe、Reference、CycleId、TaskData | Actual/Reference是标签自己的不可变图像快照，不是DP.Vision.ImageFrame |
 | `IInspectionEngine.InspectAsync(InspectionRequest, token)` | 正式无UI执行入口 | 不调用工作台；依赖引擎由宿主装配 |
 | `InspectionSourceExtensions.InspectAsync(engine, IImageSource, recipe, reference, cycleId, taskData, token)` | 更适合节点的统一图像源入口 | 返回任务前保留输入源，内部复制为标签快照；任务结束释放内部租约 |
-| `InspectionEngine(backend, ownsBackend=false)` | 请求校验、同引擎串行执行和Core判定 | 引擎可共享，但同实例并不并行；Dispose可能等待执行结束 |
+| `InspectionEngine(backend, ownsBackend=false)` | 请求校验、同引擎串行执行和Core判定 | 引擎可共享，但同实例的多个请求不并行（单次检测内可设 `MaximumParallelRois` 并行互不依赖的ROI）；Dispose可能等待执行结束 |
 | `OpenCvInspectionBackend` / `WithQualityAlgorithms` | 装配识别器、读码、字库、候选及质量策略 | 默认不拥有注入识别器/检测器，只有明确owns参数才转移释放责任 |
 | `InspectionReport` | Verdict、Analysis、Findings、EvidenceGroups、耗时和后端名 | 没有一个已经定义好的全局“检测完全执行”布尔字段 |
 

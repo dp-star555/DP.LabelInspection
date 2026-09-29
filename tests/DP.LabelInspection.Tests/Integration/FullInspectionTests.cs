@@ -108,7 +108,7 @@ public sealed partial class FullInspectionTests
         );
     }
 
-    /// <summary>明确重复的等格字符复用同一参考，不受字典顺序影响。</summary>
+    /// <summary>明确重复的等格字符复用同一参考，不受字典顺序影响；同一后台内固定版本字库只从存储载入一次。</summary>
     [TestMethod]
     public void EqualCellsReusePinnedCharacterAndDetectMissingInk()
     {
@@ -141,7 +141,8 @@ public sealed partial class FullInspectionTests
             new PixelRect(0, 0, 90, 40),
             field: new FieldSettings(id, revision, "AAA", equalCells: true)
         );
-        using var backend = new OpenCvInspectionBackend(libraries: temp.Store);
+        var libraries = new CountingGlyphLibraries(temp.Store);
+        using var backend = new OpenCvInspectionBackend(libraries: libraries);
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
             new InspectionRequest(
@@ -170,6 +171,27 @@ public sealed partial class FullInspectionTests
         Assert.AreEqual(EInspectionVerdict.Ok, summary.Verdict);
         StringAssert.Contains(summary.Message, "字符假设=[AAA]，来源：引导值（等宽单元）");
         StringAssert.Contains(summary.Message, "3字中1字未通过");
+
+        var again = engine.Inspect(
+            new InspectionRequest(
+                frame,
+                new InspectionRecipe(
+                    "cells",
+                    90,
+                    40,
+                    EInspectionMode.Free,
+                    EAlignmentMode.AssumeAligned,
+                    new[] { region },
+                    new InspectionOptions(minimumContrast: 0, minimumSharpness: 0)
+                )
+            )
+        );
+        Assert.AreEqual(EInspectionVerdict.Ng, again.Verdict);
+        CollectionAssert.AreEqual(
+            findings.Select(f => f.Message).ToArray(),
+            again.Analysis.Regions[0].Findings.Select(f => f.Message).ToArray()
+        );
+        Assert.AreEqual(1, libraries.Loads);
     }
 
     /// <summary>真实ECC仅从固定内容估计有界平移，并比较实际原图坐标像素。</summary>
@@ -207,6 +229,69 @@ public sealed partial class FullInspectionTests
         Assert.AreEqual(3, result.Analysis.OffsetX);
         Assert.AreEqual(2, result.Analysis.OffsetY);
         Assert.AreEqual(EInspectionVerdict.Ok, result.Verdict);
+    }
+
+    /// <summary>真实后台并行执行多个ROI（共享一次ECC配准）时，报告与串行逐字节一致。</summary>
+    [TestMethod]
+    public void ParallelRoisMatchSerialOnRealBackend()
+    {
+        using var reference = new Mat(120, 240, MatType.CV_8UC1, Scalar.All(255));
+        Cv2.PutText(reference, "DP123", new Point(22, 52), HersheyFonts.HersheySimplex, 1, Scalar.All(0), 2);
+        using var matrix = new Mat(2, 3, MatType.CV_32F, Scalar.All(0));
+        matrix.Set(0, 0, 1f);
+        matrix.Set(1, 1, 1f);
+        matrix.Set(0, 2, 3f);
+        matrix.Set(1, 2, 2f);
+        using var actual = new Mat();
+        Cv2.WarpAffine(
+            reference,
+            actual,
+            matrix,
+            new Size(240, 120),
+            InterpolationFlags.Nearest,
+            BorderTypes.Constant,
+            Scalar.All(255)
+        );
+        Cv2.Circle(actual, new Point(200, 95), 4, Scalar.All(0), -1);
+        var regions = new[]
+        {
+            new InspectionRegion("fixed", ERegionKind.Fixed, new PixelRect(10, 10, 150, 60)),
+            new InspectionRegion("blank-1", ERegionKind.Blank, new PixelRect(170, 10, 50, 30)),
+            new InspectionRegion("blank-2", ERegionKind.Blank, new PixelRect(170, 45, 50, 30)),
+            new InspectionRegion("blank-3", ERegionKind.Blank, new PixelRect(170, 80, 50, 30)),
+            new InspectionRegion("blank-4", ERegionKind.Blank, new PixelRect(10, 80, 150, 30)),
+        };
+        var recipe = new InspectionRecipe(
+            "parallel",
+            240,
+            120,
+            EInspectionMode.Template,
+            EAlignmentMode.Translation,
+            regions
+        );
+        string Run(int parallelism)
+        {
+            using var backend = new OpenCvInspectionBackend();
+            using var engine = new InspectionEngine(backend) { MaximumParallelRois = parallelism };
+            var report = engine.Inspect(new InspectionRequest(Frame(actual), recipe, Frame(reference)));
+            Assert.AreEqual(3, report.Analysis.OffsetX);
+            Assert.AreEqual(2, report.Analysis.OffsetY);
+            return report.Verdict
+                + "|"
+                + string.Join(
+                    "|",
+                    report.Analysis.Regions.SelectMany(r =>
+                        r.Findings.Select(f => r.RegionName + ":" + f.Code + ":" + f.Verdict + ":" + f.Bounds + ":" + f.Message)
+                    )
+                );
+        }
+
+        string serial = Run(1);
+        StringAssert.Contains(serial, "blank-3:blank_spot");
+        for (int i = 0; i < 5; i++)
+        {
+            Assert.AreEqual(serial, Run(4));
+        }
     }
 
     /// <summary>真实一维码及QR解码、预期不符、缺少解码器与印刷评级保持区分。</summary>

@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using DP.LabelInspection.Contracts;
+using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
 using DP.Vision;
 using DP.Vision.Algorithms;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using BarcodeObservation = DP.LabelInspection.Contracts.BarcodeObservation;
-using BarcodePrintOptions = DP.LabelInspection.Contracts.BarcodePrintOptions;
 using ImageFrame = DP.LabelInspection.Contracts.ImageFrame;
 
 namespace DP.LabelInspection.Tests;
@@ -43,7 +43,8 @@ public sealed partial class AlgorithmIsolationTests
                 new InspectionRegion("blank", ERegionKind.Blank, new PixelRect(16, 0, 16, 16)),
             }
         );
-        var analysis = backend.Analyze(new InspectionRequest(image, recipe, image), CancellationToken.None);
+        using var engine = new InspectionEngine(backend);
+        var analysis = engine.Inspect(new InspectionRequest(image, recipe, image)).Analysis;
         Assert.AreEqual(1, algorithm.FixedCalls);
         Assert.AreEqual(1, algorithm.BlankCalls);
         Assert.AreEqual(2, analysis.Regions.Count);
@@ -54,7 +55,7 @@ public sealed partial class AlgorithmIsolationTests
 
     /// <summary>小数坐标测量不能在既有整数报告中静默改变坐标。</summary>
     [TestMethod]
-    public void LegacyAdapterRejectsNonintegralMeasurementBounds()
+    public void AdapterRejectsNonintegralMeasurementBounds()
     {
         var algorithm = new InkProbe { Fractional = true };
         using var backend = OpenCvInspectionBackend.WithQualityAlgorithms(
@@ -69,9 +70,8 @@ public sealed partial class AlgorithmIsolationTests
             EAlignmentMode.AssumeAligned,
             new[] { new InspectionRegion("blank", ERegionKind.Blank, new PixelRect(0, 0, 16, 16)) }
         );
-        var result = backend
-            .Analyze(new InspectionRequest(image, recipe), CancellationToken.None)
-            .Regions.Single();
+        using var engine = new InspectionEngine(backend);
+        var result = engine.Inspect(new InspectionRequest(image, recipe)).Analysis.Regions.Single();
         Assert.AreEqual(ERoiStageState.Failed, result.Execution!.Quality);
         Assert.IsTrue(
             result.Findings.Any(f =>

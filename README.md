@@ -124,7 +124,7 @@ var jobId = store.SaveReport(request, report, codec.Annotate(snapshot, report));
 store.ExportReport(jobId, newZipPath);
 ```
 
-需引用上述各项目对应命名空间。宿主可将同一个`IInspectionEngine`注入WinForms/WPF，也可只用SDK。引擎对自身后端串行执行，界面不拥有注入引擎。关闭前先取消并异步等待，再由宿主释放引擎与模型；不要在UI线程用`.Wait()`。
+需引用上述各项目对应命名空间。宿主可将同一个`IInspectionEngine`注入WinForms/WPF，也可只用SDK。引擎对自身后端串行执行（多个检测请求依次执行；单次检测内互不依赖的ROI可按 `InspectionEngine.MaximumParallelRois` 并行，默认1，需会话实现 `IConcurrentRoiSession`，`LabelInspectionHost` 创建的引擎默认启用），界面不拥有注入引擎。关闭前先取消并异步等待，再由宿主释放引擎与模型；不要在UI线程用`.Wait()`。
 
 标签入口接受统一图像源，内部业务快照仍限制为Gray8/Bgr24、≤12000边长、≤1600万像素；其他布局显式拒绝。矩形为原图坐标半开区间。字符比较消费拥有的Patch，**不能重新裁相交外接框**。取消不能硬中断正在执行的原生算子。
 

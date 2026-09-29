@@ -16,8 +16,8 @@ internal sealed class AnomalyModelCache
     private const int ModelCapacity = 4096;
 
     private readonly object _gate = new object();
-    private readonly LinkedList<(string Id, int Revision, AnomalyLibrarySnapshot Library)> _libraries =
-        new LinkedList<(string, int, AnomalyLibrarySnapshot)>();
+    private readonly PinnedRevisionCache<AnomalyLibrarySnapshot> _libraries =
+        new PinnedRevisionCache<AnomalyLibrarySnapshot>(LibraryCapacity);
     private readonly Dictionary<string, PatchAnomalyModel> _models = new Dictionary<
         string,
         PatchAnomalyModel
@@ -26,33 +26,7 @@ internal sealed class AnomalyModelCache
     /// <summary>取库的某个版本；未缓存时由<paramref name = "repository"/>载入（异常原样抛出，不缓存失败）。</summary>
     internal AnomalyLibrarySnapshot Library(IAnomalyLibraryRepository repository, string id, int revision)
     {
-        lock (_gate)
-        {
-            for (var node = _libraries.First; node != null; node = node.Next)
-            {
-                if (
-                    node.Value.Revision == revision
-                    && string.Equals(node.Value.Id, id, StringComparison.Ordinal)
-                )
-                {
-                    _libraries.Remove(node);
-                    _libraries.AddFirst(node);
-                    return node.Value.Library;
-                }
-            }
-        }
-
-        var library = repository.LoadAnomalyLibrary(id, revision);
-        lock (_gate)
-        {
-            _libraries.AddFirst((id, revision, library));
-            while (_libraries.Count > LibraryCapacity)
-            {
-                _libraries.RemoveLast();
-            }
-        }
-
-        return library;
+        return _libraries.Get(id, revision, () => repository.LoadAnomalyLibrary(id, revision));
     }
 
     /// <summary>解析条目中的模型（同一模型字节只解析一次）。</summary>

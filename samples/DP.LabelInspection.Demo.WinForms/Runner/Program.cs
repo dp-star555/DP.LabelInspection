@@ -60,7 +60,6 @@ internal static class Program
 
         bool smoke = args.Length == 2 && (args[0] == "--smoke" || args[0] == "--smoke-auto");
         string? assets = FindAssets();
-        var codec = new OpenCvImageCodec();
         string root =
             Environment.GetEnvironmentVariable("DP_LABEL_DATA")
             ?? (
@@ -71,15 +70,23 @@ internal static class Program
                         "DP.LabelInspection"
                     )
             );
-        var store = new InspectionStore(root, codec);
+        var options = new LabelInspectionHostOptions(root)
+        {
+            // 方法B（局部块异常检测）：默认手工特征；设置DP_LABEL_ANOMALY_BACKBONE为ONNX骨干网络路径时改用CNN特征训练，
+            // 两种特征的已有模型都可检测。
+            AnomalyBackbone = Environment.GetEnvironmentVariable("DP_LABEL_ANOMALY_BACKBONE"),
+        };
         if (assets != null)
         {
             foreach (string id in new[] { "production-regular", "production-narrow" })
             {
-                store.InstallSeed(File.ReadAllText(Path.Combine(assets, "libraries", id + ".json")));
+                options.SeedLibraryFiles.Add(Path.Combine(assets, "libraries", id + ".json"));
             }
         }
 
+        using var host = LabelInspectionHost.Create(options);
+        var codec = host.Codec;
+        var store = host.Store;
         using var form = new Form
         {
             Text = "DP.LabelInspection · 标签检测工作台 · 实验阈值/非工业认证",
@@ -89,42 +96,9 @@ internal static class Program
         };
         var control = new LabelInspectionControl { Dock = DockStyle.Fill };
         control.AttachLibraryManager(store);
-        // 方法B（局部块异常检测）：默认手工特征；设置DP_LABEL_ANOMALY_BACKBONE为ONNX骨干网络路径时改用CNN特征训练，
-        // 两种特征的已有模型都可检测。
-        string? backbone = Environment.GetEnvironmentVariable("DP_LABEL_ANOMALY_BACKBONE");
-        using var cnn = string.IsNullOrEmpty(backbone)
-            ? null
-            : new DP.Vision.OpenCv.OpenCvCnnPatchAnomalyDetector(backbone!);
-        var anomalyDetectors = new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>(
-            StringComparer.Ordinal
-        );
-        if (cnn != null)
-        {
-            anomalyDetectors[cnn.FeatureSource] = cnn;
-        }
-
-        control.AttachAnomalyLibraryManager(
-            store.AnomalyLibraries,
-            cnn == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(cnn),
-            new DP.Vision.OpenCv.OpenCvTemplateLocator()
-        );
-        control.AttachAnomalyTrainingProjects(
-            (session, path) => AnomalyTrainingProject.Save(session, path, codec),
-            (path, regions) =>
-            {
-                var session = AnomalyTrainingProject.Load(path, codec, regions, out var excluded);
-                return (session, excluded);
-            }
-        );
-        InspectionEngine engine = new InspectionEngine(
-            new OpenCvInspectionBackend(
-                libraries: store,
-                barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
-                anomalyModels: store.AnomalyLibraries,
-                anomalyDetectors: anomalyDetectors
-            ),
-            true
-        );
+        control.AttachAnomalyLibraryManager(store.AnomalyLibraries, host.AnomalyTrainer, host.TemplateLocator);
+        control.AttachAnomalyTrainingProjects(host.SaveTrainingProject, host.LoadTrainingProject);
+        InspectionEngine engine = host.CreateEngine();
         control.AttachEngine(engine);
         SetSample(control);
         var modelStatus = new Label
@@ -137,19 +111,7 @@ internal static class Program
         void LoadModel(string path)
         {
             using var input = control.CreateRequest();
-            var recognizer = new DP.Vision.Onnx.OnnxTextLineRecognizer(
-                path, new DP.Vision.OpenCv.OpenCvTextLinePreprocessor());
-            var replacement = new InspectionEngine(
-                new OpenCvInspectionBackend(
-                    ownsRecognizer: true,
-                    libraries: store,
-                    anomalyModels: store.AnomalyLibraries,
-                    anomalyDetectors: anomalyDetectors,
-                    barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
-                    recognizer: recognizer
-                ),
-                true
-            );
+            var replacement = host.CreateEngine(path);
             try
             {
                 control.AttachEngine(replacement);
