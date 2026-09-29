@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
@@ -13,7 +14,7 @@ public sealed class VisionValidationTests
 {
     /// <summary>尺寸、整图参考和ROI范围检查只需读取Vision元数据。</summary>
     [TestMethod]
-    public void LegacyBackendValidationDoesNotCopyVisionPixels()
+    public void ValidationDoesNotCopyVisionPixels()
     {
         using var actual = new Source(16, 16);
         using var reference = new Source(16, 16);
@@ -38,18 +39,41 @@ public sealed class VisionValidationTests
         new[] { new InspectionRegion("blank", ERegionKind.Blank, new PixelRect(1, 1, 4, 4)) }
     );
 
-    private sealed class Backend : IInspectionBackend
+    /// <summary>只读元数据的后台：各阶段不访问像素，记录会话次数。</summary>
+    private sealed class Backend : IInspectionBackend, IRoiInspectionSession
     {
         public int Calls { get; private set; }
         public string Name => "metadata-only";
         public EInspectionCapabilities Capabilities => EInspectionCapabilities.None;
-        public BackendAnalysis Analyze(InspectionRequest request, CancellationToken token)
+        public int OffsetX => 0;
+        public int OffsetY => 0;
+
+        public IRoiInspectionSession OpenSession(InspectionRequest request)
         {
             Calls++;
-            return new BackendAnalysis(0, 0, new[] {
-                new RegionInspectionResult("blank", Array.Empty<InspectionFinding>())
-            });
+            return this;
         }
+
+        public bool QualityNeedsReading(InspectionRegion region) => false;
+
+        public IReadOnlyList<InspectionFinding> Validate(
+            InspectionRegion region,
+            bool readRequired,
+            bool qualityRequired,
+            CancellationToken token
+        ) => Array.Empty<InspectionFinding>();
+
+        public InspectionRegion Locate(InspectionRegion region, CancellationToken token) => region;
+
+        public RegionInspectionResult Read(InspectionRegion region, CancellationToken token) =>
+            new RegionInspectionResult(region.Name, Array.Empty<InspectionFinding>());
+
+        public RoiQualityMeasurement InspectQuality(
+            InspectionRegion region,
+            RegionInspectionResult reading,
+            CancellationToken token
+        ) => new RoiQualityMeasurement(new RegionInspectionResult(region.Name, Array.Empty<InspectionFinding>()), true);
+
         public void Dispose() { }
     }
 

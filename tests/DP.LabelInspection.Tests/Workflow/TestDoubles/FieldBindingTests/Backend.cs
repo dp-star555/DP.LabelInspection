@@ -13,65 +13,62 @@ namespace DP.LabelInspection.Tests;
 
 public sealed partial class FieldBindingTests
 {
-    private sealed class Backend(
-        string text = "A",
-        string barcode = "A",
-        int count = 1,
-        double confidence = .99,
-        double contrast = 255
-    ) : IInspectionBackend
+    /// <summary>按ROI返回受控实际读数的会话后台：文字ROI返回OCR，码ROI返回指定数量的码。</summary>
+    private sealed class Backend(string text = "A", string barcode = "A", int count = 1, double confidence = .99)
+        : IInspectionBackend,
+            IRoiInspectionSession
     {
         public string Name => "controlled observations";
         public EInspectionCapabilities Capabilities =>
-            EInspectionCapabilities.Quality
-            | EInspectionCapabilities.Ocr
-            | EInspectionCapabilities.CharacterSegmentation
-            | EInspectionCapabilities.GlyphComparison
-            | EInspectionCapabilities.BarcodeDecode
-            | EInspectionCapabilities.BarcodeStructure;
+            EInspectionCapabilities.Ocr | EInspectionCapabilities.BarcodeDecode;
+        public int OffsetX => 0;
+        public int OffsetY => 0;
 
-        public BackendAnalysis Analyze(InspectionRequest request, CancellationToken token)
+        public IRoiInspectionSession OpenSession(InspectionRequest request) => this;
+
+        public bool QualityNeedsReading(InspectionRegion region) => false;
+
+        public IReadOnlyList<InspectionFinding> Validate(
+            InspectionRegion region,
+            bool readRequired,
+            bool qualityRequired,
+            CancellationToken token
+        ) => Array.Empty<InspectionFinding>();
+
+        public InspectionRegion Locate(InspectionRegion region, CancellationToken token) => region;
+
+        public RegionInspectionResult Read(InspectionRegion region, CancellationToken token)
         {
-            var rect = request.Recipe.Regions[0].Bounds;
-            var recognition = new TextLineRecognition(
-                rect,
-                "test",
-                320,
-                48,
-                new[] { new CtcStep(1, (float)confidence) },
-                new[] { new CtcToken(text, 0, 1, (float)confidence) }
-            );
-            return new BackendAnalysis(
-                contrast,
-                100,
-                new[]
-                {
-                    new RegionInspectionResult(
-                        "text",
-                        new[]
-                        {
-                            new InspectionFinding(
-                                "ocr_identity_review",
-                                "raw hypothesis",
-                                EInspectionVerdict.Review
-                            ),
-                        },
-                        recognition
-                    ),
-                    new RegionInspectionResult(
-                        "barcode",
-                        Array.Empty<InspectionFinding>(),
-                        barcodes: Enumerable
-                            .Range(0, count)
-                            .Select(_ => new BarcodeObservation(
-                                barcode,
-                                "CODE128",
-                                request.Recipe.Regions[1].Bounds
-                            ))
-                    ),
-                }
+            if (region.Kind == ERegionKind.Barcode)
+            {
+                return new RegionInspectionResult(
+                    region.Name,
+                    Array.Empty<InspectionFinding>(),
+                    barcodes: Enumerable
+                        .Range(0, count)
+                        .Select(_ => new BarcodeObservation(barcode, "CODE128", region.Bounds))
+                );
+            }
+
+            return new RegionInspectionResult(
+                region.Name,
+                Array.Empty<InspectionFinding>(),
+                new TextLineRecognition(
+                    region.Bounds,
+                    "test",
+                    320,
+                    48,
+                    new[] { new CtcStep(1, (float)confidence) },
+                    new[] { new CtcToken(text, 0, 1, (float)confidence) }
+                )
             );
         }
+
+        public RoiQualityMeasurement InspectQuality(
+            InspectionRegion region,
+            RegionInspectionResult reading,
+            CancellationToken token
+        ) => new RoiQualityMeasurement(new RegionInspectionResult(region.Name, Array.Empty<InspectionFinding>()), true);
 
         public void Dispose() { }
     }

@@ -26,7 +26,7 @@
 - 当前单字库面向ASCII字母/数字，每字符每类别一个参考，字块4～512像素；这与OCR模型自身支持的字符集是不同限制。
 - 标签业务ROI仍是`PixelRect`。不要从通用Region/旋转多边形取外接矩形，冒充原范围已经支持。
 - `RoiInspectionTasks.ReadData/CheckQuality`是正式项目选择；不能因为旧Enabled开关或缺少算法而悄悄撤销已选任务。
-- 内置后端进入Core分阶段流程；第三方仅实现旧`IInspectionBackend`时仍可能走兼容路径，不能宣称所有后端语义完全相同。
+- 所有后端（内置及第三方）都经Core逐ROI分阶段流程；`IInspectionBackend`要求实现逐ROI会话，旧整图`Analyze`兼容路径已移除。
 
 ## 2. 无界面SDK入口：已有
 

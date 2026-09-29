@@ -13,7 +13,7 @@ namespace DP.LabelInspection.Tests;
 
 public sealed partial class RoiWorkflowTests
 {
-    private sealed class Backend : IInspectionBackend, IRoiWorkflowBackend, IRoiInspectionSession
+    private sealed class Backend : IInspectionBackend, IRoiInspectionSession
     {
         internal readonly List<string> Calls = new List<string>();
         internal string? Invalid,
@@ -25,11 +25,6 @@ public sealed partial class RoiWorkflowTests
         internal string Value = "A";
         public string Name => "stage spy";
         public EInspectionCapabilities Capabilities => EInspectionCapabilities.None;
-
-        public BackendAnalysis Analyze(InspectionRequest r, CancellationToken t)
-        {
-            throw new InvalidOperationException("Monolithic Analyze must never run.");
-        }
 
         public IRoiInspectionSession OpenSession(InspectionRequest r)
         {

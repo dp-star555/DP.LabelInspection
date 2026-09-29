@@ -13,20 +13,18 @@ internal static class RoiWorkflow
 {
     /// <summary>调度本轮检测，按依赖顺序处理引导源，再按配方顺序返回区域结果。</summary>
     /// <param name = "request">本轮不可变原图、配方、引导数据及参考资源。</param>
-    /// <param name = "backend">提供能力和模型元数据的后台，应与staged对应同一实现。</param>
-    /// <param name = "staged">用于创建本轮算法会话的分阶段后台。</param>
+    /// <param name = "backend">创建本轮算法会话并提供名称与能力的后台。</param>
     /// <param name = "token">协作式取消标记；取消传播到调用方，不转换成局部缺陷。</param>
     /// <returns>包含全部配置ROI结果和明确执行状态的报告；无有效项目不能放行。</returns>
     internal static InspectionReport Run(
         InspectionRequest request,
         IInspectionBackend backend,
-        IRoiWorkflowBackend staged,
         CancellationToken token
     )
     {
         var watch = Stopwatch.StartNew();
         var configured = request.Recipe.Regions.Where(r => r.Kind != ERegionKind.Ignore).ToArray();
-        using var session = staged.OpenSession(request);
+        using var session = backend.OpenSession(request);
         var results = new Dictionary<string, RegionInspectionResult>(StringComparer.Ordinal);
         var active = new HashSet<string>(StringComparer.Ordinal);
         bool measuredAlignment = false;

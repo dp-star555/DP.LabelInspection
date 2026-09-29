@@ -243,26 +243,6 @@ public sealed partial class OpenCvInspectionBackend
             _recognizer == null ? EInspectionCapabilities.None : EInspectionCapabilities.Ocr
         );
 
-    /// <summary>既有分析入口委托到同一分阶段Core，不另建第二套单体流程。</summary>
-    /// <param name = "request">不可变检测请求，交由Core执行相同的分阶段流程。</param>
-    /// <param name = "cancellationToken">协作式取消标记。</param>
-    public BackendAnalysis Analyze(InspectionRequest request, CancellationToken cancellationToken)
-    {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(OpenCvInspectionBackend));
-        }
-
-        if (request == null)
-        {
-            throw new ArgumentNullException(nameof(request));
-        }
-
-        cancellationToken.ThrowIfCancellationRequested();
-        using var engine = new DP.LabelInspection.Core.InspectionEngine(this, ownsBackend: false);
-        return engine.Inspect(request, cancellationToken).Analysis;
-    }
-
     private static PixelRect LegacyBounds(DP.Vision.RectD bounds, PixelRect scope)
     {
         if (

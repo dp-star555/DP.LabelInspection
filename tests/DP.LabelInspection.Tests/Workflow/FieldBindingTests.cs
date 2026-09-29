@@ -15,44 +15,37 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed partial class FieldBindingTests
 {
-    /// <summary>原始精确比较不修正O/0，也不信任有歧义的条码。</summary>
+    /// <summary>原始精确比较不修正O/0或大小写，也不信任没有唯一读数的条码（此时引导来源不可用，当前ROI判NG）。</summary>
     [TestMethod]
-    [DataRow("A", "A", 1, .99, 255.0, "binding_match", EInspectionVerdict.Ok)]
-    [DataRow("O", "0", 1, .99, 255.0, "binding_mismatch", EInspectionVerdict.Ng)]
-    [DataRow("a", "A", 1, .99, 255.0, "binding_mismatch", EInspectionVerdict.Ng)]
-    [DataRow("A", "A", 0, .99, 255.0, "binding_review", EInspectionVerdict.Review)]
-    [DataRow("A", "A", 2, .99, 255.0, "binding_review", EInspectionVerdict.Review)]
-    [DataRow("A", "A", 1, .4, 255.0, "binding_review", EInspectionVerdict.Review)]
-    [DataRow("A", "B", 1, .99, 0.0, "binding_review", EInspectionVerdict.Review)]
-    public void CrossRegion(
-        string text,
-        string barcode,
-        int count,
-        double confidence,
-        double contrast,
-        string code,
-        EInspectionVerdict verdict
-    )
+    [DataRow("A", "A", 1, "binding_match", EInspectionVerdict.Ok)]
+    [DataRow("O", "0", 1, "binding_mismatch", EInspectionVerdict.Ng)]
+    [DataRow("a", "A", 1, "binding_mismatch", EInspectionVerdict.Ng)]
+    [DataRow("A", "A", 0, "binding_unavailable", EInspectionVerdict.Ng)]
+    [DataRow("A", "A", 2, "binding_unavailable", EInspectionVerdict.Ng)]
+    public void CrossRegion(string text, string barcode, int count, string code, EInspectionVerdict verdict)
     {
-        using var backend = new Backend(text, barcode, count, confidence, contrast);
+        using var backend = new Backend(text, barcode, count);
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(Request(new FieldBinding("text", EBindingSource.Region, "barcode")));
         var result = report.Analysis.Regions.Single(r => r.RegionName == "text");
-        Assert.AreEqual(verdict, result.Findings.Single(f => f.Code == code).Verdict);
-        Assert.IsFalse(result.Findings.Any(f => f.Code == "ocr_identity_review"));
-        Assert.AreEqual(text, result.Recognition!.Text);
-        Assert.AreNotEqual(EInspectionVerdict.Ok, report.Verdict);
+        Assert.AreEqual(verdict, result.Findings.First(f => f.Code == code).Verdict);
+        if (code != "binding_unavailable")
+        {
+            Assert.AreEqual(text, result.Recognition!.Text);
+        }
+
+        Assert.AreEqual(verdict == EInspectionVerdict.Ok ? EInspectionVerdict.Ok : EInspectionVerdict.Ng, report.Verdict);
     }
 
-    /// <summary>任务值被复制并绑定采集周期，具有有效期且包含在报告导出中。</summary>
+    /// <summary>任务值被复制并绑定采集周期，具有有效期且包含在报告导出中；缺失、周期不符、未生效或过期时引导来源不可用，当前ROI判NG。</summary>
     [TestMethod]
     [DataRow("ok", "binding_match", EInspectionVerdict.Ok)]
     [DataRow("different", "binding_mismatch", EInspectionVerdict.Ng)]
-    [DataRow("missing", "binding_review", EInspectionVerdict.Review)]
-    [DataRow("cycle", "binding_review", EInspectionVerdict.Review)]
-    [DataRow("expired", "binding_review", EInspectionVerdict.Review)]
-    [DataRow("future", "binding_review", EInspectionVerdict.Review)]
-    [DataRow("none", "binding_review", EInspectionVerdict.Review)]
+    [DataRow("missing", "binding_unavailable", EInspectionVerdict.Ng)]
+    [DataRow("cycle", "binding_unavailable", EInspectionVerdict.Ng)]
+    [DataRow("expired", "binding_unavailable", EInspectionVerdict.Ng)]
+    [DataRow("future", "binding_unavailable", EInspectionVerdict.Ng)]
+    [DataRow("none", "binding_unavailable", EInspectionVerdict.Ng)]
     public void TaskContext(string state, string code, EInspectionVerdict verdict)
     {
         var now = DateTimeOffset.UtcNow;
@@ -82,7 +75,7 @@ public sealed partial class FieldBindingTests
             verdict,
             report
                 .Analysis.Regions.Single(r => r.RegionName == "text")
-                .Findings.Single(f => f.Code == code)
+                .Findings.First(f => f.Code == code)
                 .Verdict
         );
         if (state == "ok")
@@ -124,9 +117,11 @@ public sealed partial class FieldBindingTests
         );
     }
 
-    /// <summary>跨ROI一致不能掩盖与独立任务值不符；历史非分阶段策略的环比较原始观测。</summary>
+    /// <summary>跨ROI一致不能掩盖与独立任务值不符；ROI之间互为引导的循环不能虚构互相认证的读数。</summary>
     [TestMethod]
-    public void MultipleConstraintsAndCyclesRemainIndependent()
+    [DataRow(false)]
+    [DataRow(true)]
+    public void MultipleConstraintsAndCyclesRemainIndependent(bool cycle)
     {
         var now = DateTimeOffset.UtcNow;
         var data = new TaskDataSnapshot(
@@ -140,9 +135,13 @@ public sealed partial class FieldBindingTests
         var bindings = new List<FieldBinding>
         {
             new FieldBinding("text", EBindingSource.Region, "barcode"),
-            new FieldBinding("barcode", EBindingSource.Region, "text"),
             new FieldBinding("text", EBindingSource.TaskData, "Part"),
         };
+        if (cycle)
+        {
+            bindings.Add(new FieldBinding("barcode", EBindingSource.Region, "text"));
+        }
+
         var recipe = new InspectionRecipe(
             "combined",
             80,
@@ -152,17 +151,33 @@ public sealed partial class FieldBindingTests
             initial.Recipe.Regions,
             bindings: bindings
         );
+        int count = bindings.Count;
         bindings.Clear();
-        Assert.AreEqual(3, recipe.Bindings.Count);
+        Assert.AreEqual(count, recipe.Bindings.Count);
         using var backend = new Backend();
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
             new InspectionRequest(initial.Actual, recipe, cycleId: "c", taskData: data)
         );
         var findings = report.Analysis.Regions.SelectMany(r => r.Findings).ToArray();
-        Assert.AreEqual(2, findings.Count(f => f.Code == "binding_match"));
-        Assert.AreEqual(1, findings.Count(f => f.Code == "binding_mismatch"));
         Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
+        if (cycle)
+        {
+            // 互为引导时任一方都没有独立先行读数：两个ROI都报引导来源不可用，不产生互相认证的一致。
+            foreach (var region in report.Analysis.Regions)
+            {
+                Assert.IsTrue(
+                    region.Findings.Any(f => f.Code == "binding_unavailable" && f.Verdict == EInspectionVerdict.Ng),
+                    region.RegionName
+                );
+            }
+            Assert.IsFalse(findings.Any(f => f.Code == "binding_match"));
+        }
+        else
+        {
+            // 文字A与码A一致，但与任务值B不一致：不能因跨ROI一致而放行。
+            Assert.AreEqual(1, findings.Count(f => f.Code == "binding_mismatch"));
+        }
     }
 
     /// <summary>条码ROI可包含其可读文字，两种观测仍须独立比较。</summary>

@@ -89,11 +89,9 @@
 | `AnomalyTrainingSession` | [src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSession.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSession.cs) |
 | `EAnomalyTrainingKind` | [src/DP.LabelInspection.Core/Libraries/Anomaly/EAnomalyTrainingKind.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/EAnomalyTrainingKind.cs) |
 | `InspectionEngine` | [src/DP.LabelInspection.Core/Inspection/InspectionEngine.cs](src/DP.LabelInspection.Core/Inspection/InspectionEngine.cs) |
-| `RequiredAppearancePolicy` | [src/DP.LabelInspection.Core/Inspection/RequiredAppearancePolicy.cs](src/DP.LabelInspection.Core/Inspection/RequiredAppearancePolicy.cs) |
 | `RoiWorkflow` | [src/DP.LabelInspection.Core/Inspection/RoiWorkflow.cs](src/DP.LabelInspection.Core/Inspection/RoiWorkflow.cs) |
 | `GlyphDraftCandidate` | [src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftCandidate.cs](src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftCandidate.cs) |
 | `GlyphDraftSession` | [src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs](src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs) |
-| `FieldBindingEvaluator` | [src/DP.LabelInspection.Core/Rules/FieldBindingEvaluator.cs](src/DP.LabelInspection.Core/Rules/FieldBindingEvaluator.cs) |
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
 | `AnomalyModelCache` | [src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs](src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs) |
 | `PinnedRevisionCache<T>` | [src/DP.LabelInspection.Runtime/Libraries/PinnedRevisionCache.cs](src/DP.LabelInspection.Runtime/Libraries/PinnedRevisionCache.cs) |
@@ -179,7 +177,7 @@
 | `FullInspectionTests.CountingCharacterTasks` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingCharacterTasks.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingCharacterTasks.cs) |
 | `FullInspectionTests.CountingGlyphLibraries` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingGlyphLibraries.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/CountingGlyphLibraries.cs) |
 | `FullInspectionTests.TempStore` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/TempStore.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/FullInspectionTests/TempStore.cs) |
-| `InspectionTests.IncompleteBackend` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/InspectionTests/IncompleteBackend.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/InspectionTests/IncompleteBackend.cs) |
+| `InspectionTests.ContractBackend` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/InspectionTests/ContractBackend.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/InspectionTests/ContractBackend.cs) |
 | `SourceInspectionEngine` | [tests/DP.LabelInspection.Tests/Integration/TestDoubles/SourceInspectionEngine.cs](tests/DP.LabelInspection.Tests/Integration/TestDoubles/SourceInspectionEngine.cs) |
 | `GlyphDraftSessionTests` | [tests/DP.LabelInspection.Tests/Libraries/GlyphDraftSessionTests.cs](tests/DP.LabelInspection.Tests/Libraries/GlyphDraftSessionTests.cs) |
 | `GlyphQuickLibraryTests` | [tests/DP.LabelInspection.Tests/Libraries/GlyphQuickLibraryTests.cs](tests/DP.LabelInspection.Tests/Libraries/GlyphQuickLibraryTests.cs) |

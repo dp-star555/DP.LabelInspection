@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -13,7 +14,7 @@ namespace DP.LabelInspection.Tests;
 
 public sealed partial class GlyphQuickLibraryTests
 {
-    private sealed class GateBackend : IInspectionBackend, IGlyphCandidateBackend
+    private sealed class GateBackend : IInspectionBackend, IGlyphCandidateBackend, IRoiInspectionSession
     {
         private int _active;
         internal bool Overlap;
@@ -31,11 +32,35 @@ public sealed partial class GlyphQuickLibraryTests
             Interlocked.Decrement(ref _active);
         }
 
-        public BackendAnalysis Analyze(InspectionRequest request, CancellationToken cancellationToken)
+        public IRoiInspectionSession OpenSession(InspectionRequest request)
         {
+            // 检测在打开会话时占用执行关卡，与候选提取互斥。
             Work();
-            return new BackendAnalysis(255, 200, Array.Empty<RegionInspectionResult>());
+            return this;
         }
+
+        public int OffsetX => 0;
+        public int OffsetY => 0;
+
+        public bool QualityNeedsReading(InspectionRegion region) => false;
+
+        public IReadOnlyList<InspectionFinding> Validate(
+            InspectionRegion region,
+            bool readRequired,
+            bool qualityRequired,
+            CancellationToken token
+        ) => Array.Empty<InspectionFinding>();
+
+        public InspectionRegion Locate(InspectionRegion region, CancellationToken token) => region;
+
+        public RegionInspectionResult Read(InspectionRegion region, CancellationToken token) =>
+            new RegionInspectionResult(region.Name, Array.Empty<InspectionFinding>());
+
+        public RoiQualityMeasurement InspectQuality(
+            InspectionRegion region,
+            RegionInspectionResult reading,
+            CancellationToken token
+        ) => new RoiQualityMeasurement(new RegionInspectionResult(region.Name, Array.Empty<InspectionFinding>()), true);
 
         public GlyphCandidateExtraction ExtractGlyphCandidates(
             DP.Vision.IImageSource frame,

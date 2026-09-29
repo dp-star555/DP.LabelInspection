@@ -7,13 +7,13 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace DP.LabelInspection.Tests;
 
-/// <summary>要求但未完成的外观检查保守判失败，并保留一个无损ROI父项。</summary>
+/// <summary>要求的外观检查（绑定字库的质量A）未完整执行或只部分比较时保守判失败，并保留一个无损ROI父项。</summary>
 [TestClass]
 public sealed partial class RequiredAppearanceTests
 {
-    private static InspectionReport Run(bool bound, params RegionInspectionResult[] results)
+    private static InspectionReport Run(bool completed, RegionInspectionResult? quality = null)
     {
-        using var backend = new Backend(results);
+        using var backend = new Backend(quality, completed);
         using var engine = new InspectionEngine(backend);
         var image = new ImageFrame(32, 32, EImagePixelFormat.Gray8, new byte[1024]);
         var region = new InspectionRegion(
@@ -21,8 +21,8 @@ public sealed partial class RequiredAppearanceTests
             ERegionKind.Text,
             new PixelRect(2, 2, 24, 24),
             true,
-            bound ? new FieldSettings("font", 2) : new FieldSettings()
-        );
+            new FieldSettings("font", 2)
+        ).WithTasks(new RoiInspectionTasks(true, true));
         return engine.Inspect(
             new InspectionRequest(
                 image,
@@ -38,12 +38,12 @@ public sealed partial class RequiredAppearanceTests
         );
     }
 
-    /// <summary>即使图像质量评估不可用，分割失败仍为NG。</summary>
+    /// <summary>质量策略报告未完整执行（例如无法分割）时ROI为NG，不能降级为待复核或通过。</summary>
     [TestMethod]
     public void RequestedComparisonWithoutCoverageIsNg()
     {
         var report = Run(
-            true,
+            false,
             new RegionInspectionResult(
                 "text",
                 new[]
@@ -58,35 +58,9 @@ public sealed partial class RequiredAppearanceTests
             )
         );
         Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
-        Assert.IsTrue(
-            report
-                .Analysis.Regions.Single()
-                .Findings.Any(f => f.Code == "appearance_incomplete" && f.Verdict == EInspectionVerdict.Ng)
-        );
-    }
-
-    /// <summary>遗漏的已要求ROI不能被误当成可选覆盖。</summary>
-    [TestMethod]
-    public void MissingBackendRoiIsNg()
-    {
-        var report = Run(true);
-        Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
-        Assert.AreEqual(1, report.EvidenceGroups.Count(g => g.RegionName == "text"));
-    }
-
-    /// <summary>普通未绑定OCR不能静默转为要求的字形检查。</summary>
-    [TestMethod]
-    public void UnboundTextDoesNotGainAppearanceFailure()
-    {
-        var report = Run(
-            false,
-            new RegionInspectionResult(
-                "text",
-                new[] { new InspectionFinding("ocr_unavailable", "missing", EInspectionVerdict.Review) }
-            )
-        );
-        Assert.AreEqual(EInspectionVerdict.Review, report.Verdict);
-        Assert.IsFalse(report.Analysis.Regions.Single().Findings.Any(f => f.Code == "appearance_incomplete"));
+        var findings = report.Analysis.Regions.Single().Findings;
+        Assert.IsTrue(findings.Any(f => f.Code == "quality_incomplete" && f.Verdict == EInspectionVerdict.Ng));
+        Assert.AreEqual(EInspectionVerdict.Ng, findings.Single(f => f.Code == "segmentation_review").Verdict);
     }
 
     /// <summary>多个有效比较中即使只缺一个参考，要求的ROI仍失败。</summary>
@@ -118,7 +92,7 @@ public sealed partial class RequiredAppearanceTests
         Assert.AreEqual(0, report.EvidenceGroups.Single(g => g.RegionName == "text").LocalizedCandidateCount);
     }
 
-    /// <summary>仅因质量不确定，不能把已完成覆盖误报为未完成。</summary>
+    /// <summary>完整执行且全部比较通过时不附加未完成失败。</summary>
     [TestMethod]
     public void CompletedComparisonDoesNotGainCompletionNg()
     {
@@ -134,21 +108,25 @@ public sealed partial class RequiredAppearanceTests
                 glyphs: new[] { new GlyphInspection(a, "compared", "hash", comparison) }
             )
         );
-        Assert.IsFalse(report.Analysis.Regions.Single().Findings.Any(f => f.Code == "appearance_incomplete"));
+        Assert.IsFalse(report.Analysis.Regions.Single().Findings.Any(f => f.Code == "quality_incomplete"));
+        Assert.AreNotEqual(EInspectionVerdict.Ng, report.Verdict);
     }
 
-    /// <summary>文字ROI只有一个F父项，原子项均保留各自局部标识。</summary>
+    /// <summary>文字ROI只有一个F父项，原子项按顺序保留各自局部标识。</summary>
     [TestMethod]
     public void RoiFindingsHaveOneLosslessParent()
     {
         var bounds = new PixelRect(2, 2, 24, 24);
         var first = new InspectionFinding("missing_template", "1", EInspectionVerdict.Review, bounds);
         var second = new InspectionFinding("missing_template", "2", EInspectionVerdict.Review, bounds);
-        var report = Run(false, new RegionInspectionResult("text", new[] { first, second }));
+        var report = Run(true, new RegionInspectionResult("text", new[] { first, second }));
         var group = report.EvidenceGroups.Single(g => g.RegionName == "text");
-        Assert.AreEqual(2, group.Children.Count);
-        Assert.AreEqual(first.Message, group.Children[0].Finding.Message);
-        Assert.AreEqual(group.Id + ".2", group.Children[1].Id);
+        var children = group.Children.Where(c => c.Finding.Code == "missing_template").ToArray();
+        Assert.AreEqual(2, children.Length);
+        Assert.AreEqual(first.Message, children[0].Finding.Message);
+        Assert.AreEqual(second.Message, children[1].Finding.Message);
+        Assert.IsTrue(group.Children.Select(c => c.Id).All(id => id.StartsWith(group.Id + ".")));
+        Assert.AreEqual(group.Children.Count, group.Children.Select(c => c.Id).Distinct().Count());
         Assert.IsFalse(group.IsBarcode);
     }
 }
