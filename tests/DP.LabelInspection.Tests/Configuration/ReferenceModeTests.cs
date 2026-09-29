@@ -29,7 +29,7 @@ public sealed class ReferenceModeTests
             EAlignmentMode.AssumeAligned,
             new[] { new InspectionRegion("fixed", ERegionKind.Fixed, new PixelRect(0, 0, 32, 16)) }
         );
-        var report = engine.Inspect(new InspectionRequest(image, recipe, reference));
+        var report = engine.Inspect(TestRequests.FromSnapshot(image, recipe, reference));
         Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
         var message = report.Analysis.Regions.Single().Findings.Single().Message;
         StringAssert.Contains(message, "32×16");
@@ -131,7 +131,7 @@ public sealed class ReferenceModeTests
             EAlignmentMode.AssumeAligned,
             new[] { new InspectionRegion("fixed", ERegionKind.Fixed, new PixelRect(0, 0, 32, 16)) }
         );
-        var report = engine.Inspect(new InspectionRequest(image, recipe));
+        var report = engine.Inspect(TestRequests.FromSnapshot(image, recipe));
         Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
         StringAssert.Contains(report.Analysis.Regions.Single().Findings.Single().Message, "未载入");
     }
@@ -173,7 +173,7 @@ public sealed class ReferenceModeTests
             using var backend = new OpenCvInspectionBackend(libraries: store);
             using var engine = new InspectionEngine(backend);
             var report = engine.Inspect(
-                new InspectionRequest(
+                TestRequests.FromSnapshot(
                     image,
                     new InspectionRecipe(
                         "glyph",

@@ -100,7 +100,7 @@ public sealed class BarcodePrintTests
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "bar",

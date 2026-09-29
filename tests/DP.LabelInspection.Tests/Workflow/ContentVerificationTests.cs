@@ -83,7 +83,7 @@ public sealed class ContentVerificationTests
             state == "expired" ? now.AddMinutes(-1) : now.AddMinutes(5),
             values
         );
-        var request = new InspectionRequest(
+        var request = TestRequests.FromSnapshot(
             new ImageFrame(8, 8, EImagePixelFormat.Gray8, new byte[64]),
             new InspectionRecipe(
                 "r",

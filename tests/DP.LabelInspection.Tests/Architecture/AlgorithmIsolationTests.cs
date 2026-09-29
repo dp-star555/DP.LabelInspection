@@ -44,7 +44,7 @@ public sealed partial class AlgorithmIsolationTests
             }
         );
         using var engine = new InspectionEngine(backend);
-        var analysis = engine.Inspect(new InspectionRequest(image, recipe, image)).Analysis;
+        var analysis = engine.Inspect(TestRequests.FromSnapshot(image, recipe, image)).Analysis;
         Assert.AreEqual(1, algorithm.FixedCalls);
         Assert.AreEqual(1, algorithm.BlankCalls);
         Assert.AreEqual(2, analysis.Regions.Count);
@@ -71,7 +71,7 @@ public sealed partial class AlgorithmIsolationTests
             new[] { new InspectionRegion("blank", ERegionKind.Blank, new PixelRect(0, 0, 16, 16)) }
         );
         using var engine = new InspectionEngine(backend);
-        var result = engine.Inspect(new InspectionRequest(image, recipe)).Analysis.Regions.Single();
+        var result = engine.Inspect(TestRequests.FromSnapshot(image, recipe)).Analysis.Regions.Single();
         Assert.AreEqual(ERoiStageState.Failed, result.Execution!.Quality);
         Assert.IsTrue(
             result.Findings.Any(f =>

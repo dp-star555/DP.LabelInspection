@@ -183,7 +183,7 @@ public sealed partial class GlyphQuickLibraryTests
         using var engine = new InspectionEngine(backend);
         var frame = Line();
         using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(frame);
-        var request = new InspectionRequest(
+        var request = TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(
                 "test",

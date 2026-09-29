@@ -145,7 +145,7 @@ public sealed partial class FullInspectionTests
         using var backend = new OpenCvInspectionBackend(libraries: libraries);
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "cells",
@@ -173,7 +173,7 @@ public sealed partial class FullInspectionTests
         StringAssert.Contains(summary.Message, "3字中1字未通过");
 
         var again = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "cells",
@@ -225,7 +225,7 @@ public sealed partial class FullInspectionTests
         );
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var result = engine.Inspect(new InspectionRequest(Frame(actual), recipe, Frame(reference)));
+        var result = engine.Inspect(TestRequests.FromSnapshot(Frame(actual), recipe, Frame(reference)));
         Assert.AreEqual(3, result.Analysis.OffsetX);
         Assert.AreEqual(2, result.Analysis.OffsetY);
         Assert.AreEqual(EInspectionVerdict.Ok, result.Verdict);
@@ -273,7 +273,7 @@ public sealed partial class FullInspectionTests
         {
             using var backend = new OpenCvInspectionBackend();
             using var engine = new InspectionEngine(backend) { MaximumParallelRois = parallelism };
-            var report = engine.Inspect(new InspectionRequest(Frame(actual), recipe, Frame(reference)));
+            var report = engine.Inspect(TestRequests.FromSnapshot(Frame(actual), recipe, Frame(reference)));
             Assert.AreEqual(3, report.Analysis.OffsetX);
             Assert.AreEqual(2, report.Analysis.OffsetY);
             return report.Verdict
@@ -339,7 +339,7 @@ public sealed partial class FullInspectionTests
                 ),
             }
         );
-        var report = engine.Inspect(new InspectionRequest(frame, recipe));
+        var report = engine.Inspect(TestRequests.FromSnapshot(frame, recipe));
         Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
         Assert.AreEqual(1, report.Analysis.Regions[0].Barcodes.Count);
         Assert.IsTrue(report.Analysis.Regions[0].Findings.Any(f => f.Code == "content_mismatch"));
@@ -410,7 +410,7 @@ public sealed partial class FullInspectionTests
         var frame = Glyph();
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var request = new InspectionRequest(
+        var request = TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(
                 "blank",
@@ -444,7 +444,7 @@ public sealed partial class FullInspectionTests
         var frame = Frame(raw);
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var request = new InspectionRequest(
+        var request = TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(
                 "samples",
@@ -542,7 +542,7 @@ public sealed partial class FullInspectionTests
         store.PutGlyph(id, 2, "a", Glyph());
         Assert.AreEqual(2, store.Load(id, 3).Glyphs.Count);
         var frame = Glyph();
-        var request = new InspectionRequest(
+        var request = TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(
                 "pinned",
@@ -629,7 +629,7 @@ public sealed partial class FullInspectionTests
         var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
         using var engine = new InspectionEngine(backend);
-        var request = new InspectionRequest(
+        var request = TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(
                 "stripe",
@@ -686,7 +686,7 @@ public sealed partial class FullInspectionTests
         );
         using var engine = new InspectionEngine(backend);
         engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "tasks",

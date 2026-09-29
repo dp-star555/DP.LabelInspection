@@ -31,7 +31,7 @@ public sealed partial class BarcodeReadabilityTests
             field: new FieldSettings(barcodeType: EBarcodeKind.QrCode)
         );
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "qr",
@@ -148,7 +148,7 @@ public sealed partial class BarcodeReadabilityTests
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 Blank(),
                 new InspectionRecipe(
                     "qr",
@@ -185,7 +185,7 @@ public sealed partial class BarcodeReadabilityTests
         Assert.IsFalse(backend.Capabilities.HasFlag(EInspectionCapabilities.Discovery));
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 Blank(),
                 new InspectionRecipe(
                     "search",
@@ -233,7 +233,7 @@ public sealed partial class BarcodeReadabilityTests
         using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "typed",

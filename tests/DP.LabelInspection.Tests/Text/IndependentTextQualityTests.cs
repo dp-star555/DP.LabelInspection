@@ -66,7 +66,7 @@ public sealed partial class IndependentTextQualityTests
         var roi = new InspectionRegion("text", ERegionKind.Text, new PixelRect(0, 0, 32, 32)).WithTasks(
             new RoiInspectionTasks(false, true)
         );
-        var request = new InspectionRequest(
+        var request = TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(
                 "alternative",

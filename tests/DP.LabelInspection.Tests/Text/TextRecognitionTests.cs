@@ -179,7 +179,7 @@ public sealed partial class TextRecognitionTests
             new FieldSettings(expected: expected, minimumConfidence: confidence)
         );
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "expected",
@@ -252,7 +252,7 @@ public sealed partial class TextRecognitionTests
                 ),
             }
         );
-        var result = engine.Inspect(new InspectionRequest(input.Actual, recipe)).Analysis.Regions.Single();
+        var result = engine.Inspect(TestRequests.FromSnapshot(input.Actual, recipe)).Analysis.Regions.Single();
         Assert.IsNull(result.Segmentation);
         Assert.IsNull(result.Recognition);
         Assert.AreEqual(0, recognizer.Calls);
@@ -273,7 +273,7 @@ public sealed partial class TextRecognitionTests
             );
         }
 
-        return new InspectionRequest(
+        return TestRequests.FromSnapshot(
             new ImageFrame(20, 20, EImagePixelFormat.Gray8, new byte[400]),
             new InspectionRecipe("text", 20, 20, EInspectionMode.Free, EAlignmentMode.AssumeAligned, regions)
         );

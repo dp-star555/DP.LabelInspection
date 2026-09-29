@@ -157,7 +157,7 @@ public sealed partial class FieldBindingTests
         using var backend = new Backend();
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(initial.Actual, recipe, cycleId: "c", taskData: data)
+            TestRequests.FromSnapshot(initial.Actual, recipe, cycleId: "c", taskData: data)
         );
         var findings = report.Analysis.Regions.SelectMany(r => r.Findings).ToArray();
         Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);
@@ -195,7 +195,7 @@ public sealed partial class FieldBindingTests
         using var backend = new Backend();
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "overlap",
@@ -224,7 +224,7 @@ public sealed partial class FieldBindingTests
     )
     {
         var frame = new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
-        return new InspectionRequest(
+        return TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(
                 "binding",

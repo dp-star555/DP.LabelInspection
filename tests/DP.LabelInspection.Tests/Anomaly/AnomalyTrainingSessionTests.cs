@@ -157,7 +157,7 @@ public sealed partial class AnomalyTrainingSessionTests
             using var engine = new InspectionEngine(backend);
             return engine
                 .Inspect(
-                    new InspectionRequest(
+                    TestRequests.FromSnapshot(
                         image,
                         new InspectionRecipe(
                             "batch",

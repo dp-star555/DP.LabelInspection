@@ -90,7 +90,7 @@ public sealed class AnomalyLibraryTests
         using var backend = new OpenCvInspectionBackend(anomalyModels: store.AnomalyLibraries);
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 actual,
                 new InspectionRecipe(
                     "anomaly",

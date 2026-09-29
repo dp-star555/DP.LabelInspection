@@ -42,13 +42,13 @@ public sealed class LabelInspectionHostTests
             );
             using (var first = host.CreateEngine())
             {
-                var report = first.Inspect(new InspectionRequest(image, recipe));
+                var report = first.Inspect(TestRequests.FromSnapshot(image, recipe));
                 Assert.AreEqual(
                     EInspectionVerdict.Ok,
                     report.Verdict,
                     string.Join(";", report.Analysis.Regions.SelectMany(r => r.Findings).Select(f => f.Code))
                 );
-                host.Store.SaveReport(new InspectionRequest(image, recipe), report);
+                host.Store.SaveReport(TestRequests.FromSnapshot(image, recipe), report);
             }
 
             using (var second = host.CreateEngine())

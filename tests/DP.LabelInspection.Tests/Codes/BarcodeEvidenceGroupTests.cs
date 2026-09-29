@@ -60,7 +60,7 @@ public sealed class BarcodeEvidenceGroupTests
                 EImagePixelFormat.Gray8,
                 Enumerable.Repeat((byte)255, 8000).ToArray()
             );
-            var request = new InspectionRequest(
+            var request = TestRequests.FromSnapshot(
                 frame,
                 new InspectionRecipe(
                     "group",

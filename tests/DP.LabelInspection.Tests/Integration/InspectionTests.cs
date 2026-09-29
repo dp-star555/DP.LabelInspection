@@ -56,7 +56,7 @@ public sealed partial class InspectionTests
         EAlignmentMode alignment = EAlignmentMode.AssumeAligned
     )
     {
-        return new InspectionRequest(
+        return TestRequests.FromSnapshot(
             Frame(actual),
             new InspectionRecipe(
                 "test",

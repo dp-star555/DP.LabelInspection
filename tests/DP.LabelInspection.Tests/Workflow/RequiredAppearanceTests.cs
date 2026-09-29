@@ -24,7 +24,7 @@ public sealed partial class RequiredAppearanceTests
             new FieldSettings("font", 2)
         ).WithTasks(new RoiInspectionTasks(true, true));
         return engine.Inspect(
-            new InspectionRequest(
+            TestRequests.FromSnapshot(
                 image,
                 new InspectionRecipe(
                     "test",

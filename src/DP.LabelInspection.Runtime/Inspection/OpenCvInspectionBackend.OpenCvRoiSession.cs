@@ -19,6 +19,21 @@ public sealed partial class OpenCvInspectionBackend
             throw new ObjectDisposedException(nameof(OpenCvInspectionBackend));
         }
 
-        return new RoiSession(this, request ?? throw new ArgumentNullException(nameof(request)));
+        if (request == null)
+        {
+            throw new ArgumentNullException(nameof(request));
+        }
+
+        // 本后台只接受携带Vision原图租约的请求。旧快照请求在这里明确失败，
+        // 而不是在ROI阶段用空值兜底整帧转换——那会复制整帧，并掩盖像素真正来自哪里。
+        if (request.VisionSource == null)
+        {
+            throw new ArgumentException(
+                "InspectionRequest must carry a Vision image lease; create it with InspectionRequest.FromVision.",
+                nameof(request)
+            );
+        }
+
+        return new RoiSession(this, request);
     }
 }

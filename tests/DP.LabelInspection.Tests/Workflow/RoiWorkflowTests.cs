@@ -38,7 +38,7 @@ public sealed partial class RoiWorkflowTests
         TaskDataSnapshot? context = null
     )
     {
-        return new InspectionRequest(
+        return TestRequests.FromSnapshot(
             new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]),
             new InspectionRecipe(
                 "stages",
@@ -102,7 +102,7 @@ public sealed partial class RoiWorkflowTests
             EAlignmentMode.Translation,
             new[] { Region("a", 0) }
         );
-        var request = new InspectionRequest(actual, recipe, actual, frameId: "capture-1");
+        var request = TestRequests.FromSnapshot(actual, recipe, actual, frameId: "capture-1");
         var report = Run(new Backend { X = 3, Y = -2 }, request);
         var alignment = report.Analysis.Alignment!;
         Assert.AreEqual(request.FrameId, alignment.FrameId);
