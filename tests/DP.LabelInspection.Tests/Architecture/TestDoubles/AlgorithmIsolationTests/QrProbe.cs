@@ -8,7 +8,6 @@ using DP.Vision;
 using DP.Vision.Algorithms;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using BarcodeObservation = DP.LabelInspection.Contracts.BarcodeObservation;
-using BarcodePrintOptions = DP.LabelInspection.Contracts.BarcodePrintOptions;
 using ImageFrame = DP.LabelInspection.Contracts.ImageFrame;
 
 namespace DP.LabelInspection.Tests;

@@ -21,10 +21,10 @@ internal sealed class SnapshotBarcodeQuality
         var result = symbols.Count == 1 && symbols[0].Format == "QR_CODE"
             ? new DP.Vision.OpenCv.OpenCvQrPrintInspector().Inspect(
                 source, bounds, symbols.Select(Bridge.ToVision).ToArray(),
-                Bridge.ToVision(options), token)
+                options, token)
             : new DP.Vision.OpenCv.OpenCvBarcodePrintInspector().Inspect(
                 source, bounds, symbols.Select(Bridge.ToVision).ToArray(),
-                Bridge.ToVision(options), token);
+                options, token);
         return result.Findings.Select(Bridge.ToLabel).ToArray();
     }
 }

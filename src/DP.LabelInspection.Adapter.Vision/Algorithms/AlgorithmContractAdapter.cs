@@ -117,21 +117,6 @@ public static class AlgorithmContractAdapter
         );
     }
 
-    /// <summary>复制算法专用印刷设置，不改变单位。</summary>
-    /// <param name = "o">标签侧局部印刷阈值及开关。</param>
-    public static A.BarcodePrintOptions ToVision(L.BarcodePrintOptions o)
-    {
-        return new A.BarcodePrintOptions(
-            o.Enabled,
-            o.MinimumArea,
-            o.MinimumFraction,
-            o.EdgeTolerance,
-            o.CheckQrQuietZone,
-            o.DetectInkLoss,
-            o.MinimumInkLoss
-        );
-    }
-
     /// <summary>将中立证据角色映射到既有报告，最终业务NG由ROI策略决定。</summary>
     /// <param name = "f">中立算法证据，保留阻断角色和原图定位。</param>
     public static L.InspectionFinding ToLabel(A.QualityFinding f)

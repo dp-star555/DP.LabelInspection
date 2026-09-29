@@ -39,10 +39,10 @@ public sealed partial class OpenCvInspectionBackend
                 var result = qr
                     ? _owner._qrQuality.Inspect(source, r.Bounds,
                         reading.Barcodes.Select(Bridge.ToVision).ToArray(),
-                        Bridge.ToVision(r.Field.BarcodePrint), token)
+                        r.Field.BarcodePrint, token)
                     : _owner._linearQuality.Inspect(source, r.Bounds,
                         reading.Barcodes.Select(Bridge.ToVision).ToArray(),
-                        Bridge.ToVision(r.Field.BarcodePrint), token);
+                        r.Field.BarcodePrint, token);
                 return new RoiQualityMeasurement(
                     new RegionInspectionResult(r.Name, result.Findings.Select(Bridge.ToLabel),
                         barcodes: reading.Barcodes),

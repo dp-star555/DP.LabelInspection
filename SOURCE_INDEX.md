@@ -15,7 +15,6 @@
 | `VisionAdapter` | [src/DP.LabelInspection.Adapter.Vision/Display/VisionAdapter.cs](src/DP.LabelInspection.Adapter.Vision/Display/VisionAdapter.cs) |
 | `BarcodeModuleGrid` | [src/DP.LabelInspection.Contracts/Codes/BarcodeModuleGrid.cs](src/DP.LabelInspection.Contracts/Codes/BarcodeModuleGrid.cs) |
 | `BarcodeObservation` | [src/DP.LabelInspection.Contracts/Codes/BarcodeObservation.cs](src/DP.LabelInspection.Contracts/Codes/BarcodeObservation.cs) |
-| `BarcodePrintOptions` | [src/DP.LabelInspection.Contracts/Codes/BarcodePrintOptions.cs](src/DP.LabelInspection.Contracts/Codes/BarcodePrintOptions.cs) |
 | `EBarcodeKind` | [src/DP.LabelInspection.Contracts/Codes/EBarcodeKind.cs](src/DP.LabelInspection.Contracts/Codes/EBarcodeKind.cs) |
 | `CanvasGeometry` | [src/DP.LabelInspection.Contracts/Geometry/CanvasGeometry.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasGeometry.cs) |
 | `CanvasPoint` | [src/DP.LabelInspection.Contracts/Geometry/CanvasPoint.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasPoint.cs) |
