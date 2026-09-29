@@ -421,7 +421,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     }
 
     /// <summary>以事务方式保存完整任务，包含精确配方、参考快照、像素及结果。</summary>
-    /// <param name = "request">本次不可变请求，包含原图、配方及参考。</param>
+    /// <param name = "request">本次不可变请求，提供配方、业务身份及显式快照。</param>
     /// <param name = "report">对应的完整检测报告。</param>
     /// <param name = "annotated">可选标注图快照，不替代原图保存。</param>
     public string SaveReport(InspectionRequest request, InspectionReport report, ImageFrame? annotated = null)
@@ -447,10 +447,11 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
                 JsonConvert.SerializeObject(report, _json),
                 Encoding.UTF8
             );
-            File.WriteAllBytes(Path.Combine(temp, "actual.png"), _codec.EncodePng(request.Actual));
-            if (request.Reference != null)
+            File.WriteAllBytes(Path.Combine(temp, "actual.png"), _codec.EncodePng(request.CreateActualSnapshot()));
+            var referenceSnapshot = request.CreateReferenceSnapshot();
+            if (referenceSnapshot != null)
             {
-                File.WriteAllBytes(Path.Combine(temp, "reference.png"), _codec.EncodePng(request.Reference));
+                File.WriteAllBytes(Path.Combine(temp, "reference.png"), _codec.EncodePng(referenceSnapshot));
             }
 
             if (annotated != null)

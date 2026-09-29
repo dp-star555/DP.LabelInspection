@@ -73,8 +73,8 @@ public sealed class VisionLeaseLifecycleTests
         Assert.AreEqual(1, probe.LiveLeases, "请求释放后只能剩下测试自己的句柄，不得有后台任务继续占用租约。");
         Assert.ThrowsExactly<ObjectDisposedException>(() => _ = request.VisionSource);
         Assert.ThrowsExactly<ObjectDisposedException>(() => _ = request.VisionReference);
-        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = request.Actual);
-        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = request.Reference);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = request.CreateActualSnapshot());
+        Assert.ThrowsExactly<ObjectDisposedException>(() => _ = request.CreateReferenceSnapshot());
 
         request.Dispose();
         Assert.AreEqual(1, probe.LiveLeases, "重复释放不得多归还租约。");

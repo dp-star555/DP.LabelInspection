@@ -83,10 +83,10 @@ public sealed partial class RoiWorkflowTests
         Assert.AreEqual("frame-42", request.FrameId);
         Assert.AreEqual(80, request.ImageWidth);
         Assert.AreEqual(EInspectionVerdict.Ok, Run(new Backend(), request).Verdict);
-        Assert.AreEqual(3200, request.Actual.CopyPixels().Length);
+        Assert.AreEqual(3200, request.CreateActualSnapshot().CopyPixels().Length);
         request.Dispose();
         Assert.ThrowsExactly<ObjectDisposedException>(() => request.VisionSource);
-        Assert.ThrowsExactly<ObjectDisposedException>(() => request.Actual);
+        Assert.ThrowsExactly<ObjectDisposedException>(() => request.CreateActualSnapshot());
     }
 
     /// <summary>正式流程发布与当前帧绑定的可逆矩阵；旧整数偏移只是其平移特例。</summary>

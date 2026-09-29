@@ -6,50 +6,12 @@ using V = DP.Vision;
 
 namespace DP.LabelInspection.Contracts;
 
-/// <summary>与UI无关的检测输入，不要求文件路径或原生图像对象。</summary>
+/// <summary>与UI无关的检测输入，不要求文件路径或原生图像对象。运行时像素只来自Vision原图租约。</summary>
 public sealed class InspectionRequest : IDisposable
 {
-    private readonly ImageFrame? _actualSnapshot;
-    private readonly ImageFrame? _referenceSnapshot;
-    private readonly V.ImageFrame? _visionActual;
+    private readonly V.ImageFrame _visionActual;
     private readonly V.ImageFrame? _visionReference;
-    private readonly Lazy<ImageFrame>? _convertedActual;
-    private readonly Lazy<ImageFrame>? _convertedReference;
     private bool _disposed;
-
-    /// <summary>创建不可变请求。</summary>
-    /// <param name = "actual">独立图像快照。</param>
-    /// <param name = "recipe">固定配方。</param>
-    /// <param name = "reference">可选参考快照。</param>
-    /// <param name = "cycleId">宿主采集周期标识，用于匹配业务数据。</param>
-    /// <param name = "taskData">可选的本周期不可变数据。</param>
-    /// <param name = "frameId">宿主提供的当前帧身份；不提供时本请求生成独立身份。</param>
-    public InspectionRequest(
-        ImageFrame actual,
-        InspectionRecipe recipe,
-        ImageFrame? reference = null,
-        string? cycleId = null,
-        TaskDataSnapshot? taskData = null,
-        string? frameId = null
-    )
-    {
-        _actualSnapshot = actual ?? throw new ArgumentNullException(nameof(actual));
-        Recipe = recipe ?? throw new ArgumentNullException(nameof(recipe));
-        if (frameId != null && string.IsNullOrWhiteSpace(frameId))
-        {
-            throw new ArgumentException("Invalid frame identity.", nameof(frameId));
-        }
-
-        FrameId = frameId ?? Guid.NewGuid().ToString("N");
-        if (cycleId != null && (string.IsNullOrWhiteSpace(cycleId) || cycleId.Length > 200))
-        {
-            throw new ArgumentException("Invalid capture-cycle identity.", nameof(cycleId));
-        }
-
-        _referenceSnapshot = reference;
-        CycleId = cycleId;
-        TaskData = taskData;
-    }
 
     private InspectionRequest(
         V.ImageFrame actual,
@@ -82,17 +44,14 @@ public sealed class InspectionRequest : IDisposable
         FrameId = actual.FrameId;
         CycleId = cycleId;
         TaskData = taskData;
-        _convertedActual = new Lazy<ImageFrame>(() => ToSnapshot(_visionActual!.Image));
-        if (_visionReference != null)
-            _convertedReference = new Lazy<ImageFrame>(() => ToSnapshot(_visionReference.Image));
     }
 
-    /// <summary>以Vision原图租约创建请求；独立Retain输入，请在检测及保存结束后释放请求。旧算法首次访问Actual时才复制像素。</summary>
-    /// <param name="actual">实际原图及帧身份。</param>
-    /// <param name="recipe">固定配方。</param>
-    /// <param name="reference">可选整图参考。</param>
-    /// <param name="cycleId">本周期业务身份。</param>
-    /// <param name="taskData">本周期引导数据。</param>
+    /// <summary>以Vision原图租约创建请求；独立Retain输入，请在检测及保存结束后释放请求。</summary>
+    /// <param name = "actual">实际原图及帧身份。</param>
+    /// <param name = "recipe">固定配方。</param>
+    /// <param name = "reference">可选整图参考。</param>
+    /// <param name = "cycleId">本周期业务身份。</param>
+    /// <param name = "taskData">本周期引导数据。</param>
     /// <returns>拥有独立Vision租约的检测请求。</returns>
     public static InspectionRequest FromVision(
         V.ImageFrame actual,
@@ -114,6 +73,7 @@ public sealed class InspectionRequest : IDisposable
             throw new NotSupportedException("Label inspection requires Gray8/Bgr24 and at most 16M pixels.");
     }
 
+    /// <summary>把租约复制为独立标签快照。只在调用方明确要求像素时执行，不做隐式缓存。</summary>
     private static ImageFrame ToSnapshot(V.IImageSource image)
     {
         var info = image.Info;
@@ -127,25 +87,25 @@ public sealed class InspectionRequest : IDisposable
         );
     }
 
-    /// <summary>当前原图尺寸；读取Vision请求时不触发旧快照复制。</summary>
+    /// <summary>当前原图尺寸。</summary>
     public int ImageWidth
     {
         get
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(InspectionRequest));
-            return _visionActual?.Image.Info.Width ?? Actual.Width;
+            return _visionActual.Image.Info.Width;
         }
     }
 
-    /// <summary>当前原图高度；读取Vision请求时不触发旧快照复制。</summary>
+    /// <summary>当前原图高度。</summary>
     public int ImageHeight
     {
         get
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(InspectionRequest));
-            return _visionActual?.Image.Info.Height ?? Actual.Height;
+            return _visionActual.Image.Info.Height;
         }
     }
 
@@ -158,52 +118,51 @@ public sealed class InspectionRequest : IDisposable
     /// <summary>固定的外部预期值，不从OCR推断。</summary>
     public TaskDataSnapshot? TaskData { get; }
 
-    /// <summary>是否提供整图参考；Vision请求不需先转换快照。</summary>
-    public bool HasReference => _visionReference != null || _referenceSnapshot != null;
+    /// <summary>是否提供整图参考。</summary>
+    public bool HasReference => _visionReference != null;
 
     /// <summary>参考图宽度，未提供时为空。</summary>
-    public int? ReferenceWidth => _visionReference?.Image.Info.Width ?? _referenceSnapshot?.Width;
+    public int? ReferenceWidth => _visionReference?.Image.Info.Width;
 
     /// <summary>参考图高度，未提供时为空。</summary>
-    public int? ReferenceHeight => _visionReference?.Image.Info.Height ?? _referenceSnapshot?.Height;
-
-    /// <summary>供现有算法/存储使用的独立像素快照；Vision请求首次访问时才复制。</summary>
-    public ImageFrame Actual
-    {
-        get
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(InspectionRequest));
-            return _actualSnapshot ?? _convertedActual!.Value;
-        }
-    }
+    public int? ReferenceHeight => _visionReference?.Image.Info.Height;
 
     /// <summary>配方快照。</summary>
     public InspectionRecipe Recipe { get; }
 
-    /// <summary>供现有算法/存储使用的可选整图参考快照。</summary>
-    public ImageFrame? Reference
+    /// <summary>
+    /// 把本次请求的原图租约复制为独立标签快照，供持久化、显示等确实需要像素的接口使用。
+    /// 每次调用都会复制整帧，因此不要在检测热路径上调用。
+    /// </summary>
+    /// <returns>调用方拥有的独立快照；不是本次检测的运行时输入。</returns>
+    public ImageFrame CreateActualSnapshot()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(InspectionRequest));
+        return ToSnapshot(_visionActual.Image);
+    }
+
+    /// <summary>把参考图租约复制为独立标签快照；未提供参考时为空。</summary>
+    /// <returns>调用方拥有的独立快照，或空。</returns>
+    public ImageFrame? CreateReferenceSnapshot()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(InspectionRequest));
+        return _visionReference == null ? null : ToSnapshot(_visionReference.Image);
+    }
+
+    /// <summary>本次检测持有的原图租约；仅借用，不得单独释放。</summary>
+    public V.IImageSource VisionSource
     {
         get
         {
             if (_disposed)
                 throw new ObjectDisposedException(nameof(InspectionRequest));
-            return _referenceSnapshot ?? _convertedReference?.Value;
+            return _visionActual.Image;
         }
     }
 
-    /// <summary>Vision请求持有的原图租约；仅借用，不得单独释放。旧请求为null。</summary>
-    public V.IImageSource? VisionSource
-    {
-        get
-        {
-            if (_disposed)
-                throw new ObjectDisposedException(nameof(InspectionRequest));
-            return _visionActual?.Image;
-        }
-    }
-
-    /// <summary>Vision请求持有的参考图租约；仅借用，不得单独释放。旧请求为null。</summary>
+    /// <summary>本次检测持有的参考图租约；仅借用，不得单独释放。未提供参考时为空。</summary>
     public V.IImageSource? VisionReference
     {
         get
@@ -214,7 +173,7 @@ public sealed class InspectionRequest : IDisposable
         }
     }
 
-    /// <summary>在后台任务和报告保存结束后释放请求持有的Vision租约；旧快照请求无需释放。</summary>
+    /// <summary>在后台任务和报告保存结束后释放请求持有的Vision租约。</summary>
     public void Dispose()
     {
         if (_disposed)
@@ -222,7 +181,7 @@ public sealed class InspectionRequest : IDisposable
         _disposed = true;
         try
         {
-            _visionActual?.Dispose();
+            _visionActual.Dispose();
         }
         finally
         {

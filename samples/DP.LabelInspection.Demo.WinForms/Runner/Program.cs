@@ -191,7 +191,7 @@ internal static class Program
             var request = control.LastRequest!;
             var report = e.Report;
             latestSave = Task.Run(() =>
-                store.SaveReport(request, report, codec.Annotate(request.Actual, report))
+                store.SaveReport(request, report, codec.Annotate(request.CreateActualSnapshot(), report))
             );
             saves.Add(latestSave);
             _ = Observe(latestSave);

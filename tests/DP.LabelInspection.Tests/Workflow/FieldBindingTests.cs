@@ -157,7 +157,7 @@ public sealed partial class FieldBindingTests
         using var backend = new Backend();
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
-            TestRequests.FromSnapshot(initial.Actual, recipe, cycleId: "c", taskData: data)
+            TestRequests.FromSnapshot(initial.CreateActualSnapshot(), recipe, cycleId: "c", taskData: data)
         );
         var findings = report.Analysis.Regions.SelectMany(r => r.Findings).ToArray();
         Assert.AreEqual(EInspectionVerdict.Ng, report.Verdict);

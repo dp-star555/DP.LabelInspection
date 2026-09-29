@@ -7,7 +7,7 @@ namespace DP.LabelInspection.Tests;
 
 /// <summary>
 /// 以标签快照创建检测请求，形态与宿主入口一致：快照 -> Vision图像 -> FromVision。
-/// 参数与旧快照构造器逐一对应，供尚未迁移的用例替换 <c>new InspectionRequest(...)</c>。
+/// 供只持有快照的用例与工具使用；生产入口走 <c>InspectionSourceExtensions</c>，不经快照。
 /// 转换会复制像素一次（快照到Vision图像），随后请求持有独立租约；
 /// 临时包装句柄在本方法内归还，因此调用方沿用原有的 using 写法即可。
 /// </summary>

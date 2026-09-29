@@ -647,7 +647,7 @@ internal static class UiInteractionProbe
         var form = control.FindForm()!;
         var originalSize = form.Size;
         using var originalRequest = control.CreateRequest();
-        var originalFrame = originalRequest.Actual;
+        var originalFrame = originalRequest.CreateActualSnapshot();
         var originalRegions = control.Regions;
         var viewer = FindViewer(control)!;
         try
@@ -1142,7 +1142,7 @@ internal static class UiInteractionProbe
     internal static async Task VerifyDataBindings(LabelInspectionControl control)
     {
         using var request = control.CreateRequest();
-        using var bitmap = DrawingImageConverter.ToBitmap(request.Actual);
+        using var bitmap = DrawingImageConverter.ToBitmap(request.CreateActualSnapshot());
         var matrix = new ZXing.MultiFormatWriter().encode("A1020", ZXing.BarcodeFormat.QR_CODE, 140, 140);
         for (int y = 0; y < 140; y++)
         {
@@ -1479,7 +1479,7 @@ internal static class UiInteractionProbe
         }
 
         var viewer = FindViewer(control)!;
-        var frame = control.LastRequest!.Actual;
+        var frame = control.LastRequest!.CreateActualSnapshot();
         var bounds = tag.Item2.Bounds!.Value;
         float scale = Math.Min(
             Math.Max(1, viewer.ClientSize.Width - 24) / (float)frame.Width,

@@ -252,7 +252,7 @@ public sealed partial class TextRecognitionTests
                 ),
             }
         );
-        var result = engine.Inspect(TestRequests.FromSnapshot(input.Actual, recipe)).Analysis.Regions.Single();
+        var result = engine.Inspect(TestRequests.FromSnapshot(input.CreateActualSnapshot(), recipe)).Analysis.Regions.Single();
         Assert.IsNull(result.Segmentation);
         Assert.IsNull(result.Recognition);
         Assert.AreEqual(0, recognizer.Calls);

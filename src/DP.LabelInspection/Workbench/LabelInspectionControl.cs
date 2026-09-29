@@ -1169,7 +1169,7 @@ public sealed class LabelInspectionControl : UserControl
             }
 
             info.Visible = false;
-            var comparison = new BarcodeComparisonControl(LastRequest.Actual, barcode)
+            var comparison = new BarcodeComparisonControl(LastRequest.CreateActualSnapshot(), barcode)
             {
                 Tag = barcode,
                 Width = Math.Max(600, _glyphGallery.ClientSize.Width - 30),

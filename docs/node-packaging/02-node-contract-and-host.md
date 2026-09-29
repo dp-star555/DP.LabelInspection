@@ -47,9 +47,9 @@ var report = await engine.InspectAsync(
     cancellationToken: cancellationToken).ConfigureAwait(false);
 ```
 
-图像源扩展在返回任务前保留输入，内部仍转换成独立标签图像快照。若节点在调用它之前还要await资源解析，应先保留必要的输入帧租约，不能跨异步边界依赖别人随时可能释放的借用句柄。不要额外在Handler里创建工作台，也不要把DP.Vision.ImageFrame与标签Contracts.ImageFrame混为同一种类型。
+图像源扩展在返回任务前保留输入，并让检测直接读取该Vision租约，不再复制为标签快照。若节点在调用它之前还要await资源解析，应先保留必要的输入帧租约，不能跨异步边界依赖别人随时可能释放的借用句柄。不要额外在Handler里创建工作台，也不要把DP.Vision.ImageFrame与标签Contracts.ImageFrame混为同一种类型。
 
-**报告保存还有一个接入点：**源扩展只返回Report，不公开其内部InspectionRequest；而InspectionStore.SaveReport需要当次Request。启用保存时，宿主执行服务应持有与检测完全相同的请求快照，例如从保留的源构造一次标签快照和InspectionRequest，再调用已有的`engine.InspectAsync(request, token)`并保存该请求/报告。也可显式保留原源再复制，但必须说明额外复制成本。不能从UI.LastRequest、当前选中图或另一周期重建保存输入。
+**报告保存还有一个接入点：**源扩展只返回Report，不公开其内部InspectionRequest；而InspectionStore.SaveReport需要当次Request。启用保存时，宿主执行服务应持有与检测完全相同的请求：自己保留输入租约后用`InspectionRequest.FromVision`构造一次请求，再调用已有的`engine.InspectAsync(request, token)`并保存该请求/报告。请求不再自带隐式快照；需要像素时由`SaveReport`显式调用`CreateActualSnapshot()`/`CreateReferenceSnapshot()`，这两次调用会复制整帧。不能从UI.LastRequest、当前选中图或另一周期重建保存输入。
 
 ## 3. 输出与流程语义
 

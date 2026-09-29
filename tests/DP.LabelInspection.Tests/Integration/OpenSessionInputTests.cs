@@ -1,19 +1,21 @@
-using System;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
 using DP.Vision;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using L = DP.LabelInspection.Contracts;
 using V = DP.Vision;
 
 namespace DP.LabelInspection.Tests;
 
 /// <summary>
 /// 后台入口的输入契约：只接受携带Vision原图租约的请求。
-/// 旧快照请求必须在这里明确失败，而不是在ROI阶段靠空值兜底整帧转换——
-/// 那样会复制整帧、并掩盖像素真正来自哪里。
 /// </summary>
+/// <remarks>
+/// 本类原先还有一条"旧快照请求被拒绝"的用例。删掉 <c>InspectionRequest</c> 的快照构造器之后，
+/// 已经无法再构造出不带租约的请求，这条用例变成**编译期不可能**，故随之删除。
+/// <c>OpenSession</c> 里的租约检查保留为防御：一旦后续批次把 <c>VisionSource</c> 改回可空，
+/// 它会立刻在入口暴露，而不是退化成ROI深处的空引用。
+/// </remarks>
 [TestClass]
 public sealed class OpenSessionInputTests
 {
@@ -37,25 +39,7 @@ public sealed class OpenSessionInputTests
         );
     }
 
-    /// <summary>旧快照请求必须在入口被拒绝，且错误信息点名缺失的是Vision租约。</summary>
-    [TestMethod]
-    public void SnapshotRequestIsRefusedWithExplicitMessage()
-    {
-        using var backend = new OpenCvInspectionBackend();
-        // 标签快照不可释放（自持像素），因此只让请求走 using。
-        var snapshot = new L.ImageFrame(Width, Height, EImagePixelFormat.Gray8, new byte[ByteLength]);
-        using var request = new InspectionRequest(snapshot, Recipe());
-
-        var error = Assert.ThrowsExactly<ArgumentException>(() => backend.OpenSession(request));
-
-        StringAssert.Contains(
-            error.Message,
-            "Vision image lease",
-            "错误信息必须指出请求缺少Vision原图租约，否则调用方无从判断该改用哪个入口。"
-        );
-    }
-
-    /// <summary>正向对照：携带Vision租约的请求必须被接受，否则上面的用例可能只是"拒绝一切"。</summary>
+    /// <summary>携带Vision租约的请求必须能开出会话。</summary>
     [TestMethod]
     public void VisionRequestIsAccepted()
     {
