@@ -49,7 +49,7 @@ public sealed class BarcodePrintTests
             pixels[i] = encoded.Pixels[i * 4];
         }
 
-        var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
         var symbols = new BarcodeFixtureReader().Decode(
             frame,
@@ -141,7 +141,7 @@ public sealed class BarcodePrintTests
             checker.Inspect(frame, bounds, qr, new BarcodePrintOptions(), default).Single().Code
         );
         Assert.AreEqual(0, checker.Inspect(frame, bounds, qr, new BarcodePrintOptions(false), default).Count);
-        var flat = new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
+        var flat = new PixelSnapshot(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
         Assert.AreEqual("barcode_print_review", Inspect(flat).Single().Code);
         Assert.ThrowsExactly<OperationCanceledException>(() =>
             checker.Inspect(frame, bounds, qr, new BarcodePrintOptions(), new CancellationToken(true))
@@ -190,7 +190,7 @@ public sealed class BarcodePrintTests
             2
         );
         System.Runtime.InteropServices.Marshal.Copy(mat.Data, pixels, 0, pixels.Length);
-        var result = Inspect(new ImageFrame(340, 185, EImagePixelFormat.Gray8, pixels));
+        var result = Inspect(new PixelSnapshot(340, 185, EImagePixelFormat.Gray8, pixels));
         Assert.IsFalse(result.Any(f => f.Verdict == EInspectionVerdict.Ng));
         Assert.IsTrue(result.Any(f => f.Code == "barcode_print_scope"));
     }
@@ -207,7 +207,7 @@ public sealed class BarcodePrintTests
             Buffer.BlockCopy(source, y * chip.Width, pixels, (y + 13) * 500 + 17, chip.Width);
         }
 
-        var frame = new ImageFrame(500, 220, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(500, 220, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(17, 13, 340, 140);
         var found = new OpenCvBarcodePrintInspector()
             .Inspect(frame, bounds, Array.Empty<BarcodeObservation>(), new BarcodePrintOptions(), default)
@@ -288,7 +288,7 @@ public sealed class BarcodePrintTests
         }
 
         var findings = Inspect(
-            new ImageFrame(
+            new PixelSnapshot(
                 rotated ? original.Height : original.Width,
                 rotated ? original.Width : original.Height,
                 EImagePixelFormat.Gray8,
@@ -315,7 +315,7 @@ public sealed class BarcodePrintTests
             }
         }
 
-        var frame = new ImageFrame(original.Width, original.Height, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(original.Width, original.Height, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
         var checker = new OpenCvBarcodePrintInspector();
         foreach (
@@ -343,7 +343,7 @@ public sealed class BarcodePrintTests
         }
 
         Assert.IsFalse(
-            Inspect(new ImageFrame(original.Width, original.Height, EImagePixelFormat.Gray8, pixels))
+            Inspect(new PixelSnapshot(original.Width, original.Height, EImagePixelFormat.Gray8, pixels))
                 .Any(f => f.Verdict == EInspectionVerdict.Ng)
         );
     }
@@ -366,7 +366,7 @@ public sealed class BarcodePrintTests
         Assert.AreEqual(.4, restored.MinimumInkLoss);
     }
 
-    private static System.Collections.Generic.IReadOnlyList<InspectionFinding> Inspect(ImageFrame frame)
+    private static System.Collections.Generic.IReadOnlyList<InspectionFinding> Inspect(PixelSnapshot frame)
     {
         return new OpenCvBarcodePrintInspector().Inspect(
             frame,
@@ -377,7 +377,7 @@ public sealed class BarcodePrintTests
         );
     }
 
-    private static ImageFrame Bars(bool missing, bool extra, bool rotated)
+    private static PixelSnapshot Bars(bool missing, bool extra, bool rotated)
     {
         const int w = 340,
             h = 140;
@@ -410,7 +410,7 @@ public sealed class BarcodePrintTests
 
         if (!rotated)
         {
-            return new ImageFrame(w, h, EImagePixelFormat.Gray8, pixels);
+            return new PixelSnapshot(w, h, EImagePixelFormat.Gray8, pixels);
         }
 
         var transposed = new byte[pixels.Length];
@@ -422,6 +422,6 @@ public sealed class BarcodePrintTests
             }
         }
 
-        return new ImageFrame(h, w, EImagePixelFormat.Gray8, transposed);
+        return new PixelSnapshot(h, w, EImagePixelFormat.Gray8, transposed);
     }
 }

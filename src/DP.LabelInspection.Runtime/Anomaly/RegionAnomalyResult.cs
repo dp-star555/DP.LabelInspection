@@ -22,7 +22,7 @@ public sealed class RegionAnomalyResult
         double maximumScore,
         double threshold,
         IEnumerable<InspectionFinding> findings,
-        ImageFrame? heatMap,
+        PixelSnapshot? heatMap,
         bool completed = true
     )
     {
@@ -54,7 +54,7 @@ public sealed class RegionAnomalyResult
     public IReadOnlyList<InspectionFinding> Findings { get; }
 
     /// <summary>灰度热力图（128=阈值），与<see cref = "Crop"/>同尺寸。</summary>
-    public ImageFrame? HeatMap { get; }
+    public PixelSnapshot? HeatMap { get; }
 
     /// <summary>检测是否完整执行。</summary>
     public bool Completed { get; }

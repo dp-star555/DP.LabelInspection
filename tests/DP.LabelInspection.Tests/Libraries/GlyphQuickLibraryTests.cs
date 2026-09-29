@@ -15,7 +15,7 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed partial class GlyphQuickLibraryTests
 {
-    private static ImageFrame Line()
+    private static PixelSnapshot Line()
     {
         var pixels = Enumerable.Repeat((byte)255, 64 * 32).ToArray();
         for (int y = 6; y < 26; y++)
@@ -27,7 +27,7 @@ public sealed partial class GlyphQuickLibraryTests
             }
         }
 
-        return new ImageFrame(64, 32, EImagePixelFormat.Gray8, pixels);
+        return new PixelSnapshot(64, 32, EImagePixelFormat.Gray8, pixels);
     }
 
     private static GlyphImportItem Item(string character, string? provenance = null)
@@ -100,7 +100,7 @@ public sealed partial class GlyphQuickLibraryTests
         Assert.ThrowsExactly<ArgumentException>(() => Item("字"));
         Assert.ThrowsExactly<ArgumentException>(() => Item("AB"));
         Assert.ThrowsExactly<ArgumentException>(() =>
-            new GlyphImportItem("A", new ImageFrame(3, 4, EImagePixelFormat.Gray8, new byte[12]))
+            new GlyphImportItem("A", new PixelSnapshot(3, 4, EImagePixelFormat.Gray8, new byte[12]))
         );
     }
 

@@ -9,7 +9,7 @@ namespace DP.LabelInspection.Runtime;
 public sealed class OpenCvImageCodec : IImageCodec
 {
     /// <inheritdoc/>
-    public ImageFrame Decode(byte[] bytes)
+    public PixelSnapshot Decode(byte[] bytes)
     {
         if (bytes == null || bytes.Length == 0 || bytes.Length > 64 * 1024 * 1024)
         {
@@ -59,7 +59,7 @@ public sealed class OpenCvImageCodec : IImageCodec
     }
 
     /// <inheritdoc/>
-    public byte[] EncodePng(ImageFrame frame)
+    public byte[] EncodePng(PixelSnapshot frame)
     {
         using var raw = CvImages.Mat(frame);
         return raw.ToBytes(".png");
@@ -68,7 +68,7 @@ public sealed class OpenCvImageCodec : IImageCodec
     /// <summary>绘制实际图像坐标证据，不修改生产原始像素。</summary>
     /// <param name = "frame">不可变实际原图，不修改其像素。</param>
     /// <param name = "report">已完成报告，证据定位使用实际图像坐标。</param>
-    public ImageFrame Annotate(ImageFrame frame, InspectionReport report)
+    public PixelSnapshot Annotate(PixelSnapshot frame, InspectionReport report)
     {
         using var raw = CvImages.Mat(frame);
         using var canvas = new Mat();

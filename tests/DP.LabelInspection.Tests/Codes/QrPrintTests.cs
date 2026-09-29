@@ -40,7 +40,7 @@ public sealed class QrPrintTests
         }
 
         var decoder = new ZxingBarcodeDecoder();
-        var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
         var initial = decoder.Decode(frame, bounds, default).Single();
         Assert.IsNotNull(initial.ModuleGrid);
@@ -87,7 +87,7 @@ public sealed class QrPrintTests
             pixels = target;
         }
 
-        frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var decoded = decoder.Decode(frame, bounds, default);
         Assert.AreEqual("WF675907", decoded.Single().Text);
         Assert.IsNotNull(decoded.Single().ModuleGrid);
@@ -180,7 +180,7 @@ public sealed class QrPrintTests
 
         var data = new byte[warped.Width * warped.Height];
         System.Runtime.InteropServices.Marshal.Copy(warped.Data, data, 0, data.Length);
-        var frame = new ImageFrame(warped.Width, warped.Height, EImagePixelFormat.Gray8, data);
+        var frame = new PixelSnapshot(warped.Width, warped.Height, EImagePixelFormat.Gray8, data);
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         Assert.AreEqual(text, symbols.Single().Text);
@@ -232,7 +232,7 @@ public sealed class QrPrintTests
 
         var bounds = new PixelRect(0, 0, encoded.Width, encoded.Height);
         var decoder = new ZxingBarcodeDecoder();
-        var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var grid = decoder.Decode(frame, bounds, default).Single().ModuleGrid!;
         double scale = (grid.Corners[2] - grid.Corners[0]) / grid.Dimension;
         foreach (int col in new[] { 10, 11 })
@@ -250,7 +250,7 @@ public sealed class QrPrintTests
             }
         }
 
-        frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var symbols = decoder.Decode(frame, bounds, default);
         Assert.AreEqual("QR-TEST-A1020", symbols.Single().Text);
         var result = new OpenCvBarcodePrintInspector().Inspect(
@@ -292,7 +292,7 @@ public sealed class QrPrintTests
             pixels[i] = encoded.Pixels[i * 4];
         }
 
-        var frame = new ImageFrame(side, side, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(side, side, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, side, side);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         Assert.AreEqual(17 + 4 * version, symbols.Single().ModuleGrid!.Dimension);
@@ -333,7 +333,7 @@ public sealed class QrPrintTests
             }
         }
 
-        var frame = new ImageFrame(400, 400, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(400, 400, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, 400, 400);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         Assert.AreEqual("QR-TEST-A1020", symbols.Single().Text);
@@ -370,7 +370,7 @@ public sealed class QrPrintTests
             pixels[i] = encoded.Pixels[i * 4];
         }
 
-        var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         Assert.AreEqual(1, symbols.Count);

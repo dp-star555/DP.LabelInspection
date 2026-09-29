@@ -12,7 +12,7 @@ public static class DrawingImageConverter
     /// <summary>将图像合成到白色背景，生成独立BGR24快照。</summary>
     /// <param name = "image">借用的源图，不由本方法释放。</param>
     /// <returns>不可变图像快照。</returns>
-    public static ImageFrame FromImage(Image image)
+    public static PixelSnapshot FromImage(Image image)
     {
         if (image == null)
         {
@@ -62,7 +62,7 @@ public static class DrawingImageConverter
                 );
             }
 
-            return new ImageFrame(bitmap.Width, bitmap.Height, EImagePixelFormat.Bgr24, pixels);
+            return new PixelSnapshot(bitmap.Width, bitmap.Height, EImagePixelFormat.Bgr24, pixels);
         }
         finally
         {
@@ -73,7 +73,7 @@ public static class DrawingImageConverter
     /// <summary>创建新的GDI位图，调用方拥有并负责释放。</summary>
     /// <param name = "frame">不可变源图。</param>
     /// <returns>调用方拥有的位图。</returns>
-    public static Bitmap ToBitmap(ImageFrame frame)
+    public static Bitmap ToBitmap(PixelSnapshot frame)
     {
         if (frame == null)
         {

@@ -33,7 +33,7 @@
 | 类型/入口 | 实际作用 | 所有权与注意事项 |
 |---|---|---|
 | `InspectionRecipe` | 尺寸、参考模式、对齐、Regions、Options、Bindings的不可变配置 | 不包含参考图像、模型文件或字库文件实体 |
-| `InspectionRequest` | Recipe、CycleId、TaskData，以及原图/参考 | `FromVision` 只保留 `DP.Vision.ImageFrame` 租约，不复制像素；旧构造器仍以标签快照为输入（迁移中，待第 2 批移除） |
+| `InspectionRequest` | Recipe、CycleId、TaskData，以及原图/参考 | `FromVision` 只保留 `DP.Vision.ImageFrame` 租约，不复制像素；旧标签快照构造器已移除，需要像素时用 `CreateActualSnapshot()` / `CreateReferenceSnapshot()` 显式复制 |
 | `IInspectionEngine.InspectAsync(InspectionRequest, token)` | 正式无UI执行入口 | 不调用工作台；依赖引擎由宿主装配 |
 | `InspectionSourceExtensions.InspectAsync(engine, IImageSource, recipe, reference, cycleId, taskData, token)` | 更适合节点的统一图像源入口 | 返回任务前保留输入源；任务内以 `InspectionRequest.FromVision` 借用租约，**不再复制为标签快照**；任务结束释放内部租约 |
 | `InspectionEngine(backend, ownsBackend=false)` | 请求校验、同引擎串行执行和Core判定 | 引擎可共享，但同实例的多个请求不并行（单次检测内可设 `MaximumParallelRois` 并行互不依赖的ROI）；Dispose可能等待执行结束 |

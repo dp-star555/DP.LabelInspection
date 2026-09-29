@@ -120,7 +120,7 @@ internal static class AnomalyDemo
     }
 
     /// <summary>整图转为BGR，热力≥64处按强度叠加橙/红色，异常区域画红框，ROI画蓝框。</summary>
-    private static ImageFrame Overlay(ImageFrame image, IReadOnlyList<RegionAnomalyResult> results)
+    private static PixelSnapshot Overlay(PixelSnapshot image, IReadOnlyList<RegionAnomalyResult> results)
     {
         byte[] source = image.CopyPixels();
         bool gray = image.Format == EImagePixelFormat.Gray8;
@@ -196,6 +196,6 @@ internal static class AnomalyDemo
             }
         }
 
-        return new ImageFrame(image.Width, image.Height, EImagePixelFormat.Bgr24, bgr);
+        return new PixelSnapshot(image.Width, image.Height, EImagePixelFormat.Bgr24, bgr);
     }
 }

@@ -7,7 +7,7 @@ namespace DP.LabelInspection.Runtime;
 
 internal static class CvImages
 {
-    internal static Mat Mat(ImageFrame frame)
+    internal static Mat Mat(PixelSnapshot frame)
     {
         var output = new Mat(
             frame.Height,
@@ -27,7 +27,7 @@ internal static class CvImages
         }
     }
 
-    internal static ImageFrame Frame(Mat image)
+    internal static PixelSnapshot Frame(Mat image)
     {
         if (image.Channels() != 1 && image.Channels() != 3)
         {
@@ -37,7 +37,7 @@ internal static class CvImages
         using var packed = image.Clone();
         var bytes = new byte[checked(packed.Rows * packed.Cols * packed.Channels())];
         Marshal.Copy(packed.Data, bytes, 0, bytes.Length);
-        return new ImageFrame(
+        return new PixelSnapshot(
             packed.Cols,
             packed.Rows,
             packed.Channels() == 1 ? EImagePixelFormat.Gray8 : EImagePixelFormat.Bgr24,

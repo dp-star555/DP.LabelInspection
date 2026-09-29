@@ -36,7 +36,7 @@ public sealed class GlyphLibraryControl : UserControl
     };
     private IGlyphCandidateService? _candidateService;
     private IGlyphLibraryManager? _manager;
-    private ImageFrame? _candidate;
+    private PixelSnapshot? _candidate;
     private PixelRect? _crop;
     private string? _provenance;
 
@@ -284,7 +284,7 @@ public sealed class GlyphLibraryControl : UserControl
     /// <param name = "frame">独立不可变候选图像。</param>
     /// <param name = "character">候选字符标签，发布前须人工确认。</param>
     /// <param name = "provenanceJson">可选的来源证据JSON。</param>
-    public void SetCandidate(ImageFrame frame, string character, string? provenanceJson = null)
+    public void SetCandidate(PixelSnapshot frame, string character, string? provenanceJson = null)
     {
         _candidate = frame;
         _crop = null;

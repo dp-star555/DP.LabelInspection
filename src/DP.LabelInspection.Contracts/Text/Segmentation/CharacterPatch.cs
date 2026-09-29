@@ -19,7 +19,7 @@ public sealed class CharacterPatch
         string character,
         int tokenIndex,
         PixelRect bounds,
-        ImageFrame patch,
+        PixelSnapshot patch,
         int neighborInkRemoved = 0
     )
     {
@@ -51,7 +51,7 @@ public sealed class CharacterPatch
     public PixelRect Bounds { get; }
 
     /// <summary>已抑制已知邻字墨迹的独立图像。</summary>
-    public ImageFrame Patch { get; }
+    public PixelSnapshot Patch { get; }
 
     /// <summary>移除的已知邻字墨迹量，单位为原图像素。</summary>
     public int NeighborInkRemoved { get; }

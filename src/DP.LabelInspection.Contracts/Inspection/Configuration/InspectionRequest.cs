@@ -74,12 +74,12 @@ public sealed class InspectionRequest : IDisposable
     }
 
     /// <summary>把租约复制为独立标签快照。只在调用方明确要求像素时执行，不做隐式缓存。</summary>
-    private static ImageFrame ToSnapshot(V.IImageSource image)
+    private static PixelSnapshot ToSnapshot(V.IImageSource image)
     {
         var info = image.Info;
         var pixels = new byte[info.ByteLength];
         image.CopyTo(0, pixels, 0, pixels.Length);
-        return new ImageFrame(
+        return new PixelSnapshot(
             info.Width,
             info.Height,
             info.Layout == V.EPixelLayout.Gray8 ? EImagePixelFormat.Gray8 : EImagePixelFormat.Bgr24,
@@ -135,7 +135,7 @@ public sealed class InspectionRequest : IDisposable
     /// 每次调用都会复制整帧，因此不要在检测热路径上调用。
     /// </summary>
     /// <returns>调用方拥有的独立快照；不是本次检测的运行时输入。</returns>
-    public ImageFrame CreateActualSnapshot()
+    public PixelSnapshot CreateActualSnapshot()
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(InspectionRequest));
@@ -144,7 +144,7 @@ public sealed class InspectionRequest : IDisposable
 
     /// <summary>把参考图租约复制为独立标签快照；未提供参考时为空。</summary>
     /// <returns>调用方拥有的独立快照，或空。</returns>
-    public ImageFrame? CreateReferenceSnapshot()
+    public PixelSnapshot? CreateReferenceSnapshot()
     {
         if (_disposed)
             throw new ObjectDisposedException(nameof(InspectionRequest));

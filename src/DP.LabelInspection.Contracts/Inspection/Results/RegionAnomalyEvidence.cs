@@ -24,7 +24,7 @@ public sealed class RegionAnomalyEvidence
         PixelRect crop,
         double maximumScore,
         double threshold,
-        ImageFrame? heatMap
+        PixelSnapshot? heatMap
     )
     {
         LibraryId = libraryId ?? throw new ArgumentNullException(nameof(libraryId));
@@ -71,5 +71,5 @@ public sealed class RegionAnomalyEvidence
     public double Ratio => Threshold > 0 ? MaximumScore / Threshold : 0;
 
     /// <summary>灰度热力图（128=阈值），与<see cref = "Crop"/>同尺寸。</summary>
-    public ImageFrame? HeatMap { get; }
+    public PixelSnapshot? HeatMap { get; }
 }

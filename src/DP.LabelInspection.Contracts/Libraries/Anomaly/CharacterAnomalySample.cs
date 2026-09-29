@@ -18,7 +18,7 @@ public sealed class CharacterAnomalySample
     /// <param name = "source">可选来源说明（文件名等）。</param>
     /// <param name = "group">字符组（同一字体的行共用；null为不分组），同组同字符的样本合训一个模型。</param>
     public CharacterAnomalySample(
-        ImageFrame image,
+        PixelSnapshot image,
         IEnumerable<CharacterPatch> characters,
         IEnumerable<int>? excluded = null,
         string? source = null,
@@ -50,7 +50,7 @@ public sealed class CharacterAnomalySample
     }
 
     /// <summary>原始整图。</summary>
-    public ImageFrame Image { get; }
+    public PixelSnapshot Image { get; }
 
     /// <summary>该行字符（原图坐标）。</summary>
     public IReadOnlyList<CharacterPatch> Characters { get; }

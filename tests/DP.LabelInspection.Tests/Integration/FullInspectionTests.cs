@@ -317,7 +317,7 @@ public sealed partial class FullInspectionTests
             pixels[i] = encoded.Pixels[i * 4];
         }
 
-        var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, frame.Width, frame.Height);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         Assert.AreEqual("DP12345", symbols.Single().Text);
@@ -626,7 +626,7 @@ public sealed partial class FullInspectionTests
             }
         }
 
-        var frame = new ImageFrame(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(encoded.Width, encoded.Height, EImagePixelFormat.Gray8, pixels);
         using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
         using var engine = new InspectionEngine(backend);
         var request = TestRequests.FromSnapshot(
@@ -710,19 +710,19 @@ public sealed partial class FullInspectionTests
         Assert.AreEqual(1, tasks.CompareCalls);
     }
 
-    private static ImageFrame Glyph()
+    private static PixelSnapshot Glyph()
     {
         using var m = new Mat(40, 30, MatType.CV_8UC1, Scalar.All(255));
         Cv2.PutText(m, "A", new Point(3, 31), HersheyFonts.HersheySimplex, 1, Scalar.All(0), 2);
         return Frame(m);
     }
 
-    private static ImageFrame Frame(Mat mat)
+    private static PixelSnapshot Frame(Mat mat)
     {
         using var packed = mat.Clone();
         var bytes = new byte[mat.Rows * mat.Cols * mat.Channels()];
         Marshal.Copy(packed.Data, bytes, 0, bytes.Length);
-        return new ImageFrame(
+        return new PixelSnapshot(
             mat.Cols,
             mat.Rows,
             mat.Channels() == 1 ? EImagePixelFormat.Gray8 : EImagePixelFormat.Bgr24,

@@ -218,8 +218,8 @@ public sealed class CharacterAnomalyDetector
     /// <summary>标签行样本转为Vision行：同一标签图对象只转换一次（同一来源），未排除的字母/数字带“组/字符”模型键。</summary>
     private sealed class VisionLines : IDisposable
     {
-        private readonly Dictionary<ImageFrame, DP.Vision.IImageSource> _images =
-            new Dictionary<ImageFrame, DP.Vision.IImageSource>();
+        private readonly Dictionary<PixelSnapshot, DP.Vision.IImageSource> _images =
+            new Dictionary<PixelSnapshot, DP.Vision.IImageSource>();
 
         internal VisionLines(IReadOnlyList<CharacterAnomalySample> samples)
         {

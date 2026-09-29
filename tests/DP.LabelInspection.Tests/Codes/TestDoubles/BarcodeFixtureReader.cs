@@ -14,7 +14,7 @@ public sealed class BarcodeFixtureReader
     /// <param name="bounds">测试范围。</param>
     /// <param name="token">取消。</param>
     /// <returns>标签侧码观测。</returns>
-    public IReadOnlyList<BarcodeObservation> Decode(ImageFrame frame, PixelRect bounds, CancellationToken token)
+    public IReadOnlyList<BarcodeObservation> Decode(PixelSnapshot frame, PixelRect bounds, CancellationToken token)
     {
         using var image = Bridge.ToVision(frame);
         return new DP.Vision.Zxing.ZxingBarcodeDecoder()

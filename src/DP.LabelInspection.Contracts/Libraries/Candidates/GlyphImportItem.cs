@@ -15,7 +15,7 @@ public sealed class GlyphImportItem
     /// <param name = "provenanceJson">可选来源证据JSON，用于保留人工确认及原图来源。</param>
     public GlyphImportItem(
         string character,
-        ImageFrame image,
+        PixelSnapshot image,
         string binarization = "otsu",
         string? provenanceJson = null
     )
@@ -31,7 +31,7 @@ public sealed class GlyphImportItem
     public string Character { get; }
 
     /// <summary>独立拥有像素的不可变图块。</summary>
-    public ImageFrame Image { get; }
+    public PixelSnapshot Image { get; }
 
     /// <summary>参考二值化策略。</summary>
     public string Binarization { get; }

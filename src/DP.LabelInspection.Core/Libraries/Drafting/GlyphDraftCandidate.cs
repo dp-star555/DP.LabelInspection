@@ -14,7 +14,7 @@ public sealed class GlyphDraftCandidate
         string id,
         string label,
         PixelRect bounds,
-        ImageFrame image,
+        PixelSnapshot image,
         string operation,
         string provisionalCharacter = ""
     )
@@ -37,7 +37,7 @@ public sealed class GlyphDraftCandidate
     public PixelRect Bounds { get; }
 
     /// <summary>独立的不可变像素，不是指向下一张图的活动视图。</summary>
-    public ImageFrame Image { get; }
+    public PixelSnapshot Image { get; }
 
     /// <summary>供人工复核和溯源使用的来源或编辑操作。</summary>
     public string Operation { get; }

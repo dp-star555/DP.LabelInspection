@@ -362,12 +362,12 @@ internal sealed class BenchmarkExporter
         return mat;
     }
 
-    private static ImageFrame Frame(Mat gray)
+    private static PixelSnapshot Frame(Mat gray)
     {
         using var c = gray.Clone();
         var bytes = new byte[c.Rows * c.Cols];
         Marshal.Copy(c.Data, bytes, 0, bytes.Length);
-        return new ImageFrame(c.Cols, c.Rows, EImagePixelFormat.Gray8, bytes);
+        return new PixelSnapshot(c.Cols, c.Rows, EImagePixelFormat.Gray8, bytes);
     }
 
     /// <summary>目录名：组名去掉非法字符，字符用Unicode编码（Windows文件名不区分大小写，a与A须分开）。</summary>

@@ -6,7 +6,7 @@
 - 配方及结果：只持久化需要长期保存的图像字节；运行中借用图像和持久化快照不是同一种对象。不能把已释放的 `IImageSource` 保存在报告里。
 - 算法：通用定位、仿射、读码、质量测量使用 `DP.Vision.Algorithms` 的接口和实现；LabelInspection只决定检查范围、读取/质量门控、版本及业务判定。
 - ROI：局部几何经矩阵映射为当前帧原图掩膜；需摆正时单独生成图像副本，任何测量证据反向映回原图。
-- 完成迁移时删除 `DP.LabelInspection.Contracts.ImageFrame` 及其运行时依赖、剩余码质检/自定义策略的旧图像委托接口和纯转换代码。`IBarcodeDecoder`、标签侧 OCR/文本候选/字符分割/单字比较通用接口与Runtime转发类均已删除。测试里的快照构造辅助仅用于验证仍需持久化的标签侧证据，不作为产品适配器。
+- 完成迁移时删除 `DP.LabelInspection.Contracts.PixelSnapshot` 及其运行时依赖、剩余码质检/自定义策略的旧图像委托接口和纯转换代码。（该类型原名为 `ImageFrame`，第 3 批已改名并重新定位为"只保存像素数据、不参与检测"，见下方进度 11。）`IBarcodeDecoder`、标签侧 OCR/文本候选/字符分割/单字比较通用接口与Runtime转发类均已删除。测试里的快照构造辅助仅用于验证仍需持久化的标签侧证据，不作为产品适配器。
 
 ## 实际进度
 
@@ -23,13 +23,15 @@
 
 10. 类型统一：标签侧 `PixelRect` 结构已删除，改为 DP.Vision `PixelBounds` 的全局别名（`Directory.Build.props` 的 `<Using Alias="PixelRect">`），源码写法与持久化JSON（`[x,y,w,h]`）不变；`AlgorithmContractAdapter` 中矩形互转删除，调用处直接传递。外部宿主若引用 `DP.LabelInspection.Contracts.PixelRect` 全名，需改为 `DP.Vision.Algorithms.PixelBounds` 或加同样的别名。`BarcodePrintOptions` 同样改为Vision类型的全局别名（逐字段一致）。OCR结果 `TextLineRecognition` / `CtcStep` / `CtcToken` 也直接使用Vision类型（逐字段一致，报告JSON不变）。`BarcodeObservation` / `BarcodeModuleGrid` 暂不统一：标签侧网格角点为像素中心坐标、Vision为像素边缘坐标（相差0.5），直接替换会使QR模块网格及已保存报告中的网格偏移半个像素，须先定义报告迁移。
 
+11. 类型改名与重新定位（第 3 批）：标签侧 `Contracts.ImageFrame` 改名为 `PixelSnapshot`，并明确其角色——只承担"把像素当数据保存或传递"（报告与字库持久化、界面显示、批量训练等离线入口），**不再是检测输入**；检测与在线推理一律走 `DP.Vision` 的 `IImageSource` 租约。改名是纯机械替换：76 个文件、216 处引用，其中 Vision 侧 `DP.Vision.ImageFrame` / `V.ImageFrame` 40 处一处未动；双框架测试 283/283 与基线一致。附带收益是源码里裸写 `ImageFrame` 的歧义（CS0104）消失——`ImageFrame` 现在只指 Vision 侧类型。后续按"训练输入 / 报告证据 / 字库字段"逐组收窄该类型的剩余用法。
+
 ## 尚未完成（阻止删除旧类型/发布标准化SDK）
 
-- 将Core的剩余图像任务、码质量、异常模型训练/检测等接口逐项迁入Vision租约，不让运行中任务访问旧 `ImageFrame`；字库候选后台已直接使用Vision，制作UI和训练库存量旧快照仍需转换。
+- 将Core的剩余图像任务、码质量、异常模型训练/检测等接口逐项迁入Vision租约，不让运行中任务访问旧 `PixelSnapshot`；字库候选后台已直接使用Vision，制作UI和训练库存量旧快照仍需转换。
 - 字库、异常模型、候选库和报告保存使用独立持久化像素表示；明确哈希、版本和释放责任，历史JSON/PNG兼容回归必须通过。
 - 补齐WinForms/WPF工作台异步工作、关闭/取消、预览、输入帧身份的自动化测试；进一步移除UI预览及工具内部的标签侧图像快照，避免运行时常驻两份像素。
 - 样本导出及两套UI不能再只依据 `OffsetX/OffsetY` 切框或画框；非平移矩阵未完整支持前明确阻断，避免导出/展示伪证据。
-- 切换所有测试、示例、工具的调用，再移除余下旧类型和冗余适配，执行双框架构建与完整回归。最后检查生产源码中旧 `ImageFrame` 运行时接口、标签侧读码接口/实现等引用数为零。
+- 切换所有测试、示例、工具的调用，再移除余下旧类型和冗余适配，执行双框架构建与完整回归。最后检查生产源码中旧 `PixelSnapshot` 运行时接口、标签侧读码接口/实现等引用数为零。
 
 ## 不可妥协的约束
 

@@ -49,7 +49,7 @@ public sealed partial class TextRecognitionTests
     [TestMethod]
     public void BgrChannelsAndPadding()
     {
-        var frame = new ImageFrame(1, 1, EImagePixelFormat.Bgr24, new byte[] { 0, 127, 255 });
+        var frame = new PixelSnapshot(1, 1, EImagePixelFormat.Bgr24, new byte[] { 0, 127, 255 });
         using var source = Bridge.ToVision(frame);
         var input = new VisionPreprocessor().Prepare(source, new PixelRect(0, 0, 1, 1), default);
         var values = input.CopyValues();
@@ -69,7 +69,7 @@ public sealed partial class TextRecognitionTests
     {
         var pixels = new byte[700 * 48];
         pixels[0] = 255;
-        var frame = new ImageFrame(700, 48, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(700, 48, EImagePixelFormat.Gray8, pixels);
         using var source = Bridge.ToVision(frame);
         var prep = new VisionPreprocessor();
         var tiny = prep.Prepare(source, new PixelRect(0, 0, 1, 1), default).CopyValues();
@@ -85,7 +85,7 @@ public sealed partial class TextRecognitionTests
     public void PreprocessingRejectsInvalidInput()
     {
         var prep = new VisionPreprocessor();
-        var frame = new ImageFrame(100, 1, EImagePixelFormat.Gray8, new byte[100]);
+        var frame = new PixelSnapshot(100, 1, EImagePixelFormat.Gray8, new byte[100]);
         using var source = Bridge.ToVision(frame);
         Assert.ThrowsExactly<ArgumentException>(() =>
             prep.Prepare(source, new PixelRect(0, 0, 100, 1), default)
@@ -170,7 +170,7 @@ public sealed partial class TextRecognitionTests
         using var recognizer = new FakeRecognizer();
         using var backend = new OpenCvInspectionBackend(recognizer);
         using var engine = new InspectionEngine(backend);
-        var frame = new ImageFrame(20, 20, EImagePixelFormat.Gray8, new byte[400]);
+        var frame = new PixelSnapshot(20, 20, EImagePixelFormat.Gray8, new byte[400]);
         var region = new InspectionRegion(
             "text",
             ERegionKind.Text,
@@ -274,7 +274,7 @@ public sealed partial class TextRecognitionTests
         }
 
         return TestRequests.FromSnapshot(
-            new ImageFrame(20, 20, EImagePixelFormat.Gray8, new byte[400]),
+            new PixelSnapshot(20, 20, EImagePixelFormat.Gray8, new byte[400]),
             new InspectionRecipe("text", 20, 20, EInspectionMode.Free, EAlignmentMode.AssumeAligned, regions)
         );
     }

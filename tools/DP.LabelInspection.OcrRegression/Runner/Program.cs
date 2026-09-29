@@ -88,7 +88,7 @@ internal static class Program
 
                 var bytes = new byte[image.Rows * image.Cols * 3];
                 Marshal.Copy(image.Data, bytes, 0, bytes.Length);
-                var frame = new ImageFrame(image.Cols, image.Rows, EImagePixelFormat.Bgr24, bytes);
+                var frame = new PixelSnapshot(image.Cols, image.Rows, EImagePixelFormat.Bgr24, bytes);
                 var bounds = new PixelRect(
                     int.Parse(p[3]),
                     int.Parse(p[4]),
@@ -201,7 +201,7 @@ internal static class Program
                 );
                 var bytes = new byte[image.Rows * image.Cols];
                 Marshal.Copy(image.Data, bytes, 0, bytes.Length);
-                var frame = new ImageFrame(image.Cols, image.Rows, EImagePixelFormat.Gray8, bytes);
+                var frame = new PixelSnapshot(image.Cols, image.Rows, EImagePixelFormat.Gray8, bytes);
                 using var visionImage = Bridge.ToVision(frame);
                 var result = recognizer.Recognize(
                     visionImage,

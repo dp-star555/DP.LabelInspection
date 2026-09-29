@@ -92,7 +92,7 @@ public sealed class VisionAdapterTests
     [TestMethod]
     public void ImageConversionOwnsPixels()
     {
-        var source = new ImageFrame(1, 1, EImagePixelFormat.Gray8, new byte[] { 12 });
+        var source = new PixelSnapshot(1, 1, EImagePixelFormat.Gray8, new byte[] { 12 });
         using var image = VisionAdapter.CopyImage(source);
         using var retained = image.Retain();
         image.Dispose();

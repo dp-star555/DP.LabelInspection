@@ -47,7 +47,7 @@ public sealed partial class AnomalyLibraryControl : UserControl
         Text = "良品图须与当前配方对齐（同一相机/工位）；每个ROI一个模型，默认以ROI名称为键。",
     };
     private readonly Label _goodInfo = new Label { AutoSize = true, Margin = new Padding(8, 7, 0, 0) };
-    private readonly List<ImageFrame> _good = new List<ImageFrame>();
+    private readonly List<PixelSnapshot> _good = new List<PixelSnapshot>();
     private readonly ListBox _goodList = new ListBox
     {
         Dock = DockStyle.Left,
@@ -62,9 +62,9 @@ public sealed partial class AnomalyLibraryControl : UserControl
     );
 
     /// <summary>各良品图上各ROI相对训练框的平移（原图像素），用于对齐位置略有偏差的良品。</summary>
-    private readonly Dictionary<(ImageFrame Image, string Region), Point> _shifts =
-        new Dictionary<(ImageFrame, string), Point>();
-    private ImageFrame? _shown;
+    private readonly Dictionary<(PixelSnapshot Image, string Region), Point> _shifts =
+        new Dictionary<(PixelSnapshot, string), Point>();
+    private PixelSnapshot? _shown;
     private readonly List<Control> _busyDisabled = new List<Control>();
     private IAnomalyLibraryManager? _manager;
     private IAnomalyModelTrainer? _trainer;
@@ -277,7 +277,7 @@ public sealed partial class AnomalyLibraryControl : UserControl
 
     private RegionItem? SelectedRegion => _regions.SelectedItem as RegionItem;
 
-    private ImageFrame? CurrentImage =>
+    private PixelSnapshot? CurrentImage =>
         _goodList.SelectedIndex >= 0 && _goodList.SelectedIndex < _good.Count
             ? _good[_goodList.SelectedIndex]
             : null;
@@ -288,7 +288,7 @@ public sealed partial class AnomalyLibraryControl : UserControl
     }
 
     /// <summary>该ROI在该良品图上的框：训练框加本图平移。</summary>
-    private PixelRect BoxOn(ImageFrame image, InspectionRegion region)
+    private PixelRect BoxOn(PixelSnapshot image, InspectionRegion region)
     {
         var box = TrainingBox(region);
         var shift = _shifts.TryGetValue((image, region.Name), out var s) ? s : Point.Empty;
@@ -356,7 +356,7 @@ public sealed partial class AnomalyLibraryControl : UserControl
     }
 
     /// <summary>整图平移：结果(x, y)取原图(x + dx, y + dy)，越界按边缘像素延伸；用于把本图上的ROI内容移到训练框位置。</summary>
-    private static ImageFrame Translate(ImageFrame image, int dx, int dy)
+    private static PixelSnapshot Translate(PixelSnapshot image, int dx, int dy)
     {
         if (dx == 0 && dy == 0)
         {
@@ -378,7 +378,7 @@ public sealed partial class AnomalyLibraryControl : UserControl
             }
         }
 
-        return new ImageFrame(w, h, image.Format, output);
+        return new PixelSnapshot(w, h, image.Format, output);
     }
 
     private void TryUi(Action action)
@@ -422,7 +422,7 @@ public sealed partial class AnomalyLibraryControl : UserControl
     /// <summary>加入一张良品整图（例如当前载入的待检图）；位置与配方有偏差时可在画布上移动该图上的ROI框。</summary>
     /// <param name = "image">独立不可变整图。</param>
     /// <param name = "name">显示名称。</param>
-    public void AddGoodImage(ImageFrame image, string? name = null)
+    public void AddGoodImage(PixelSnapshot image, string? name = null)
     {
         _good.Add(image ?? throw new ArgumentNullException(nameof(image)));
         _goodList.Items.Add(name ?? "良品" + _good.Count);

@@ -46,7 +46,7 @@ public sealed class AnomalyTrainingSession
     /// <param name = "image">不可变整图。</param>
     /// <param name = "name">显示名称。</param>
     /// <param name = "path">来源文件路径，可为null。</param>
-    public AnomalyTrainingImage AddImage(ImageFrame image, string name, string? path = null)
+    public AnomalyTrainingImage AddImage(PixelSnapshot image, string name, string? path = null)
     {
         var item = new AnomalyTrainingImage(image, name, path);
         _images.Add(item);

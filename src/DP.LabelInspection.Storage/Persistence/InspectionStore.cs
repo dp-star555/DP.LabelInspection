@@ -204,7 +204,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
         string id,
         int expectedRevision,
         string character,
-        ImageFrame image,
+        PixelSnapshot image,
         string binarization = "otsu",
         string? provenanceJson = null
     )
@@ -296,7 +296,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     public int PutSheet(
         string id,
         int expectedRevision,
-        ImageFrame sheet,
+        PixelSnapshot sheet,
         string alphabet,
         int rows,
         int columns,
@@ -424,7 +424,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     /// <param name = "request">本次不可变请求，提供配方、业务身份及显式快照。</param>
     /// <param name = "report">对应的完整检测报告。</param>
     /// <param name = "annotated">可选标注图快照，不替代原图保存。</param>
-    public string SaveReport(InspectionRequest request, InspectionReport report, ImageFrame? annotated = null)
+    public string SaveReport(InspectionRequest request, InspectionReport report, PixelSnapshot? annotated = null)
     {
         string id = Guid.NewGuid().ToString("N"),
             jobs = Path.Combine(_root, "jobs"),

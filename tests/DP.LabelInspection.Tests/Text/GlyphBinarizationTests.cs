@@ -13,7 +13,7 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed class GlyphBinarizationTests
 {
-    private static ImageFrame Block(byte ink, byte paper)
+    private static PixelSnapshot Block(byte ink, byte paper)
     {
         var pixels = Enumerable.Repeat(paper, 32 * 32).ToArray();
         for (int y = 6; y < 26; y++)
@@ -24,7 +24,7 @@ public sealed class GlyphBinarizationTests
             }
         }
 
-        return new ImageFrame(32, 32, EImagePixelFormat.Gray8, pixels);
+        return new PixelSnapshot(32, 32, EImagePixelFormat.Gray8, pixels);
     }
 
     /// <summary>三种模式名均可保存；未知名称仍被拒绝。</summary>

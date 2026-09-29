@@ -34,7 +34,7 @@ public sealed class LabelInspectionHostTests
                     ),
                 }
             );
-            var image = new ImageFrame(
+            var image = new PixelSnapshot(
                 32,
                 32,
                 EImagePixelFormat.Gray8,

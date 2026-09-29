@@ -9,7 +9,7 @@ internal sealed class LoadedImage
     internal LoadedImage(
         BenchmarkImage source,
         string stem,
-        ImageFrame frame,
+        PixelSnapshot frame,
         IReadOnlyList<LoadedLine> lines
     )
     {
@@ -23,7 +23,7 @@ internal sealed class LoadedImage
 
     internal string Stem { get; }
 
-    internal ImageFrame Frame { get; }
+    internal PixelSnapshot Frame { get; }
 
     internal IReadOnlyList<LoadedLine> Lines { get; }
 

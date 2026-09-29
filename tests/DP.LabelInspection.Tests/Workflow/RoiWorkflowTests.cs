@@ -39,7 +39,7 @@ public sealed partial class RoiWorkflowTests
     )
     {
         return TestRequests.FromSnapshot(
-            new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]),
+            new PixelSnapshot(80, 40, EImagePixelFormat.Gray8, new byte[3200]),
             new InspectionRecipe(
                 "stages",
                 80,
@@ -93,7 +93,7 @@ public sealed partial class RoiWorkflowTests
     [TestMethod]
     public void ReportIncludesFrameBoundAlignment()
     {
-        var actual = new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
+        var actual = new PixelSnapshot(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
         var recipe = new InspectionRecipe(
             "pose",
             80,

@@ -33,9 +33,9 @@ public sealed partial class InspectionTests
         }
     }
 
-    private static ImageFrame Frame(byte[] data)
+    private static PixelSnapshot Frame(byte[] data)
     {
-        return new ImageFrame(120, 80, EImagePixelFormat.Gray8, data);
+        return new PixelSnapshot(120, 80, EImagePixelFormat.Gray8, data);
     }
 
     private static InspectionRegion Fixed()
@@ -96,7 +96,7 @@ public sealed partial class InspectionTests
     public void InvalidFrameLayoutRejected()
     {
         Assert.ThrowsExactly<ArgumentException>(() =>
-            new ImageFrame(10, 10, EImagePixelFormat.Bgr24, new byte[100])
+            new PixelSnapshot(10, 10, EImagePixelFormat.Bgr24, new byte[100])
         );
     }
 
@@ -383,7 +383,7 @@ public sealed partial class InspectionTests
     [TestMethod]
     public void CoreHasNoNativeOrUiAssemblyDependencies()
     {
-        foreach (var assembly in new[] { typeof(ImageFrame).Assembly, typeof(InspectionEngine).Assembly })
+        foreach (var assembly in new[] { typeof(PixelSnapshot).Assembly, typeof(InspectionEngine).Assembly })
         {
             foreach (var reference in assembly.GetReferencedAssemblies())
             {

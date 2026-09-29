@@ -19,7 +19,7 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
     private readonly Canvas _canvas = new Canvas { Background = Brushes.WhiteSmoke, ClipToBounds = true };
     private readonly DP.Vision.WPF.VisionCanvasControl _vision = new DP.Vision.WPF.VisionCanvasControl();
     private DP.Vision.IImageSource? _source;
-    private ImageFrame? _displayedActual;
+    private PixelSnapshot? _displayedActual;
     private string _frameId = "";
     private long _sequence;
     private bool _disposed;
@@ -54,7 +54,7 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
     };
     private readonly List<InspectionRegion> _regions = new List<InspectionRegion>();
     private IInspectionEngine? _engine;
-    private ImageFrame? _actual,
+    private PixelSnapshot? _actual,
         _reference;
     private DP.Vision.ImageFrame? _visionActual, _visionReference;
     private InspectionRequest? _lastRequest;
@@ -767,7 +767,7 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
         Render();
     }
 
-    private static Image Preview(ImageFrame frame)
+    private static Image Preview(PixelSnapshot frame)
     {
         return new Image
         {
@@ -779,7 +779,7 @@ public sealed class LabelInspectionControl : UserControl, IDisposable
         };
     }
 
-    private static BitmapSource Source(ImageFrame frame)
+    private static BitmapSource Source(PixelSnapshot frame)
     {
         var source = BitmapSource.Create(
             frame.Width,

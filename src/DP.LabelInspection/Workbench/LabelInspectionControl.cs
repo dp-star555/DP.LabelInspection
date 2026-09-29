@@ -85,8 +85,8 @@ public sealed class LabelInspectionControl : UserControl
     private string? _cycleId;
     private readonly List<InspectionRegion> _regions = new List<InspectionRegion>();
     private IInspectionEngine? _engine;
-    private ImageFrame? _actual;
-    private ImageFrame? _reference;
+    private PixelSnapshot? _actual;
+    private PixelSnapshot? _reference;
     private DP.Vision.ImageFrame? _visionActual;
     private DP.Vision.ImageFrame? _visionReference;
     private readonly Label _referenceMode = new Label { AutoSize = true };
@@ -1429,7 +1429,7 @@ public sealed class LabelInspectionControl : UserControl
         parent.Controls.Add(ActionGroup.CreateButton(text, action));
     }
 
-    private static void AddPreview(Control card, ImageFrame frame, string label)
+    private static void AddPreview(Control card, PixelSnapshot frame, string label)
     {
         var box = new PictureBox
         {

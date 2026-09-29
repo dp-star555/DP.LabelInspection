@@ -54,7 +54,7 @@ public sealed class BarcodeEvidenceGroupTests
         {
             var codec = new OpenCvImageCodec();
             var store = new InspectionStore(root, codec);
-            var frame = new ImageFrame(
+            var frame = new PixelSnapshot(
                 100,
                 80,
                 EImagePixelFormat.Gray8,
@@ -99,7 +99,7 @@ public sealed class BarcodeEvidenceGroupTests
     [TestMethod]
     public void ExportedOverviewDoesNotPaintEverySmallDefect()
     {
-        var frame = new ImageFrame(
+        var frame = new PixelSnapshot(
             100,
             80,
             EImagePixelFormat.Gray8,

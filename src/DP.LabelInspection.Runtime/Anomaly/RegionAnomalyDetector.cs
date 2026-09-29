@@ -55,7 +55,7 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
     /// <param name = "options">块大小、记忆库容量与阈值余量。</param>
     /// <param name = "token">协作式取消标记。</param>
     public PatchAnomalyModel Train(
-        IReadOnlyList<ImageFrame> good,
+        IReadOnlyList<PixelSnapshot> good,
         InspectionRegion region,
         PatchAnomalyOptions options,
         CancellationToken token = default
@@ -142,7 +142,7 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
     /// <param name = "key">模型键；null时使用ROI名称。</param>
     /// <param name = "token">协作式取消标记。</param>
     public AnomalyModelEntry TrainEntry(
-        IReadOnlyList<ImageFrame> good,
+        IReadOnlyList<PixelSnapshot> good,
         InspectionRegion region,
         PatchAnomalyOptions? options = null,
         string? key = null,
@@ -179,7 +179,7 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
 
     /// <inheritdoc/>
     AnomalyModelEntry IAnomalyModelTrainer.Train(
-        IReadOnlyList<ImageFrame> good,
+        IReadOnlyList<PixelSnapshot> good,
         InspectionRegion region,
         string? key,
         CancellationToken token
@@ -297,7 +297,7 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         return new PixelRect(x0, y0, x1 - x0, y1 - y0);
     }
 
-    private PixelRect Crop(ImageFrame image, InspectionRegion region)
+    private PixelRect Crop(PixelSnapshot image, InspectionRegion region)
     {
         return CropFor(image.Width, image.Height, region.Bounds);
     }

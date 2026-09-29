@@ -13,9 +13,9 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed partial class GlyphDraftSessionTests
 {
-    private static ImageFrame Image(byte value = 20)
+    private static PixelSnapshot Image(byte value = 20)
     {
-        return new ImageFrame(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat(value, 512).ToArray());
+        return new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat(value, 512).ToArray());
     }
 
     private static string Add(GlyphDraftSession session, string label = "A")
@@ -98,7 +98,7 @@ public sealed partial class GlyphDraftSessionTests
     [TestMethod]
     public void SplitPreservesAllPixels()
     {
-        var image = new ImageFrame(
+        var image = new PixelSnapshot(
             32,
             16,
             EImagePixelFormat.Bgr24,

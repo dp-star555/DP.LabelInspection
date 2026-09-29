@@ -10,7 +10,7 @@ namespace DP.LabelInspection.Tests;
 /// <summary>仅供历史标签报告断言；生产码印刷测量由Vision策略执行。</summary>
 internal sealed class SnapshotBarcodeQuality
 {
-    internal IReadOnlyList<InspectionFinding> Inspect(ImageFrame frame, PixelRect bounds,
+    internal IReadOnlyList<InspectionFinding> Inspect(PixelSnapshot frame, PixelRect bounds,
         IReadOnlyList<BarcodeObservation> symbols, BarcodePrintOptions options, CancellationToken token)
     {
         if (frame == null || symbols == null || options == null) throw new ArgumentNullException(nameof(frame));

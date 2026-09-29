@@ -11,7 +11,7 @@ public static class AlgorithmContractAdapter
 {
     /// <summary>创建调用方拥有的只读算法租约。</summary>
     /// <param name = "frame">待复制的不可变标签图像快照。</param>
-    public static IImageSource ToVision(L.ImageFrame frame)
+    public static IImageSource ToVision(L.PixelSnapshot frame)
     {
         return VisionImage.CopyFrom(
             new ImageInfo(
@@ -25,7 +25,7 @@ public static class AlgorithmContractAdapter
 
     /// <summary>将支持的像素布局复制到现有不可变报告模型。</summary>
     /// <param name = "frame">借用的通用图像租约，支持的像素会复制为标签快照。</param>
-    public static L.ImageFrame ToLabel(IImageSource frame)
+    public static L.PixelSnapshot ToLabel(IImageSource frame)
     {
         if (frame == null)
             throw new ArgumentNullException(nameof(frame));
@@ -43,7 +43,7 @@ public static class AlgorithmContractAdapter
 
         var bytes = new byte[frame.Info.ByteLength];
         frame.CopyTo(0, bytes, 0, bytes.Length);
-        return new L.ImageFrame(
+        return new L.PixelSnapshot(
             frame.Info.Width,
             frame.Info.Height,
             frame.Info.Layout == EPixelLayout.Gray8 ? L.EImagePixelFormat.Gray8 : L.EImagePixelFormat.Bgr24,

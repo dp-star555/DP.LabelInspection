@@ -51,7 +51,7 @@ WPF控件现在实现`IDisposable`。宿主应先`await CancelAndWaitAsync()`，
 - 历史全BGR/GDI基准工具（`tools/DP.LabelInspection.CanvasBenchmark`）已删除，结论见`docs/archive/CANVAS_BENCHMARK.md`。
 - 本轮仅构建验证该可选工具，没有重跑40进程性能矩阵，也没有新的工作台FPS结论。
 - 通用图块Renderer的既有性能结果不能直接等同于含OCR/报告/字库的完整工作台吞吐。
-- 兼容图像输入仍会复制，尚未接入相机池/异步大文件解码；Label `ImageFrame`原有12000边长/1600万像素限制没有改变。
+- 兼容图像输入仍会复制，尚未接入相机池/异步大文件解码；Label `PixelSnapshot`原有12000边长/1600万像素限制没有改变。
 - 老公共类型继续存在，第三方宿主不用一次性改接口；新部署必须携带对应DP.Vision及Adapter程序集。
 
 ## 启动当前版本

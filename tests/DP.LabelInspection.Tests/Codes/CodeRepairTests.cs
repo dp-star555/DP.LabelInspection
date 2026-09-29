@@ -42,7 +42,7 @@ public sealed class CodeRepairTests
     public void CleanQrIsReadDirectly()
     {
         var pixels = Qr("WF675907", out int size);
-        var frame = new ImageFrame(size, size, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(size, size, EImagePixelFormat.Gray8, pixels);
         var symbol = new ZxingBarcodeDecoder()
             .Decode(frame, new PixelRect(0, 0, size, size), default)
             .Single();
@@ -238,7 +238,7 @@ public sealed class CodeRepairTests
             }
         }
 
-        var frame = new ImageFrame(size, size, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(size, size, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, size, size);
         var symbol = new ZxingBarcodeDecoder().Decode(frame, bounds, default).Single();
         Assert.AreEqual("WF675907", symbol.Text);
@@ -283,7 +283,7 @@ public sealed class CodeRepairTests
             }
         }
 
-        var frame = new ImageFrame(size, size, EImagePixelFormat.Gray8, spread);
+        var frame = new PixelSnapshot(size, size, EImagePixelFormat.Gray8, spread);
         var bounds = new PixelRect(0, 0, size, size);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         Assert.IsNotNull(symbols.Single().ModuleGrid);

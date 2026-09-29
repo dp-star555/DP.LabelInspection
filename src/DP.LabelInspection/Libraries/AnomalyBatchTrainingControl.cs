@@ -50,7 +50,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
     private AnomalyTrainingSample? _selected;
     private bool _filling,
         _extracting;
-    private ImageFrame? _shown;
+    private PixelSnapshot? _shown;
 
     /// <summary>创建无参数、可安全用于设计器的训练页。</summary>
     public AnomalyBatchTrainingControl()
@@ -363,7 +363,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
     /// <param name = "image">不可变整图。</param>
     /// <param name = "name">显示名称。</param>
     /// <param name = "path">来源文件，可为null。</param>
-    public void AddImage(ImageFrame image, string name, string? path = null)
+    public void AddImage(PixelSnapshot image, string name, string? path = null)
     {
         _session.AddImage(image, name, path);
         RefreshAll();

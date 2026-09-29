@@ -106,7 +106,7 @@ public sealed class SampleExporter
         }
     }
 
-    private IEnumerable<(ImageFrame Crop, JObject Line)> Samples(string job, int margin)
+    private IEnumerable<(PixelSnapshot Crop, JObject Line)> Samples(string job, int margin)
     {
         var recipe = _store.DeserializeRecipe(File.ReadAllText(Path.Combine(job, "recipe.json")));
         var report = JObject.Parse(File.ReadAllText(Path.Combine(job, "report.json")));

@@ -13,7 +13,7 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed class TouchingGlyphTests
 {
-    private static ImageFrame Line(int bridgeHeight)
+    private static PixelSnapshot Line(int bridgeHeight)
     {
         var p = Enumerable.Repeat((byte)255, 130 * 36).ToArray();
         for (int i = 0; i < 8; i++)
@@ -35,11 +35,11 @@ public sealed class TouchingGlyphTests
             }
         }
 
-        return new ImageFrame(130, 36, EImagePixelFormat.Gray8, p);
+        return new PixelSnapshot(130, 36, EImagePixelFormat.Gray8, p);
     }
 
     private static async Task<GlyphCandidateExtraction> Extract(
-        InspectionEngine engine, ImageFrame frame, PixelRect roi, string text)
+        InspectionEngine engine, PixelSnapshot frame, PixelRect roi, string text)
     {
         using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(frame);
         return await engine.ExtractGlyphCandidatesAsync(source, roi, text);

@@ -10,7 +10,7 @@ namespace DP.LabelInspection;
 internal sealed class BarcodeComparisonControl : UserControl
 {
     internal BarcodeComparisonControl(
-        ImageFrame actual,
+        PixelSnapshot actual,
         InspectionEvidenceGroup group,
         bool allowExpand = true
     )

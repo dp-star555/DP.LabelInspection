@@ -15,7 +15,7 @@ public sealed class CharacterAnomalyResult
     public CharacterAnomalyResult(
         PixelRect crop,
         IEnumerable<CharacterAnomalyScore> scores,
-        ImageFrame? heatMap
+        PixelSnapshot? heatMap
     )
     {
         Crop = crop;
@@ -30,7 +30,7 @@ public sealed class CharacterAnomalyResult
     public IReadOnlyList<CharacterAnomalyScore> Scores { get; }
 
     /// <summary>合成热力图。</summary>
-    public ImageFrame? HeatMap { get; }
+    public PixelSnapshot? HeatMap { get; }
 
     /// <summary>已检测字符中最大得分相对各自阈值的倍数。</summary>
     public double WorstRatio =>

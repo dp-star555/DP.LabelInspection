@@ -19,8 +19,8 @@ public sealed class ReferenceModeTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var image = new ImageFrame(32, 16, EImagePixelFormat.Gray8, new byte[512]);
-        var reference = new ImageFrame(8, 8, EImagePixelFormat.Gray8, new byte[64]);
+        var image = new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, new byte[512]);
+        var reference = new PixelSnapshot(8, 8, EImagePixelFormat.Gray8, new byte[64]);
         var recipe = new InspectionRecipe(
             "test",
             32,
@@ -122,7 +122,7 @@ public sealed class ReferenceModeTests
     {
         using var backend = new OpenCvInspectionBackend();
         using var engine = new InspectionEngine(backend);
-        var image = new ImageFrame(32, 16, EImagePixelFormat.Gray8, new byte[512]);
+        var image = new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, new byte[512]);
         var recipe = new InspectionRecipe(
             "test",
             32,
@@ -155,7 +155,7 @@ public sealed class ReferenceModeTests
                 pixels[14 * 64 + 8 + x] = 0;
             }
 
-            var image = new ImageFrame(64, 32, EImagePixelFormat.Gray8, pixels);
+            var image = new PixelSnapshot(64, 32, EImagePixelFormat.Gray8, pixels);
             var store = new InspectionStore(root, new OpenCvImageCodec());
             string id = store.CreateLibrary("user-font");
             var session = new GlyphDraftSession();

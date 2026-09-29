@@ -97,7 +97,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
     private IGlyphLibraryManager? _manager;
     private IGlyphCandidateService? _extractor;
     private GlyphLibrarySnapshot? _library;
-    private ImageFrame? _image;
+    private PixelSnapshot? _image;
     private PixelRect? _roi;
     private GlyphCandidateExtraction? _result;
     private string _currentName = "图片";
@@ -557,7 +557,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
 
     /// <summary>加载源图，仅清除当前候选表；已明确暂存的图块继续保留。</summary>
     /// <param name = "image">新的不可变源图，不会清除跨图暂存。</param>
-    public void SetImage(ImageFrame image)
+    public void SetImage(PixelSnapshot image)
     {
         LoadImage(image, "图片");
     }
@@ -565,12 +565,12 @@ public sealed class GlyphQuickBuilderControl : UserControl
     /// <summary>加载源图及简短显示名；来源记录保留名称但不保留目录路径。</summary>
     /// <param name = "image">新的不可变源图。</param>
     /// <param name = "sourceName">用于显示和溯源的简短来源名称，不包含目录路径。</param>
-    public void SetImage(ImageFrame image, string sourceName)
+    public void SetImage(PixelSnapshot image, string sourceName)
     {
         LoadImage(image, Path.GetFileName(sourceName));
     }
 
-    private void LoadImage(ImageFrame image, string name)
+    private void LoadImage(PixelSnapshot image, string name)
     {
         Idle();
         _draft.LoadImage(image, name);
@@ -659,7 +659,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
     }
 
     private async Task ExtractCoreAsync(
-        ImageFrame image,
+        PixelSnapshot image,
         PixelRect roi,
         string? text,
         CancellationToken token
@@ -1272,7 +1272,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
         IWin32Window? owner,
         IGlyphLibraryManager manager,
         IGlyphCandidateService? service,
-        ImageFrame? image = null,
+        PixelSnapshot? image = null,
         string? selectedLibrary = null
     )
     {

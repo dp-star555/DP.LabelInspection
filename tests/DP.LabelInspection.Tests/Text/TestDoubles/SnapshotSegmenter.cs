@@ -7,7 +7,7 @@ namespace DP.LabelInspection.Tests;
 /// <summary>仅为仍测试长期保存的标签侧字符证据，把Vision分割结果复制为测试快照。</summary>
 internal sealed class SnapshotSegmenter
 {
-    internal CharacterSegmentation Segment(ImageFrame frame, PixelRect bounds, string text,
+    internal CharacterSegmentation Segment(PixelSnapshot frame, PixelRect bounds, string text,
         CancellationToken token = default)
     {
         using var source = Bridge.ToVision(frame);

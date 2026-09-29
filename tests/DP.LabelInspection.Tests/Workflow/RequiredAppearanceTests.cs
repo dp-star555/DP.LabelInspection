@@ -15,7 +15,7 @@ public sealed partial class RequiredAppearanceTests
     {
         using var backend = new Backend(quality, completed);
         using var engine = new InspectionEngine(backend);
-        var image = new ImageFrame(32, 32, EImagePixelFormat.Gray8, new byte[1024]);
+        var image = new PixelSnapshot(32, 32, EImagePixelFormat.Gray8, new byte[1024]);
         var region = new InspectionRegion(
             "text",
             ERegionKind.Text,
@@ -67,7 +67,7 @@ public sealed partial class RequiredAppearanceTests
     [TestMethod]
     public void PartialComparisonFailsClosed()
     {
-        var image = new ImageFrame(8, 8, EImagePixelFormat.Gray8, new byte[64]);
+        var image = new PixelSnapshot(8, 8, EImagePixelFormat.Gray8, new byte[64]);
         var a = new CharacterPatch("A", 0, new PixelRect(2, 2, 8, 8), image);
         var b = new CharacterPatch("B", 1, new PixelRect(12, 2, 8, 8), image);
         var comparison = new GlyphComparison("compared", 0, 0, 0, image, image, image);
@@ -96,7 +96,7 @@ public sealed partial class RequiredAppearanceTests
     [TestMethod]
     public void CompletedComparisonDoesNotGainCompletionNg()
     {
-        var image = new ImageFrame(8, 8, EImagePixelFormat.Gray8, new byte[64]);
+        var image = new PixelSnapshot(8, 8, EImagePixelFormat.Gray8, new byte[64]);
         var a = new CharacterPatch("A", 0, new PixelRect(2, 2, 8, 8), image);
         var comparison = new GlyphComparison("compared", 0, 0, 0, image, image, image);
         var report = Run(

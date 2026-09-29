@@ -11,7 +11,7 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed class RegionAnomalyTests
 {
-    private static ImageFrame Label(int shift, int seed, bool defect = false)
+    private static PixelSnapshot Label(int shift, int seed, bool defect = false)
     {
         using var m = new Mat(80, 220, MatType.CV_8UC1, Scalar.All(235));
         Cv2.Randn(m, Scalar.All(235), Scalar.All(3));
@@ -32,7 +32,7 @@ public sealed class RegionAnomalyTests
 
         var bytes = new byte[m.Rows * m.Cols];
         Marshal.Copy(m.Data, bytes, 0, bytes.Length);
-        return new ImageFrame(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
+        return new PixelSnapshot(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
     }
 
     /// <summary>固定内容用位置相关模式，可变文字与条码用与位置无关模式。</summary>

@@ -9,7 +9,7 @@ public sealed class RegionAnomalySample
     /// <param name = "image">借用的原始整图（良品）。</param>
     /// <param name = "bounds">样本框，须在图像内；位置相关模型要求各样本框尺寸相同。</param>
     /// <param name = "source">可选来源说明（文件名等）。</param>
-    public RegionAnomalySample(ImageFrame image, PixelRect bounds, string? source = null)
+    public RegionAnomalySample(PixelSnapshot image, PixelRect bounds, string? source = null)
     {
         Image = image ?? throw new ArgumentNullException(nameof(image));
         if (!bounds.Fits(image) || bounds.Width < 8 || bounds.Height < 8)
@@ -25,7 +25,7 @@ public sealed class RegionAnomalySample
     }
 
     /// <summary>原始整图。</summary>
-    public ImageFrame Image { get; }
+    public PixelSnapshot Image { get; }
 
     /// <summary>样本框（原图坐标）。</summary>
     public PixelRect Bounds { get; }

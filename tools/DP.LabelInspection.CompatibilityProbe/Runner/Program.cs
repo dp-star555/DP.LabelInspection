@@ -30,7 +30,7 @@ internal static class Program
                 }
             }
 
-            var actual = new ImageFrame(160, 80, EImagePixelFormat.Gray8, bytes);
+            var actual = new PixelSnapshot(160, 80, EImagePixelFormat.Gray8, bytes);
             using var backend = new OpenCvInspectionBackend();
             using var engine = new InspectionEngine(backend);
             var recipe = new InspectionRecipe(

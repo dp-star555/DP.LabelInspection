@@ -10,7 +10,7 @@ namespace DP.LabelInspection.Core;
 /// <summary>与UI无关的候选编辑和跨图暂存；加载新图清除当前编辑，不清除暂存参考。</summary>
 public sealed class GlyphDraftSession
 {
-    private ImageFrame? _source;
+    private PixelSnapshot? _source;
     private string _hash = "",
         _sourceName = "";
     private long _next;
@@ -21,7 +21,7 @@ public sealed class GlyphDraftSession
     private string? _pendingLibrary;
 
     /// <summary>当前源图，暂存项不会保留完整源图。</summary>
-    public ImageFrame? Source => _source;
+    public PixelSnapshot? Source => _source;
 
     /// <summary>当前图像候选，与调用方可变集合分离。</summary>
     public IReadOnlyList<GlyphDraftCandidate> Candidates => _candidates.AsReadOnly();
@@ -41,7 +41,7 @@ public sealed class GlyphDraftSession
     /// <summary>加载另一张不可变图像，不丢弃已暂存图块。</summary>
     /// <param name = "image">新的不可变源图，暂存项不保留整个源图。</param>
     /// <param name = "sourceName">简短来源名称，用于候选溯源，可为空。</param>
-    public void LoadImage(ImageFrame image, string sourceName = "")
+    public void LoadImage(PixelSnapshot image, string sourceName = "")
     {
         if (image == null)
         {

@@ -186,7 +186,7 @@ public sealed partial class FieldBindingTests
     [DataRow(true)]
     public void OverlappingTextAndBarcodeCanBind(bool reverse)
     {
-        var frame = new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
+        var frame = new PixelSnapshot(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
         var regions = new[]
         {
             new InspectionRegion("text", ERegionKind.Text, new PixelRect(10, 10, 30, 20), true),
@@ -223,7 +223,7 @@ public sealed partial class FieldBindingTests
         string? cycle = null
     )
     {
-        var frame = new ImageFrame(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
+        var frame = new PixelSnapshot(80, 40, EImagePixelFormat.Gray8, new byte[3200]);
         return TestRequests.FromSnapshot(
             frame,
             new InspectionRecipe(

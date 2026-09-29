@@ -28,7 +28,7 @@ DP.Vision增加独立的WinForms/WPF多节点、多视图、图层选择浏览�
 
 两框架各 **219通过**，共享各94、算法各46，共718项；完整真实OCR、物理外观、DB候选发现和两种原生工作台通过。新增双输入保留、成功/失败/取消清理、保留实际源失败时释放参考源及位深拒绝回归。完整日志`artifacts/source-verification.log`及`../DP.Vision/artifacts/source-verification.log`。重新编译时旧枚举测试可能提示MSTEST0032；不将增量构建无警告误写为清洁重建保证。
 
-源接口与工作台图像输入是破坏性变更，示例已迁移；旧发布包未重建。仍保留标签业务ImageFrame快照及低层InspectionRequest入口，不冒称全链零复制。见[统一源用法与边界](../DP.Vision/UNIFIED_IMAGE_SOURCE.md)。
+源接口与工作台图像输入是破坏性变更，示例已迁移；旧发布包未重建。仍保留标签业务像素快照（当时名为`ImageFrame`，第 3 批已改名`PixelSnapshot`）及低层InspectionRequest入口，不冒称全链零复制。见[统一源用法与边界](../DP.Vision/UNIFIED_IMAGE_SOURCE.md)。
 
 ## 历史：单类型文件、功能目录与枚举E前缀
 

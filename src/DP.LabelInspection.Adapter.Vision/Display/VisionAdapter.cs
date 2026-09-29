@@ -11,7 +11,7 @@ public static class VisionAdapter
 {
     /// <summary>将现有不可变检测图复制为通用独立图像，返回租约需由调用方释放。</summary>
     /// <param name = "image">待复制的不可变标签图像快照。</param>
-    public static V.IImageSource CopyImage(ImageFrame image)
+    public static V.IImageSource CopyImage(PixelSnapshot image)
     {
         if (image == null)
         {

@@ -12,7 +12,7 @@ public interface IAnomalyModelTrainer
     /// <param name = "key">模型键；null时使用ROI名称。</param>
     /// <param name = "token">协作式取消标记。</param>
     AnomalyModelEntry Train(
-        IReadOnlyList<ImageFrame> good,
+        IReadOnlyList<PixelSnapshot> good,
         InspectionRegion region,
         string? key = null,
         CancellationToken token = default

@@ -12,7 +12,7 @@ public sealed class CharacterAnomalyCell
     /// <param name = "key">模型键（“组/字符”或字符）。</param>
     /// <param name = "training">是否来自训练样本。</param>
     /// <param name = "image">归一化后的灰度单元，与同键训练单元同尺寸。</param>
-    public CharacterAnomalyCell(int sample, int index, string key, bool training, ImageFrame image)
+    public CharacterAnomalyCell(int sample, int index, string key, bool training, PixelSnapshot image)
     {
         Sample = sample;
         Index = index;
@@ -34,5 +34,5 @@ public sealed class CharacterAnomalyCell
     public bool Training { get; }
 
     /// <summary>归一化后的灰度单元。</summary>
-    public ImageFrame Image { get; }
+    public PixelSnapshot Image { get; }
 }

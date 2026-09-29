@@ -33,7 +33,7 @@ public interface IGlyphLibraryManager : IGlyphLibraryRepository
         string id,
         int expectedRevision,
         string character,
-        ImageFrame image,
+        PixelSnapshot image,
         string binarization = "otsu",
         string? provenanceJson = null
     );
@@ -50,7 +50,7 @@ public interface IGlyphLibraryManager : IGlyphLibraryRepository
     int PutSheet(
         string id,
         int expectedRevision,
-        ImageFrame sheet,
+        PixelSnapshot sheet,
         string alphabet,
         int rows,
         int columns,

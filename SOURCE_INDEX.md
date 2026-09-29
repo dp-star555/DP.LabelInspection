@@ -24,7 +24,7 @@
 | `PixelRectExtensions` | [src/DP.LabelInspection.Contracts/Geometry/PixelRectExtensions.cs](src/DP.LabelInspection.Contracts/Geometry/PixelRectExtensions.cs) |
 | `EImagePixelFormat` | [src/DP.LabelInspection.Contracts/Imaging/EImagePixelFormat.cs](src/DP.LabelInspection.Contracts/Imaging/EImagePixelFormat.cs) |
 | `IImageCodec` | [src/DP.LabelInspection.Contracts/Imaging/IImageCodec.cs](src/DP.LabelInspection.Contracts/Imaging/IImageCodec.cs) |
-| `ImageFrame` | [src/DP.LabelInspection.Contracts/Imaging/ImageFrame.cs](src/DP.LabelInspection.Contracts/Imaging/ImageFrame.cs) |
+| `PixelSnapshot` | [src/DP.LabelInspection.Contracts/Imaging/PixelSnapshot.cs](src/DP.LabelInspection.Contracts/Imaging/PixelSnapshot.cs) |
 | `EAlignmentMode` | [src/DP.LabelInspection.Contracts/Inspection/Configuration/EAlignmentMode.cs](src/DP.LabelInspection.Contracts/Inspection/Configuration/EAlignmentMode.cs) |
 | `EInspectionMode` | [src/DP.LabelInspection.Contracts/Inspection/Configuration/EInspectionMode.cs](src/DP.LabelInspection.Contracts/Inspection/Configuration/EInspectionMode.cs) |
 | `ERegionKind` | [src/DP.LabelInspection.Contracts/Inspection/Configuration/ERegionKind.cs](src/DP.LabelInspection.Contracts/Inspection/Configuration/ERegionKind.cs) |

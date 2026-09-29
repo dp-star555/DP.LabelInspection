@@ -22,9 +22,9 @@ public sealed class GlyphComparison
         double difference,
         int missing,
         int extra,
-        ImageFrame actual,
-        ImageFrame reference,
-        ImageFrame delta
+        PixelSnapshot actual,
+        PixelSnapshot reference,
+        PixelSnapshot delta
     )
     {
         Status = status;
@@ -49,11 +49,11 @@ public sealed class GlyphComparison
     public int Extra { get; }
 
     /// <summary>已对齐的归一化实际图。</summary>
-    public ImageFrame Actual { get; }
+    public PixelSnapshot Actual { get; }
 
     /// <summary>归一化参考图。</summary>
-    public ImageFrame Reference { get; }
+    public PixelSnapshot Reference { get; }
 
     /// <summary>彩色差异图。</summary>
-    public ImageFrame Delta { get; }
+    public PixelSnapshot Delta { get; }
 }

@@ -84,7 +84,7 @@ public sealed class ContentVerificationTests
             values
         );
         var request = TestRequests.FromSnapshot(
-            new ImageFrame(8, 8, EImagePixelFormat.Gray8, new byte[64]),
+            new PixelSnapshot(8, 8, EImagePixelFormat.Gray8, new byte[64]),
             new InspectionRecipe(
                 "r",
                 8,

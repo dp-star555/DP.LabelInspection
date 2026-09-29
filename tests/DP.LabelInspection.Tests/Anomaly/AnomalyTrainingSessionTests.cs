@@ -20,7 +20,7 @@ namespace DP.LabelInspection.Tests;
 public sealed partial class AnomalyTrainingSessionTests
 {
     /// <summary>标签图：左上图形（位置按dx/dy偏移）、中部一行文字、右侧随机条纹“码”。</summary>
-    private static ImageFrame Label(int dx, int dy, string text, int seed, bool logoDefect = false)
+    private static PixelSnapshot Label(int dx, int dy, string text, int seed, bool logoDefect = false)
     {
         using var m = new Mat(160, 420, MatType.CV_8UC1, Scalar.All(235));
         Cv2.Randn(m, Scalar.All(235), Scalar.All(3));
@@ -42,7 +42,7 @@ public sealed partial class AnomalyTrainingSessionTests
 
         var bytes = new byte[m.Rows * m.Cols];
         Marshal.Copy(m.Data, bytes, 0, bytes.Length);
-        return new ImageFrame(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
+        return new PixelSnapshot(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
     }
 
     private static readonly string[] Texts = { "A1B2C3", "3C2B1A", "B3A1C2", "2A3C1B" };
@@ -151,7 +151,7 @@ public sealed partial class AnomalyTrainingSessionTests
         var fixedRoi = bound
             .Single(r => r.Name == "标志")
             .WithTasks(new RoiInspectionTasks(false, false, true));
-        RegionInspectionResult Run(ImageFrame image)
+        RegionInspectionResult Run(PixelSnapshot image)
         {
             using var backend = new OpenCvInspectionBackend(anomalyModels: store);
             using var engine = new InspectionEngine(backend);

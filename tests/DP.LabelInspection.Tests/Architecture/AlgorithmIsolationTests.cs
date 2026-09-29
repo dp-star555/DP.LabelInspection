@@ -9,7 +9,6 @@ using DP.Vision;
 using DP.Vision.Algorithms;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using BarcodeObservation = DP.LabelInspection.Contracts.BarcodeObservation;
-using ImageFrame = DP.LabelInspection.Contracts.ImageFrame;
 
 namespace DP.LabelInspection.Tests;
 
@@ -17,9 +16,9 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed partial class AlgorithmIsolationTests
 {
-    private static ImageFrame White()
+    private static PixelSnapshot White()
     {
-        return new ImageFrame(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)255, 512).ToArray());
+        return new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)255, 512).ToArray());
     }
 
     /// <summary>两项ROI算法均由注入提供；首个ROI的局部NG不阻止下一个ROI。</summary>

@@ -19,7 +19,7 @@ public sealed class AnomalyLibraryTests
 {
     private static readonly PixelRect Box = new PixelRect(30, 20, 150, 50);
 
-    private static ImageFrame Label(int shift, int seed, bool defect = false)
+    private static PixelSnapshot Label(int shift, int seed, bool defect = false)
     {
         using var m = new Mat(80, 220, MatType.CV_8UC1, Scalar.All(235));
         Cv2.Randn(m, Scalar.All(235), Scalar.All(3));
@@ -39,7 +39,7 @@ public sealed class AnomalyLibraryTests
 
         var bytes = new byte[m.Rows * m.Cols];
         Marshal.Copy(m.Data, bytes, 0, bytes.Length);
-        return new ImageFrame(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
+        return new PixelSnapshot(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
     }
 
     private sealed class Temp : IDisposable
@@ -83,8 +83,8 @@ public sealed class AnomalyLibraryTests
     private static RegionInspectionResult Run(
         InspectionStore store,
         InspectionRegion region,
-        ImageFrame actual,
-        ImageFrame? reference = null
+        PixelSnapshot actual,
+        PixelSnapshot? reference = null
     )
     {
         using var backend = new OpenCvInspectionBackend(anomalyModels: store.AnomalyLibraries);

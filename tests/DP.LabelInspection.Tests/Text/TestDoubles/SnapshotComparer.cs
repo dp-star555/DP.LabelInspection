@@ -8,7 +8,7 @@ namespace DP.LabelInspection.Tests;
 /// <summary>测试持久化字形证据的快照转换；生产比较直接使用Vision。</summary>
 internal sealed class SnapshotComparer
 {
-    internal GlyphComparison Compare(ImageFrame actual, GlyphReference reference,
+    internal GlyphComparison Compare(PixelSnapshot actual, GlyphReference reference,
         int threshold = 160, int tolerance = 2)
     {
         using var source = Bridge.ToVision(actual);

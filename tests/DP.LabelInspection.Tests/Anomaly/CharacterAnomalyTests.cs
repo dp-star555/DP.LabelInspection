@@ -21,7 +21,7 @@ public sealed partial class CharacterAnomalyTests
 {
     private static readonly PixelRect Line = new PixelRect(10, 12, 300, 64);
 
-    private static ImageFrame Label(string text, int seed, int breakAt = -1, int fadeAt = -1)
+    private static PixelSnapshot Label(string text, int seed, int breakAt = -1, int fadeAt = -1)
     {
         using var m = new Mat(90, 320, MatType.CV_8UC1, Scalar.All(235));
         Cv2.Randn(m, Scalar.All(235), Scalar.All(3));
@@ -75,7 +75,7 @@ public sealed partial class CharacterAnomalyTests
 
         var bytes = new byte[m.Rows * m.Cols];
         Marshal.Copy(m.Data, bytes, 0, bytes.Length);
-        return new ImageFrame(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
+        return new PixelSnapshot(m.Cols, m.Rows, EImagePixelFormat.Gray8, bytes);
     }
 
     private static readonly string[] Good = { "A1B2C3", "3C2B1A", "B3A1C2", "2A3C1B", "C1A2B3" };
@@ -121,7 +121,7 @@ public sealed partial class CharacterAnomalyTests
     private static RegionInspectionResult Run(
         InspectionStore store,
         InspectionRegion region,
-        ImageFrame image,
+        PixelSnapshot image,
         string ocr
     )
     {

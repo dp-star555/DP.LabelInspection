@@ -229,7 +229,7 @@ public sealed partial class BarcodeReadabilityTests
             pixels[i] = encoded.Pixels[i * 4];
         }
 
-        var frame = new ImageFrame(200, 200, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(200, 200, EImagePixelFormat.Gray8, pixels);
         using var backend = new OpenCvInspectionBackend(barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder());
         using var engine = new InspectionEngine(backend);
         var report = engine.Inspect(
@@ -266,8 +266,8 @@ public sealed partial class BarcodeReadabilityTests
         );
     }
 
-    private static ImageFrame Blank()
+    private static PixelSnapshot Blank()
     {
-        return new ImageFrame(80, 80, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)255, 6400).ToArray());
+        return new PixelSnapshot(80, 80, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)255, 6400).ToArray());
     }
 }

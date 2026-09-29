@@ -62,7 +62,7 @@ public sealed partial class IndependentTextQualityTests
             textQuality: strategy
         );
         using var engine = new InspectionEngine(backend);
-        var frame = new ImageFrame(32, 32, EImagePixelFormat.Gray8, new byte[1024]);
+        var frame = new PixelSnapshot(32, 32, EImagePixelFormat.Gray8, new byte[1024]);
         var roi = new InspectionRegion("text", ERegionKind.Text, new PixelRect(0, 0, 32, 32)).WithTasks(
             new RoiInspectionTasks(false, true)
         );

@@ -28,7 +28,7 @@ internal static class UiInteractionProbe
         using var viewer = new ImageViewerControl { Dock = DockStyle.Fill };
         form.Controls.Add(viewer);
         viewer.SetImage(
-            new ImageFrame(
+            new PixelSnapshot(
                 400,
                 300,
                 EImagePixelFormat.Gray8,
@@ -377,7 +377,7 @@ internal static class UiInteractionProbe
             }
         }
 
-        viewer.SetImage(new ImageFrame(400, 300, EImagePixelFormat.Gray8, pixels));
+        viewer.SetImage(new PixelSnapshot(400, 300, EImagePixelFormat.Gray8, pixels));
         var method = typeof(ImageViewerControl).GetMethod(
             "Viewport",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
@@ -537,7 +537,7 @@ internal static class UiInteractionProbe
         }
 
         viewer.ZoomAt(3, new Point(100, 100));
-        viewer.SetImage(new ImageFrame(400, 300, EImagePixelFormat.Gray8, pixels));
+        viewer.SetImage(new PixelSnapshot(400, 300, EImagePixelFormat.Gray8, pixels));
         if (Math.Abs(View().Width - before.Width) > 1)
         {
             throw new InvalidOperationException("Loading another image retained stale pan/zoom.");
@@ -657,7 +657,7 @@ internal static class UiInteractionProbe
             control.PerformLayout();
             viewer.Parent!.PerformLayout();
             viewer.SetOverlays(Array.Empty<InspectionRegion>(), Array.Empty<InspectionFinding>());
-            viewer.SetImage(new ImageFrame(2048, 1536, EImagePixelFormat.Gray8, new byte[2048 * 1536]));
+            viewer.SetImage(new PixelSnapshot(2048, 1536, EImagePixelFormat.Gray8, new byte[2048 * 1536]));
             // 大图之后加载小型彩色图，测量实际渲染像素，不只检查视口公式。
             var pixels = new byte[30 * 20 * 3];
             for (int i = 0; i < 30 * 20; i++)
@@ -667,7 +667,7 @@ internal static class UiInteractionProbe
                 pixels[i * 3 + 2] = 70;
             }
 
-            viewer.SetImage(new ImageFrame(30, 20, EImagePixelFormat.Bgr24, pixels));
+            viewer.SetImage(new PixelSnapshot(30, 20, EImagePixelFormat.Bgr24, pixels));
             using var bitmap = new Bitmap(viewer.Width, viewer.Height);
             viewer.DrawToBitmap(bitmap, new Rectangle(0, 0, bitmap.Width, bitmap.Height));
             float scale = Math.Min((viewer.Width - 24) / 30f, (viewer.Height - 24) / 20f);
@@ -891,7 +891,7 @@ internal static class UiInteractionProbe
             joined[15 * 130 + x] = 0;
         }
 
-        page.SetImage(new ImageFrame(130, 36, EImagePixelFormat.Gray8, joined));
+        page.SetImage(new PixelSnapshot(130, 36, EImagePixelFormat.Gray8, joined));
         page.SetRegion(new PixelRect(0, 0, 130, 36));
         await page.ExtractAsync("WF675907");
         if (
@@ -922,7 +922,7 @@ internal static class UiInteractionProbe
 
         page.AttachServices(manager, null, id); // 即使没有OCR或分割服务，也必须支持手动编辑。
         page.SetImage(
-            new ImageFrame(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)40, 512).ToArray()),
+            new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)40, 512).ToArray()),
             "manual-first.png"
         );
         var modes = Descendants(page).OfType<ComboBox>().Single(c => c.Items.Contains("手工补画字块"));
@@ -1002,7 +1002,7 @@ internal static class UiInteractionProbe
         reviewed.Checked = true;
         page.StageSelected();
         page.SetImage(
-            new ImageFrame(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)90, 512).ToArray()),
+            new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)90, 512).ToArray()),
             "manual-second.png"
         );
         if (page.PendingCount != 2 || page.Candidates.Rows.Count != 0)

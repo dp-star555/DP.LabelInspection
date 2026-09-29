@@ -345,7 +345,7 @@ public sealed class ImageViewerControl : Control
 
     /// <summary>加载快照；视图仅拥有其内部显示资源。</summary>
     /// <param name = "image">源图，null表示清空。</param>
-    public void SetImage(ImageFrame? image)
+    public void SetImage(PixelSnapshot? image)
     {
         DP.Vision.IImageSource? next = null;
         if (image != null)

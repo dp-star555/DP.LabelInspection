@@ -22,9 +22,9 @@ internal static class TestRequests
     /// <param name = "frameId">原图身份；不提供时生成独立身份。</param>
     /// <returns>拥有独立Vision租约、由调用方释放的检测请求。</returns>
     internal static L.InspectionRequest FromSnapshot(
-        L.ImageFrame actual,
+        L.PixelSnapshot actual,
         L.InspectionRecipe recipe,
-        L.ImageFrame? reference = null,
+        L.PixelSnapshot? reference = null,
         string? cycleId = null,
         L.TaskDataSnapshot? taskData = null,
         string? frameId = null

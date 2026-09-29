@@ -16,13 +16,13 @@ namespace DP.LabelInspection.Storage;
 
 public sealed partial class InspectionStore
 {
-    private sealed class FrameConverter(IImageCodec codec) : JsonConverter<ImageFrame>
+    private sealed class FrameConverter(IImageCodec codec) : JsonConverter<PixelSnapshot>
     {
         /// <summary>将不可变图像快照写入JSON，不修改源像素。</summary>
         /// <param name = "writer">调用方拥有的JSON写入器。</param>
         /// <param name = "value">待写入的不可变图像，可为null。</param>
         /// <param name = "serializer">当前JSON序列化上下文。</param>
-        public override void WriteJson(JsonWriter writer, ImageFrame? value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, PixelSnapshot? value, JsonSerializer serializer)
         {
             if (value == null)
             {
@@ -39,10 +39,10 @@ public sealed partial class InspectionStore
         /// <param name = "existing">已有图像值，可为null。</param>
         /// <param name = "hasExisting">是否提供已有值。</param>
         /// <param name = "serializer">当前JSON序列化上下文。</param>
-        public override ImageFrame ReadJson(
+        public override PixelSnapshot ReadJson(
             JsonReader reader,
             Type type,
-            ImageFrame? existing,
+            PixelSnapshot? existing,
             bool hasExisting,
             JsonSerializer serializer
         )

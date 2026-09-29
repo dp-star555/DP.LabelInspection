@@ -97,7 +97,7 @@ public sealed class QrQuietZoneTests
             pixels[i] = encoded.Pixels[i * 4];
         }
 
-        var frame = new ImageFrame(side, side, EImagePixelFormat.Gray8, pixels);
+        var frame = new PixelSnapshot(side, side, EImagePixelFormat.Gray8, pixels);
         var bounds = new PixelRect(0, 0, side, side);
         var symbols = new ZxingBarcodeDecoder().Decode(frame, bounds, default);
         var result = new OpenCvBarcodePrintInspector().Inspect(
@@ -114,7 +114,7 @@ public sealed class QrQuietZoneTests
         Assert.IsFalse(result.Any(f => f.Verdict != EInspectionVerdict.Ok));
     }
 
-    private static ImageFrame Image(bool dirty)
+    private static PixelSnapshot Image(bool dirty)
     {
         var encoded = new BarcodeWriterPixelData
         {
@@ -152,6 +152,6 @@ public sealed class QrQuietZoneTests
             }
         }
 
-        return new ImageFrame(400, 400, EImagePixelFormat.Gray8, pixels);
+        return new PixelSnapshot(400, 400, EImagePixelFormat.Gray8, pixels);
     }
 }

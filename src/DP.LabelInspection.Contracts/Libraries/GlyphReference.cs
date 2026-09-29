@@ -14,7 +14,7 @@ public sealed class GlyphReference
     /// <param name = "image">不可变参考图块。</param>
     /// <param name = "sha256">已保存PNG原始字节的SHA256，不是重新编码结果的哈希。</param>
     /// <param name = "binarization">二值化模式，otsu自动阈值或fixed固定阈值。</param>
-    public GlyphReference(string character, ImageFrame image, string sha256, string binarization = "otsu")
+    public GlyphReference(string character, PixelSnapshot image, string sha256, string binarization = "otsu")
     {
         if (
             character == null
@@ -41,7 +41,7 @@ public sealed class GlyphReference
     public string Character { get; }
 
     /// <summary>参考像素。</summary>
-    public ImageFrame Image { get; }
+    public PixelSnapshot Image { get; }
 
     /// <summary>已存PNG字节的哈希。</summary>
     public string Sha256 { get; }
