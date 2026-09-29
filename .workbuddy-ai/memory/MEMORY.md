@@ -107,6 +107,10 @@ dotnet build DP.LabelInspection.sln -c Debug     # 0 错误；2 个既有 MSTEST
   —— 由 `RoiWorkflow.cs:109` 的 `config.Tasks.CheckQuality` 决定，**不是**由对比度/清晰度阈值决定。
   用 `ERegionKind.Blank` 可免参考图（`Fixed` 质检无参考时会 `Reference!` 空引用）。
 - ⚠️ **改过源码就别加 `--no-build`**：会跑上一次构建的旧二进制（本次误报 3 个失败）。
+- ⚠️ **多 ROI 用例必须用互不重叠的 bounds**：完全相同的 bounds 会被 `RoiWorkflow` 判 `roi_overlap`
+  并**整体跳过质量阶段**。症状极具误导性——`libraries.Loads == 1`（字库确实载入了）但
+  参考图转换次数 `== 0`，看起来像"缓存/新代码没生效"，实际是 ROI 根本没跑到质检。
+  排查手法：把 `findings` 的 Code 列表打出来看（本次靠 `Assert.AreEqual(-1, ...)` 的失败消息取回现场）。
 - 有效用例的验收手法：**变异验证** —— 故意改坏生产代码，确认对应用例变红且红灯数值与缺陷机制对得上，
   再逐字还原并用 `git diff -- <file>` 确认干净。见技能 `test-effectiveness-verification`。
 

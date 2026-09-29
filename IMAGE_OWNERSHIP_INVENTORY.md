@@ -368,7 +368,65 @@ Vision 算法测试 `net8.0` **109/109**（`net48` 65 例失败为**既有原生
 `PixelSnapshot.Crop` 以及 `IImageCodec.EncodePng(PixelSnapshot)`、`CvImages.Mat(PixelSnapshot)`
 这些"图像操作"要等第 4 批随编解码 / 绘制一起搬走。
 
+> 其中**"字库参考图每次检测整帧复制"已在 4.8 处理**：参考图现在按固定版本只转换一次，
+> 借出方各自持独立租约。字库字段本身仍是快照（缓存从它转换），这一层没有变。
+
+### 4.8 第 2 步样板：文字质检参考图按固定版本只转换一次（2026-09-29，已完成）
+
+**动机（实测）**：`RoiSession.Quality.TextQuality` 原本**每个 ROI、每次检测**把字库里**每一个字**
+从 `PixelSnapshot` 经 `Bridge.ToVision` 整帧复制成 Vision 租约，本 ROI 结束时全部释放。
+浪费量 = `ROI 数 × 字库字数` 份整帧。`ToLabel` 也确认是**双重复制**
+（`AlgorithmContractAdapter.cs:44-51` 先 `CopyTo`，`PixelSnapshot` 构造器再 `Clone`）。
+
+**改动（4 个文件）**
+
+| 文件 | 作用 |
+|---|---|
+| `Adapter.Vision/Algorithms/IGlyphReferenceImageConverter.cs` | 新增转换缝：`PixelSnapshot → IImageSource`，**可观测**（探针可计数） |
+| `Adapter.Vision/Algorithms/VisionGlyphReferenceImageConverter.cs` | 默认实现，委托 `AlgorithmContractAdapter.ToVision` |
+| `Runtime/Libraries/GlyphReferenceImageCache.cs` | 版本级缓存：容量 8，缓存自己持一份租约，取用返回 `Retain` 出的独立租约 |
+| `Runtime/Libraries/GlyphReferenceLease.cs` | 借出的租约；`GlyphTemplate` 只借用图像，释放责任在租约 |
+| `Runtime/.../RoiSession.Quality.cs` | 热路径改为 `_owner._referenceImages.Acquire(library)`，`finally` 只归还本 ROI 那份 |
+
+**为什么没有复用 `PinnedRevisionCache<T>`**：它没有逐出回调（放租约进去会在逐出时泄漏），
+且 `Get` 在锁外 `load()`，并发未命中会载入两次并留下被丢弃的重复值——对快照无害，对图像租约就是泄漏。
+新缓存把转换放在锁内，**同一版本并发取用只转换一次**。
+
+**为什么缓存是 public 而 `PinnedRevisionCache` 是 internal**：测试程序集没有 `InternalsVisibleTo`，
+只有 public 才能直接驱动"容量 1 + 逐出"这种确定性场景。`IGlyphReferenceImageConverter` 则沿用
+本仓库"用公开接口装饰来观测"的既有手法（同 `CountingGlyphLibraries`）。
+
+**验收与变异验证**（`tests/.../Text/GlyphReferenceImageCacheTests.cs`、
+`tests/.../Integration/FullInspectionTests.ReferenceImages.cs`，共 5 例）
+
+| 用例 | 断言 | 变异 | 红灯数值 |
+|---|---|---|---|
+| 同版本反复取用 | 转换次数 == 参考图个数 | 缓存不复用 | 2 → **10**（2 字 × 5 次） |
+| 容量内多版本 | 8 个版本各一次 | 同上 | 8 → **9** |
+| 并发取用同版本 | 3 个参考图只转一次 | 同上 | 3 → **192**（3 × 64） |
+| 逐出不影响借出 | 逐出后仍能读到自己的像素 | 借出时不 `Retain` | `ObjectDisposedException` |
+| 两次检测两 ROI | 转换次数 == 1 | 绕过缓存 | 比较数 3 → **0** |
+| 同上 | 同上 | 缓存不复用 | 1 → **4**（1 字 × 2 ROI × 2 检测） |
+
+**写用例时踩到的坑**：两个 ROI 用**完全相同的 bounds** 会被工作流判 `roi_overlap` 并整体跳过质量阶段，
+此时 `libraries.Loads` 仍是 1、`conversions` 却是 0 —— 看起来像"缓存没生效"，实际是 ROI 根本没跑。
+多 ROI 用例必须用**互不重叠**的 bounds。
+
+**本轮明确不做（不要误读为已清零）**
+
+- **输出侧 `ToLabel` 不为零**：报告证据仍消费 `PixelSnapshot`，两个界面
+  （WinForms `Workbench/LabelInspectionControl.cs:1057-1062`、WPF `:523-528`）直接读它来画。
+  强行断言整个 `TextQuality` 零 `ToLabel` 会迫使一次性重写报告。
+- **报告"热态租约 + 归档字节"未设计**：`report.json` 走 `FrameConverter` 的 `png_base64`，
+  本来就是"序列化时才编码"，且 `SaveReport` 无产品调用者 → 这条路径现在改它没有产品收益。
+- **`PixelSnapshot` 未删除**，字库字段 `GlyphReference.Image` 仍是快照（缓存**从它**转换）。
+- **Vision 编码器未新增**；`OpenCvImageFileReader` 仍是**路径入口**、保留 BGRA/Gray16、
+  **不做透明图合成**，而标签侧 `OpenCvImageCodec.Decode` 是**字节入口**、把 4 通道合成到白底、
+  且有 12000×12000 / 16M 像素上限。**两者不等价**，加字节入口必须逐项核对，不能只看都用 `ImDecode`。
+
 ## 5. 复核方式
+
+
 
 ```bash
 export APPDATA="C:\\Users\\25845\\AppData\\Roaming"
@@ -379,6 +437,8 @@ dotnet test tests/DP.LabelInspection.Tests/DP.LabelInspection.Tests.csproj -c Re
 dotnet test tests/DP.LabelInspection.Tests/DP.LabelInspection.Tests.csproj -c Release -f net8.0-windows --nologo
 # 只跑第1步的两条验收用例
 dotnet test tests/DP.LabelInspection.Tests/DP.LabelInspection.Tests.csproj -c Release -f net8.0-windows --nologo --filter "FullyQualifiedName~VisionLeaseLifecycleTests"
+# 只跑 4.8 的参考图缓存验收用例
+dotnet test tests/DP.LabelInspection.Tests/DP.LabelInspection.Tests.csproj -c Release -f net8.0-windows --nologo --filter "FullyQualifiedName~GlyphReferenceImageCacheTests|FullyQualifiedName~TextQualityReusesConvertedReferenceImages"
 ```
 
 > ⚠️ 改完生产代码后不要加 `--no-build`：否则跑的是上一次构建的旧二进制（本轮变异验证时就踩到过，误报 3 个失败）。

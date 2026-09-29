@@ -11,7 +11,9 @@
 | `Program` | [samples/DP.LabelInspection.Demo.WinForms/Runner/Program.cs](samples/DP.LabelInspection.Demo.WinForms/Runner/Program.cs) |
 | `Program` | [samples/DP.LabelInspection.Demo.Wpf/Runner/Program.cs](samples/DP.LabelInspection.Demo.Wpf/Runner/Program.cs) |
 | `AlgorithmContractAdapter` | [src/DP.LabelInspection.Adapter.Vision/Algorithms/AlgorithmContractAdapter.cs](src/DP.LabelInspection.Adapter.Vision/Algorithms/AlgorithmContractAdapter.cs) |
+| `IGlyphReferenceImageConverter` | [src/DP.LabelInspection.Adapter.Vision/Algorithms/IGlyphReferenceImageConverter.cs](src/DP.LabelInspection.Adapter.Vision/Algorithms/IGlyphReferenceImageConverter.cs) |
 | `InspectionSourceExtensions` | [src/DP.LabelInspection.Adapter.Vision/Algorithms/InspectionSourceExtensions.cs](src/DP.LabelInspection.Adapter.Vision/Algorithms/InspectionSourceExtensions.cs) |
+| `VisionGlyphReferenceImageConverter` | [src/DP.LabelInspection.Adapter.Vision/Algorithms/VisionGlyphReferenceImageConverter.cs](src/DP.LabelInspection.Adapter.Vision/Algorithms/VisionGlyphReferenceImageConverter.cs) |
 | `VisionAdapter` | [src/DP.LabelInspection.Adapter.Vision/Display/VisionAdapter.cs](src/DP.LabelInspection.Adapter.Vision/Display/VisionAdapter.cs) |
 | `BarcodeModuleGrid` | [src/DP.LabelInspection.Contracts/Codes/BarcodeModuleGrid.cs](src/DP.LabelInspection.Contracts/Codes/BarcodeModuleGrid.cs) |
 | `BarcodeObservation` | [src/DP.LabelInspection.Contracts/Codes/BarcodeObservation.cs](src/DP.LabelInspection.Contracts/Codes/BarcodeObservation.cs) |
@@ -92,6 +94,8 @@
 | `GlyphDraftSession` | [src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs](src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs) |
 | `CvImages` | [src/DP.LabelInspection.Runtime/Imaging/CvImages.cs](src/DP.LabelInspection.Runtime/Imaging/CvImages.cs) |
 | `AnomalyModelCache` | [src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs](src/DP.LabelInspection.Runtime/Anomaly/AnomalyModelCache.cs) |
+| `GlyphReferenceImageCache` | [src/DP.LabelInspection.Runtime/Libraries/GlyphReferenceImageCache.cs](src/DP.LabelInspection.Runtime/Libraries/GlyphReferenceImageCache.cs) |
+| `GlyphReferenceLease` | [src/DP.LabelInspection.Runtime/Libraries/GlyphReferenceLease.cs](src/DP.LabelInspection.Runtime/Libraries/GlyphReferenceLease.cs) |
 | `PinnedRevisionCache<T>` | [src/DP.LabelInspection.Runtime/Libraries/PinnedRevisionCache.cs](src/DP.LabelInspection.Runtime/Libraries/PinnedRevisionCache.cs) |
 | `LabelInspectionHost` | [src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHost.cs](src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHost.cs) |
 | `LabelInspectionHostOptions` | [src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHostOptions.cs](src/DP.LabelInspection.Runtime/Hosting/LabelInspectionHostOptions.cs) |

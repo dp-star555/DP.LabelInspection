@@ -13,6 +13,10 @@ public sealed partial class OpenCvInspectionBackend
 {
     private sealed partial class RoiSession
     {
+        /// <summary>字库缺失或未绑定时的空参考集合；参考集合本身是借用的，不需要释放。</summary>
+        private static readonly IReadOnlyDictionary<string, A.GlyphTemplate> NoReferences =
+            new Dictionary<string, A.GlyphTemplate>(StringComparer.Ordinal);
+
         /// <summary>执行当前ROI的质量策略，保留已有实际读取及独立完成状态。</summary>
         /// <param name = "r">已定位的ROI及质量配置。</param>
         /// <param name = "reading">本轮已有真实读取证据，质量返回不能覆盖它。</param>
@@ -185,23 +189,14 @@ public sealed partial class OpenCvInspectionBackend
             CancellationToken token
         )
         {
-            var owned = new List<IImageSource>();
+            GlyphReferenceLease? lease = null;
             try
             {
                 _libraries.TryGetValue(r.Name, out var library);
-                var references = new Dictionary<string, A.GlyphTemplate>(StringComparer.Ordinal);
-                if (library != null)
-                {
-                    foreach (var entry in library.Glyphs)
-                    {
-                        var image = Bridge.ToVision(entry.Value.Image);
-                        owned.Add(image);
-                        references.Add(
-                            entry.Key,
-                            new A.GlyphTemplate(image, Bridge.ToVisionBinarization(entry.Value.Binarization))
-                        );
-                    }
-                }
+                // 固定版本的参考图在缓存里只转换一次；本ROI只取一份独立租约。
+                // 缓存即使同时逐出该版本，也只归还它自己那份，本次比较读到的像素仍然有效。
+                lease = library == null ? null : _owner._referenceImages.Acquire(library);
+                var references = lease?.Templates ?? NoReferences;
 
                 using var actual = _request.VisionSource!.Retain();
                 var strategy =
@@ -313,10 +308,7 @@ public sealed partial class OpenCvInspectionBackend
             }
             finally
             {
-                foreach (var image in owned)
-                {
-                    image.Dispose();
-                }
+                lease?.Dispose();
             }
         }
     }

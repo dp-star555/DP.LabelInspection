@@ -25,6 +25,8 @@
 
 11. 类型改名与重新定位（第 3 批）：标签侧 `Contracts.ImageFrame` 改名为 `PixelSnapshot`，并明确其角色——只承担"把像素当数据保存或传递"（报告与字库持久化、界面显示、批量训练等离线入口），**不再是检测输入**；检测与在线推理一律走 `DP.Vision` 的 `IImageSource` 租约。改名是纯机械替换：76 个文件、216 处引用，其中 Vision 侧 `DP.Vision.ImageFrame` / `V.ImageFrame` 40 处一处未动；双框架测试 283/283 与基线一致。附带收益是源码里裸写 `ImageFrame` 的歧义（CS0104）消失——`ImageFrame` 现在只指 Vision 侧类型。后续按"训练输入 / 报告证据 / 字库字段"逐组收窄该类型的剩余用法。
 
+12. 文字质检参考图按固定版本只转换一次（第 3 批第 2 步样板）：新增 `IGlyphReferenceImageConverter`（`PixelSnapshot → IImageSource` 的**可观测**转换缝，默认实现委托 `AlgorithmContractAdapter.ToVision`）与 `GlyphReferenceImageCache`（容量 8，缓存自己持一份租约，取用返回 `Retain` 出的独立租约，逐出只归还自己那份）。`RoiSession.Quality.TextQuality` 原本**每个 ROI、每次检测**把字库每个字整帧复制一次（浪费量 = ROI 数 × 字库字数 份整帧），现改为每版本只转换一次、每个 ROI 各取一份独立租约。双框架测试 291/291（原 286 + 5 例新验收）。**输出侧 `ToLabel` 与报告证据载体本轮不动**：报告证据仍由两个界面直接读取，删除 `PixelSnapshot` 需要先设计"热态租约 + 归档字节"及 UI 释放责任。
+
 ## 尚未完成（阻止删除旧类型/发布标准化SDK）
 
 - 将Core的剩余图像任务、码质量、异常模型训练/检测等接口逐项迁入Vision租约，不让运行中任务访问旧 `PixelSnapshot`；字库候选后台已直接使用Vision，制作UI和训练库存量旧快照仍需转换。
