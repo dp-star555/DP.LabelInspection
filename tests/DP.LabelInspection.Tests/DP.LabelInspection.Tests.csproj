@@ -28,4 +28,8 @@
     <ItemGroup>
         <ProjectReference Include="..\..\src\DP.LabelInspection.Runtime\DP.LabelInspection.Runtime.csproj" />
     </ItemGroup>
+    <!-- 阶段1冻结的PP-OCR检测证据：离线重放候选提取，不需要ONNX运行时。 -->
+    <ItemGroup>
+        <None Include="Text\Fixtures\**\*" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
 </Project>
