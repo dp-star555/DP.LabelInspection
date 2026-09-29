@@ -80,26 +80,6 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         }
     }
 
-    /// <summary>检测一张整图上的一个ROI。</summary>
-    /// <param name = "image">已与配方对齐的整张待检图。</param>
-    /// <param name = "region">要检测的ROI。</param>
-    /// <param name = "model">该ROI的模型。</param>
-    /// <param name = "options">检测步长、显式阈值与最小面积。</param>
-    /// <param name = "token">协作式取消标记。</param>
-    public RegionAnomalyResult Inspect(
-        ImageFrame image,
-        InspectionRegion region,
-        PatchAnomalyModel model,
-        PatchAnomalyOptions options,
-        CancellationToken token = default
-    )
-    {
-        if (image == null)
-            throw new ArgumentNullException(nameof(image));
-        using var source = Bridge.ToVision(image);
-        return Inspect(source, region, model, options, token);
-    }
-
     /// <summary>直接在借用的Vision原图上裁ROI运行异常检测，不生成旧标签图像快照。</summary>
     /// <param name="image">借用原图。</param>
     /// <param name="region">当前ROI。</param>

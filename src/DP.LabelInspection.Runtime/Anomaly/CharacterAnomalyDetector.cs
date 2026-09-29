@@ -136,34 +136,6 @@ public sealed class CharacterAnomalyDetector
         }
     }
 
-    /// <summary>
-    /// 检测一行：逐个字母/数字字符与其模型比较（局部块比较，模型带缺墨阈值时另做缺墨检查），异常区域以原图坐标报告。
-    /// 各字符相互独立；检测实现为线程安全的手工特征实现时并行处理，结果顺序与输入一致。
-    /// </summary>
-    /// <param name = "image">整张待检图。</param>
-    /// <param name = "characters">该行字符（原图坐标，身份来自OCR或等格声明）。</param>
-    /// <param name = "crop">热力图对应的原图范围，通常为ROI。</param>
-    /// <param name = "models">按字符查找模型；没有时返回null。</param>
-    /// <param name = "token">协作式取消标记。</param>
-    /// <param name = "inkLoss">是否做缺墨检查（模型未标定缺墨阈值时不做）。</param>
-    public CharacterAnomalyResult Inspect(
-        ImageFrame image,
-        IReadOnlyList<DP.LabelInspection.Contracts.CharacterPatch> characters,
-        PixelRect crop,
-        Func<string, CharacterAnomalyModel?> models,
-        CancellationToken token = default,
-        bool inkLoss = true
-    )
-    {
-        if (image == null || characters == null || models == null)
-        {
-            throw new ArgumentNullException(image == null ? nameof(image) : nameof(characters));
-        }
-
-        using var source = Bridge.ToVision(image);
-        return Inspect(source, characters, crop, models, token, inkLoss);
-    }
-
     /// <summary>借用Vision原图执行逐字异常检测，不生成旧标签图像快照。</summary>
     /// <param name="image">借用原图。</param>
     /// <param name="characters">原图坐标中的字符及身份。</param>

@@ -70,7 +70,7 @@ public sealed class RegionAnomalyTests
         );
     }
 
-    /// <summary>整ROI异常检测直接借用Vision原图，保留与旧快照入口一致的原图证据。</summary>
+    /// <summary>持久化快照转换为Vision输入后，与独立Vision图像产生相同的原图证据。</summary>
     [TestMethod]
     public void VisionAnomalyInspectionMatchesSnapshotEvidence()
     {
@@ -84,7 +84,8 @@ public sealed class RegionAnomalyTests
             new DP.Vision.ImageInfo(actual.Width, actual.Height, DP.Vision.EPixelLayout.Gray8),
             actual.CopyPixels()
         );
-        var old = detector.Inspect(actual, region, model, options);
+        using var snapshotSource = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(actual);
+        var old = detector.Inspect(snapshotSource, region, model, options);
         var vision = detector.Inspect(image, region, model, options);
         Assert.AreEqual(old.Crop, vision.Crop);
         Assert.AreEqual(old.MaximumScore, vision.MaximumScore, 1e-9);
@@ -100,11 +101,13 @@ public sealed class RegionAnomalyTests
         var detector = new RegionAnomalyDetector();
         var model = detector.Train(new[] { Label(0, 1), Label(1, 2), Label(0, 3) }, region, options);
 
-        var clean = detector.Inspect(Label(1, 4), region, model, options);
+        using var cleanSource = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(Label(1, 4));
+        var clean = detector.Inspect(cleanSource, region, model, options);
         Assert.IsTrue(clean.Passed, string.Join(";", clean.Findings.Select(f => f.Message)));
         Assert.AreEqual(clean.Crop.Width, clean.HeatMap!.Width);
 
-        var broken = detector.Inspect(Label(0, 5, defect: true), region, model, options);
+        using var brokenSource = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(Label(0, 5, defect: true));
+        var broken = detector.Inspect(brokenSource, region, model, options);
         var finding = broken.Findings.Single(f => f.Verdict == EInspectionVerdict.Ng);
         var b = finding.Bounds!.Value;
         Assert.IsTrue(b.X <= 78 && b.X + b.Width >= 70 && b.Y <= 47 && b.Y + b.Height >= 42, b.ToString());

@@ -264,7 +264,7 @@ public sealed partial class OpenCvInspectionBackend
                 || segmentation.Status != "provisional" && segmentation.Status != "explicit_cells"
             )
             {
-                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                using var source = _request.VisionSource!.Retain();
                 using var measured = r.Field.EqualCells
                     ? _owner._segmenter.EqualCells(source, r.Bounds, r.Field.Expected!)
                     : _owner._segmenter.Segment(
@@ -296,29 +296,16 @@ public sealed partial class OpenCvInspectionBackend
             }
 
             Func<string, CharacterAnomalyModel?> lookup = c => models.TryGetValue(c, out var m) ? m : null;
-            CharacterAnomalyResult result;
             var detector = new CharacterAnomalyDetector();
-            if (_request.VisionSource is { } image)
-            {
-                using var retained = image.Retain();
-                result = detector.Inspect(
-                    retained,
-                    segmentation.Characters,
-                    r.Bounds,
-                    lookup,
-                    token,
-                    pin.InkLoss
-                );
-            }
-            else
-                result = detector.Inspect(
-                    _request.Actual,
-                    segmentation.Characters,
-                    r.Bounds,
-                    lookup,
-                    token,
-                    pin.InkLoss
-                );
+            using var inspectionSource = _request.VisionSource!.Retain();
+            var result = detector.Inspect(
+                inspectionSource,
+                segmentation.Characters,
+                r.Bounds,
+                lookup,
+                token,
+                pin.InkLoss
+            );
             var findings = result.Scores.SelectMany(s => s.Findings).ToList();
             var compared = result.Scores.Where(s => s.Status == "compared").ToArray();
             var worst = compared.OrderByDescending(s => s.Ratio).FirstOrDefault();
@@ -428,7 +415,7 @@ public sealed partial class OpenCvInspectionBackend
             }
 
             var (entry, model, detector) = bound;
-            using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+            using var source = _request.VisionSource!.Retain();
             var result = new RegionAnomalyDetector(detector) { Margin = entry.Margin }.Inspect(
                 source,
                 r,

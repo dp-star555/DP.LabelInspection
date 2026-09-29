@@ -258,8 +258,9 @@ internal sealed class BenchmarkExporter
         LoadedLine line
     )
     {
+        using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(image.Frame);
         var result = detector.Inspect(
-            image.Frame,
+            source,
             line.Segmentation.Characters,
             line.Roi,
             c => models.TryGetValue(AnomalyModelEntry.CharacterKey(line.Group, c), out var m) ? m : null

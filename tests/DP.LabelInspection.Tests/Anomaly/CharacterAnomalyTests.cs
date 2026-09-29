@@ -131,7 +131,7 @@ public sealed partial class CharacterAnomalyTests
         using var engine = new InspectionEngine(backend);
         return engine
             .Inspect(
-                new InspectionRequest(
+                TestRequests.FromSnapshot(
                     image,
                     new InspectionRecipe(
                         "chars",
@@ -158,7 +158,7 @@ public sealed partial class CharacterAnomalyTests
         ).WithTasks(new RoiInspectionTasks(expected != null, false, true));
     }
 
-    /// <summary>Vision原图逐字检测与旧快照对同一模型产生相同的字符结果。</summary>
+    /// <summary>持久化像素快照转换为Vision源后，与独立Vision帧产生相同的逐字证据。</summary>
     [TestMethod]
     public void VisionCharacterInspectionMatchesSnapshot()
     {
@@ -176,8 +176,9 @@ public sealed partial class CharacterAnomalyTests
         var segmentation = new CharacterSegmenter().Segment(image, Line, "A1B2C3");
         Assert.AreEqual("provisional", segmentation.Status);
         var detector = new CharacterAnomalyDetector();
+        using var snapshotSource = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(image);
         var old = detector.Inspect(
-            image,
+            snapshotSource,
             segmentation.Characters,
             Line,
             c => models.TryGetValue(c, out var m) ? m : null

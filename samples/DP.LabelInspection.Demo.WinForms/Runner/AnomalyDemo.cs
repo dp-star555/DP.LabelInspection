@@ -67,8 +67,9 @@ internal static class AnomalyDemo
         foreach (string path in Images(testDirectory))
         {
             var image = codec.Decode(File.ReadAllBytes(path));
+            using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(image);
             var results = regions
-                .Select(r => detector.Inspect(image, r, models[r.Name], options[r.Name]))
+                .Select(r => detector.Inspect(source, r, models[r.Name], options[r.Name]))
                 .ToList();
             foreach (var r in results)
             {
