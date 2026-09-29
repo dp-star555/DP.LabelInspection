@@ -106,7 +106,7 @@ public sealed class ImageViewerControl : Control
             throw new ArgumentOutOfRangeException(nameof(factor));
         }
 
-        if (_bitmap == null || _start.HasValue || _panStart.HasValue)
+        if (_bitmap == null || _drawing || _panStart.HasValue)
         {
             return;
         }
@@ -198,19 +198,57 @@ public sealed class ImageViewerControl : Control
     private void CancelGesture()
     {
         _panStart = null;
-        _start = null;
-        _editOriginal = null;
-        _preview = null;
+        _drawing = false;
+        _editor.Cancel();
         Capture = false;
         Cursor = Cursors.Default;
     }
 
-    private Point? _start;
-    private Point _end;
-    private int _selected = -1,
-        _editHandle = -2;
-    private PixelRect? _editOriginal,
-        _preview;
+    // ROI的绘制、选择、移动与八控制点缩放由DP.Vision的RoiEditor按整像素规则处理；本控件只转发指针并把结果转为宿主事件。
+    private readonly DP.Vision.UI.RoiEditor _editor = new DP.Vision.UI.RoiEditor();
+    private bool _drawing;
+    private int _selected = -1;
+
+    /// <summary>按当前配方区域和图像尺寸重建编辑文档（区域序号即ROI标识），保留当前选择。</summary>
+    private void LoadEditor()
+    {
+        _editor.PixelRules =
+            _bitmap == null ? null : new DP.Vision.UI.RoiPixelRules(_bitmap.Width, _bitmap.Height);
+        _editor.Load(
+            new DP.Vision.UI.RoiDocument(
+                _regions.Select(
+                    (r, i) =>
+                        new DP.Vision.UI.RoiDefinition(
+                            i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                            r.Bounds.ToGeometry(),
+                            DP.Vision.UI.ERoiConstraint.AxisAligned
+                        )
+                )
+            )
+        );
+        if (_selected >= 0 && _selected < _regions.Count)
+        {
+            _editor.Select(_selected.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
+    private static PixelRect ToRect(DP.Vision.Geometry shape)
+    {
+        var b = shape.Bounds;
+        return new PixelRect(
+            (int)Math.Round(b.X),
+            (int)Math.Round(b.Y),
+            (int)Math.Round(b.Width),
+            (int)Math.Round(b.Height)
+        );
+    }
+
+    private int IndexOf(string? id)
+    {
+        return id != null && int.TryParse(id, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out int index) && index < _regions.Count
+            ? index
+            : -1;
+    }
 
     /// <summary>启用选择、移动及八控制点缩放，替代绘制；按住Shift强制新建ROI。</summary>
     [DefaultValue(false)]
@@ -242,6 +280,11 @@ public sealed class ImageViewerControl : Control
             if (_selected != value)
             {
                 _selected = value;
+                if (!_drawing)
+                {
+                    _editor.Select(value < 0 ? null : value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+
                 SelectedRegionChanged?.Invoke(this, EventArgs.Empty);
             }
 
@@ -347,6 +390,8 @@ public sealed class ImageViewerControl : Control
         _geometry = null;
         old?.Dispose();
         _selected = -1;
+        CancelGesture();
+        LoadEditor();
         FitToWindow();
     }
 
@@ -363,6 +408,11 @@ public sealed class ImageViewerControl : Control
         if (_selected >= _regions.Count)
         {
             _selected = -1;
+        }
+
+        if (!_drawing)
+        {
+            LoadEditor();
         }
 
         PresentScene();
@@ -487,7 +537,10 @@ public sealed class ImageViewerControl : Control
 
         if (EditRegions && _selected >= 0 && _selected < _regions.Count)
         {
-            var box = _preview ?? _regions[_selected].Bounds;
+            var box =
+                _drawing && _editor.Tool == DP.Vision.UI.ERoiTool.Select && _editor.Preview != null
+                    ? ToRect(_editor.Preview)
+                    : _regions[_selected].Bounds;
             DrawBox(e.Graphics, view, box, Color.DarkViolet, "编辑：拖动框内/八个控制点");
             foreach (var handle in Handles(box))
             {
@@ -495,25 +548,9 @@ public sealed class ImageViewerControl : Control
             }
         }
 
-        if (_start.HasValue && !_editOriginal.HasValue)
+        if (_drawing && _editor.Tool == DP.Vision.UI.ERoiTool.Rectangle && _editor.Preview != null)
         {
-            int width = Math.Abs(_start.Value.X - _end.X),
-                height = Math.Abs(_start.Value.Y - _end.Y);
-            if (width > 0 && height > 0)
-            {
-                DrawBox(
-                    e.Graphics,
-                    view,
-                    new PixelRect(
-                        Math.Min(_start.Value.X, _end.X),
-                        Math.Min(_start.Value.Y, _end.Y),
-                        width,
-                        height
-                    ),
-                    Color.ForestGreen,
-                    "ROI"
-                );
-            }
+            DrawBox(e.Graphics, view, ToRect(_editor.Preview), Color.ForestGreen, "ROI");
         }
 
         ForegroundPaint?.Invoke(this, e);
@@ -594,48 +631,33 @@ public sealed class ImageViewerControl : Control
         }
 
         var point = ImagePoint(e.Location);
+        var imagePoint = new DP.Vision.PointD(point.X, point.Y);
+        // 7个屏幕像素的命中容差（原图单位）。
+        double tolerance = 7.0 * _bitmap.Width / Viewport().Width;
         bool forceNew = (ModifierKeys & Keys.Shift) != 0;
         if (EditRegions && !forceNew)
         {
-            _editHandle = -1;
-            if (_selected >= 0 && _selected < _regions.Count)
+            _editor.Tool = DP.Vision.UI.ERoiTool.Select;
+            int before = _selected;
+            bool hit = _editor.PointerDown(imagePoint, tolerance);
+            _selected = IndexOf(_editor.SelectedId);
+            if (_selected != before)
             {
-                var handles = Handles(_regions[_selected].Bounds);
-                for (int i = 0; i < handles.Length; i++)
-                {
-                    if (Math.Abs(handles[i].X - e.X) <= 7 && Math.Abs(handles[i].Y - e.Y) <= 7)
-                    {
-                        _editHandle = i;
-                        break;
-                    }
-                }
+                SelectedRegionChanged?.Invoke(this, EventArgs.Empty);
             }
 
-            if (_editHandle < 0)
+            if (hit)
             {
-                int before = _selected;
-                _selected = Enumerable
-                    .Range(0, _regions.Count)
-                    .Where(i => Contains(_regions[i].Bounds, point))
-                    .OrderBy(i => (long)_regions[i].Bounds.Width * _regions[i].Bounds.Height)
-                    .DefaultIfEmpty(-1)
-                    .First();
-                if (_selected != before)
-                {
-                    SelectedRegionChanged?.Invoke(this, EventArgs.Empty);
-                }
-            }
-
-            if (_selected < 0 && !DrawOutsideRegions)
-            {
+                _drawing = true;
+                Capture = true;
                 Invalidate();
                 return;
             }
 
-            if (_selected >= 0)
+            if (!DrawOutsideRegions)
             {
-                _editOriginal = _regions[_selected].Bounds;
-                _preview = _editOriginal;
+                Invalidate();
+                return;
             }
         }
         else if (!forceNew)
@@ -655,7 +677,9 @@ public sealed class ImageViewerControl : Control
             }
         }
 
-        _start = _end = point;
+        _editor.Tool = DP.Vision.UI.ERoiTool.Rectangle;
+        _editor.PointerDown(imagePoint, tolerance);
+        _drawing = true;
         Capture = true;
         Invalidate();
     }
@@ -672,14 +696,10 @@ public sealed class ImageViewerControl : Control
             return;
         }
 
-        if (_start.HasValue)
+        if (_drawing)
         {
-            _end = ImagePoint(e.Location);
-            if (_editOriginal.HasValue)
-            {
-                _preview = EditedBounds();
-            }
-
+            var point = ImagePoint(e.Location);
+            _editor.PointerMove(new DP.Vision.PointD(point.X, point.Y));
             Invalidate();
         }
     }
@@ -704,43 +724,33 @@ public sealed class ImageViewerControl : Control
             return;
         }
 
-        if (e.Button != MouseButtons.Left || !_start.HasValue)
+        if (e.Button != MouseButtons.Left || !_drawing)
         {
             return;
         }
 
-        _end = ImagePoint(e.Location);
-        if (_editOriginal.HasValue)
-        {
-            var bounds = EditedBounds();
-            int index = _selected;
-            var original = _editOriginal.Value;
-            _start = null;
-            _editOriginal = null;
-            _preview = null;
-            Capture = false;
-            if (!bounds.Equals(original))
-            {
-                RegionEdited?.Invoke(this, new RegionEditedEventArgs(index, bounds));
-            }
-
-            Invalidate();
-            return;
-        }
-
-        var start = _start.Value;
-        _start = null;
+        var point = ImagePoint(e.Location);
+        var before = _editor.Document;
+        _editor.PointerUp(new DP.Vision.PointD(point.X, point.Y));
+        var after = _editor.Document;
+        _drawing = false;
         Capture = false;
-        int width = Math.Abs(start.X - _end.X),
-            height = Math.Abs(start.Y - _end.Y);
-        if (width >= 4 && height >= 4)
+        if (!ReferenceEquals(before, after))
         {
-            RegionDrawn?.Invoke(
-                this,
-                new RegionDrawnEventArgs(
-                    new PixelRect(Math.Min(start.X, _end.X), Math.Min(start.Y, _end.Y), width, height)
-                )
+            // 新建：文档中多出的ROI；编辑：同一标识的几何改变。均先复原为宿主的配方区域，再由宿主通过事件提交修改。
+            var created = after.Rois.FirstOrDefault(r => !before.Rois.Any(b => b.Id == r.Id));
+            var edited = after.Rois.FirstOrDefault(r =>
+                before.Rois.Any(b => b.Id == r.Id && !ReferenceEquals(b, r))
             );
+            LoadEditor();
+            if (created != null)
+            {
+                RegionDrawn?.Invoke(this, new RegionDrawnEventArgs(ToRect(created.Shape)));
+            }
+            else if (edited != null && IndexOf(edited.Id) is int index && index >= 0)
+            {
+                RegionEdited?.Invoke(this, new RegionEditedEventArgs(index, ToRect(edited.Shape)));
+            }
         }
 
         Invalidate();
@@ -754,9 +764,12 @@ public sealed class ImageViewerControl : Control
         {
             _panStart = null;
             Cursor = Cursors.Default;
-            _start = null;
-            _editOriginal = null;
-            _preview = null;
+            if (_drawing)
+            {
+                _drawing = false;
+                _editor.Cancel();
+            }
+
             Invalidate();
         }
     }
@@ -802,48 +815,6 @@ public sealed class ImageViewerControl : Control
             new PointF(l, b),
             new PointF(l, (t + b) / 2),
         };
-    }
-
-    private PixelRect EditedBounds()
-    {
-        var box = _editOriginal!.Value;
-        int dx = _end.X - _start!.Value.X,
-            dy = _end.Y - _start.Value.Y;
-        if (_editHandle < 0)
-        {
-            return new PixelRect(
-                Math.Max(0, Math.Min(_bitmap!.Width - box.Width, box.X + dx)),
-                Math.Max(0, Math.Min(_bitmap!.Height - box.Height, box.Y + dy)),
-                box.Width,
-                box.Height
-            );
-        }
-
-        int l = box.X,
-            t = box.Y,
-            r = l + box.Width,
-            b = t + box.Height;
-        if (_editHandle == 0 || _editHandle == 6 || _editHandle == 7)
-        {
-            l = Math.Max(0, Math.Min(r - 4, l + dx));
-        }
-
-        if (_editHandle == 2 || _editHandle == 3 || _editHandle == 4)
-        {
-            r = Math.Min(_bitmap!.Width, Math.Max(l + 4, r + dx));
-        }
-
-        if (_editHandle == 0 || _editHandle == 1 || _editHandle == 2)
-        {
-            t = Math.Max(0, Math.Min(b - 4, t + dy));
-        }
-
-        if (_editHandle == 4 || _editHandle == 5 || _editHandle == 6)
-        {
-            b = Math.Min(_bitmap!.Height, Math.Max(t + 4, b + dy));
-        }
-
-        return new PixelRect(l, t, r - l, b - t);
     }
 
     /// <inheritdoc/>
