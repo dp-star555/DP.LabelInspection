@@ -65,12 +65,15 @@ dotnet build DP.LabelInspection.sln -c Debug   # 0 错误；2 个既有 MSTEST00
   （HEAD blob 套同一变换后与工作区按字节比较）。⚠️ 别用 `utf-8-sig`（会抹掉 BOM 差异），
   写文件也别用 Python 默认读 + `newline=""`（会给无 BOM 文件加 BOM，污染 diff）。
 
-## PP-OCR 检测拆分（2026-09-29，阶段 1–2 已完成）
+## PP-OCR 任务与业务拆分（2026-09-29，阶段 1–3 已完成）
 
-方案在 `DP.Vision/PPOCR_REFACTOR_PLAN.md`（阶段 3–5 未开始）。已完成 `daa3f4c`(Vision) + `7b53403`(业务)。
+方案在 `DP.Vision/PPOCR_REFACTOR_PLAN.md`（阶段 4–5 未开始）。
+提交：`daa3f4c`(Vision 拆检测) + `7b53403`(业务拆检测) + `7971502`(Vision 收敛工程) + `784a9f4`(业务跟随)。
 
-- Vision 侧：`PPOcrDetectionInput/Output/Task`（Task **不含 OpenCV**）；`OnnxTextRegionDetector`
-  是**待删的旧实现**，阶段 3 删。
+- Vision 侧：执行端已收敛为**单工程** `DP.Vision.PPOcr.Onnx`（`Recognition/` + `Detection/`，
+  net48;net8.0-windows，引 `DP.Vision.Algorithms` + OnnxRuntime，**不含 OpenCV**）。
+  `PPOcrDetectionInput/Output/Task`（Task 不含 OpenCV）在此；`OnnxTextRegionDetector` 与旧
+  `DP.Vision.Onnx`、`DP.Vision.OnnxDetection` **已在阶段 3 删除**。
 - 业务侧：`Runtime/Text/Detection/PPOcrDetectionPreparer`（图→NCHW）与 `DbTextRegionCandidates`
   （概率图→候选）。阈值 `.3`/`.6`/64/1000 轮廓**不得重调**。
 - 冻结证据：`tools/DP.LabelInspection.PPOcrBaseline`（`--map` 导概率图、`--verify` 对拍）
@@ -83,9 +86,9 @@ dotnet build DP.LabelInspection.sln -c Debug   # 0 错误；2 个既有 MSTEST00
 
 ## 测试
 
-- `net8.0-windows`：`dotnet test tests/DP.LabelInspection.Tests/... -c Release -f net8.0-windows` → **295/295 全绿**。
+- `net8.0-windows`：`dotnet test tests/DP.LabelInspection.Tests/... -c Release -f net8.0-windows` → **296/296 全绿**。
 - `net48`：工程内已有 `FlattenNet48NativeDependencies` 目标（`AfterTargets="Build"`，把 `$(OutDir)dll\x64\*.dll`
-  平铺到输出根，`fe5d237`）→ `dotnet test -f net48` 直接可用，**295/295 全绿**。
+  平铺到输出根，`fe5d237`）→ `dotnet test -f net48` 直接可用，**296/296 全绿**。
   缺这一步会 100 例 `DllNotFoundException: OpenCvSharpExtern`（.NET Framework 不探 `dll/x64`）。
   **`CopyLocalLockFileAssemblies=true` 实测无效**。这是既有环境问题、不是回归（父提交 `dbcece5` 同样失败）。
   备用：把 `artifacts/project-consolidation-package/net48/WinForms` 加进 PATH。
