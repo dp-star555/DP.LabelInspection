@@ -32,7 +32,7 @@ public sealed partial class OpenCvInspectionBackend
 
             if (r.Kind == ERegionKind.Barcode)
             {
-                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                using var source = _request.VisionSource!.Retain();
                 bool qr = r.Field.BarcodeType == EBarcodeKind.QrCode
                     || r.Field.BarcodeType == EBarcodeKind.Auto
                         && reading.Barcodes.Count == 1 && reading.Barcodes[0].Format == "QR_CODE";
@@ -50,9 +50,12 @@ public sealed partial class OpenCvInspectionBackend
                 );
             }
 
-            using var actual =
-                _request.VisionSource?.Crop(r.Bounds.X, r.Bounds.Y, r.Bounds.Width, r.Bounds.Height)
-                ?? Bridge.ToVision(_request.Actual.Crop(r.Bounds));
+            using var actual = _request.VisionSource!.Crop(
+                r.Bounds.X,
+                r.Bounds.Y,
+                r.Bounds.Width,
+                r.Bounds.Height
+            );
             // 忽略区随定位平移后与本ROI的交集，在ROI局部坐标中扣除。
             var local = new A.PixelBounds(0, 0, r.Bounds.Width, r.Bounds.Height);
             var ignored = _request
@@ -93,7 +96,10 @@ public sealed partial class OpenCvInspectionBackend
                         original.Bounds.Y,
                         original.Bounds.Width,
                         original.Bounds.Height
-                    ) ?? Bridge.ToVision(_request.Reference!.Crop(original.Bounds));
+                    )
+                    ?? throw new InvalidOperationException(
+                        "fixed_quality_requires_reference: 规则质检需要参考图。"
+                    );
                 measured = _owner._qualityAlgorithms.Fixed.Inspect(
                     actual,
                     reference,
@@ -197,7 +203,7 @@ public sealed partial class OpenCvInspectionBackend
                     }
                 }
 
-                using var actual = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                using var actual = _request.VisionSource!.Retain();
                 var strategy =
                     _owner._textQuality
                     ?? new A.TextQualityInspector(

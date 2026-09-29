@@ -215,7 +215,7 @@ public sealed partial class OpenCvInspectionBackend
             token.ThrowIfCancellationRequested();
             if (r.Kind == ERegionKind.Text)
             {
-                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                using var source = _request.VisionSource!.Retain();
                 return new RegionInspectionResult(
                     r.Name,
                     Array.Empty<InspectionFinding>(),
@@ -225,7 +225,7 @@ public sealed partial class OpenCvInspectionBackend
 
             if (r.Kind == ERegionKind.Barcode)
             {
-                using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                using var source = _request.VisionSource!.Retain();
                 var measured = _owner._barcode!.Read(source, r.Bounds, token);
                 return new RegionInspectionResult(
                     r.Name,

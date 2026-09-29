@@ -5,7 +5,6 @@ using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.Vision;
 using A = DP.Vision.Algorithms;
-using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
 
 namespace DP.LabelInspection.Runtime;
 
@@ -30,10 +29,12 @@ public sealed partial class OpenCvInspectionBackend
                 {
                     if (!_located)
                     {
-                        using var actualSource =
-                            _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                        using var actualSource = _request.VisionSource!.Retain();
                         using var referenceSource =
-                            _request.VisionReference?.Retain() ?? Bridge.ToVision(_request.Reference!);
+                            _request.VisionReference?.Retain()
+                            ?? throw new InvalidOperationException(
+                                "translation_alignment_requires_reference: 整图配准需要参考图。"
+                            );
                         var offset = Register(actualSource, referenceSource, token);
                         if (offset == null)
                         {
