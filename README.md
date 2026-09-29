@@ -43,7 +43,7 @@
 | 平移配准 | 在固定内容上估计受限ECC平移，最大12px；无纹理/失败/越界不强行比较 |
 | 空白区域 | 污点检测，保留原始像素位置和面积 |
 | 单行OCR | 真正BGR预处理、动态宽度、ONNX推理、CTC blank/重复处理及模型哈希 |
-| 候选发现 | DP.Vision.OnnxDetection提供实际DB候选检测；须显式用于配方准备，没有配置ROI的验收请求为NG |
+| 候选发现 | 标签运行时从DP.Vision.PPOcr.Onnx的概率图证据提取DB候选；须显式用于配方准备，没有配置ROI的验收请求为NG |
 | 字符分割 | 测量空隙/连通域归属；保留点画、小噪点；拒绝强切粘连、边缘裁切与彩色遮挡 |
 | 单字参考比较 | 可选：文字ROI绑定类别＋固定版本才启用分割/字形比较；未绑定时仅做OCR/内容规则，不报缺字库或外观未覆盖。支持任意重排和重复字符；显式等宽单元仍要求字库 |
 | 字库管理 | 新建、单字图像/裁剪、确认保存、规则字表导入、单字删除、归档/恢复、历史读取、JSON导入/导出；[多图制库](QUICK_GLYPH_LIBRARY.md)：多图补录、手工补框/切开粘连/改边界、撤销重做、跨图清单、缺字筛选和原子新版本 |
@@ -83,9 +83,8 @@ DP.LabelInspection.Adapter.Vision   netstandard2.0，业务图像/证据与中�
 DP.LabelInspection.Runtime          net48 / net8，唯一标签运行时装配工程
 DP.Vision.Algorithms                netstandard2.0，中立视觉任务契约
 DP.Vision.OpenCv                    net48 / net8，通用分割与印刷质量实现
-DP.Vision.Onnx                      net48 / net8，独立OCR模型推理
+DP.Vision.PPOcr.Onnx                net48 / net8，PP-OCRv4检测与识别模型推理（无OpenCV、无标签依赖）
 DP.Vision.Zxing                     netstandard2.0，实际读码
-DP.Vision.OnnxDetection             net48 / net8，实际DB检测（ONNX＋OpenCV），无标签依赖
 DP.LabelInspection                  net48 / net8，WinForms主控件与中立画布适配
 DP.LabelInspection.Wpf              net48 / net8，原生WPF控件与中立画布适配
 ```
@@ -101,10 +100,10 @@ Core与控件没有Mat/HObject/ONNX类型。具体视觉适配器可以依赖其
 ```csharp
 using DP.Vision;
 using DP.LabelInspection.Adapter.Vision;
-// 引用DP.Vision.Onnx、DP.Vision.OpenCv、DP.Vision.Zxing及标签Runtime/Storage。
+// 引用DP.Vision.PPOcr.Onnx、DP.Vision.OpenCv、DP.Vision.Zxing及标签Runtime/Storage。
 var codec = new OpenCvImageCodec();
 var store = new InspectionStore(dataDirectory, codec);
-using var recognizer = new DP.Vision.Onnx.OnnxTextLineRecognizer(modelPath,
+using var recognizer = new DP.Vision.PPOcr.Onnx.OnnxTextLineRecognizer(modelPath,
     new DP.Vision.OpenCv.OpenCvTextLinePreprocessor(), expectedSha256: modelHash);
 using var backend = new OpenCvInspectionBackend(libraries: store,
     barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(), recognizer: recognizer);

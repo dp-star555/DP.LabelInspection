@@ -81,7 +81,7 @@ public sealed class LabelInspectionHost : IDisposable
         string? model = recognitionModel ?? RecognitionModel;
         var recognizer = string.IsNullOrWhiteSpace(model)
             ? null
-            : new DP.Vision.Onnx.OnnxTextLineRecognizer(
+            : new DP.Vision.PPOcr.Onnx.OnnxTextLineRecognizer(
                 model!,
                 new DP.Vision.OpenCv.OpenCvTextLinePreprocessor()
             );

@@ -7,8 +7,7 @@
         <ProjectReference Include="../DP.LabelInspection.Storage/DP.LabelInspection.Storage.csproj" />
         <ProjectReference Include="../DP.LabelInspection.Adapter.Vision/DP.LabelInspection.Adapter.Vision.csproj" />
         <ProjectReference Include="../../../DP.Vision/src/DP.Vision.OpenCv/DP.Vision.OpenCv.csproj" />
-        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.Onnx/DP.Vision.Onnx.csproj" />
+        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.PPOcr.Onnx/DP.Vision.PPOcr.Onnx.csproj" />
         <ProjectReference Include="../../../DP.Vision/src/DP.Vision.Zxing/DP.Vision.Zxing.csproj" />
-        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.OnnxDetection/DP.Vision.OnnxDetection.csproj" />
     </ItemGroup>
 </Project>

@@ -7,6 +7,6 @@
         <ProjectReference Include="../../src/DP.LabelInspection.Core/DP.LabelInspection.Core.csproj" />
         <ProjectReference Include="../../src/DP.LabelInspection.Storage/DP.LabelInspection.Storage.csproj" />
         <ProjectReference Include="../../src/DP.LabelInspection.Runtime/DP.LabelInspection.Runtime.csproj" />
-        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.OnnxDetection/DP.Vision.OnnxDetection.csproj" />
+        <ProjectReference Include="../../../DP.Vision/src/DP.Vision.PPOcr.Onnx/DP.Vision.PPOcr.Onnx.csproj" />
     </ItemGroup>
 </Project>

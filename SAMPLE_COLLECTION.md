@@ -36,6 +36,6 @@
 
 - 文字质量：`DP.Vision.Algorithms.ITextQualityInspector`（`OpenCvInspectionBackend`构造参数`textQuality`）；已有不依赖分割/字库的整段质量策略测试（`IndependentTextQualityTests`）。
 - 条码/QR质量：`IBarcodeQualityInspector`。
-- 模型运行时按`ALGORITHM_MODULES.md`中拟议的`DP.Vision.Onnx`能力包实现。
+- 模型运行时按`ALGORITHM_MODULES.md`中的`DP.Vision.PPOcr.Onnx`能力包实现。
 
 输出仍为发现（代码、框、面积、判定），报告不依赖某一实现的内部参数（如二值化阈值），两种方案可用同一样本集按ROI类型比较检出率与误判率。

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using DP.Vision.OnnxDetection;
+using DP.Vision.PPOcr.Onnx;
 using OpenCvSharp;
 
 namespace DP.LabelInspection.Runtime;

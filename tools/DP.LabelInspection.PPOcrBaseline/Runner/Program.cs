@@ -66,7 +66,7 @@ internal static class Program
             var codec = new OpenCvImageCodec();
             var rows = new List<string>();
             string modelSha256;
-            using (var task = new DP.Vision.OnnxDetection.PPOcrDetectionTask(modelPath))
+            using (var task = new DP.Vision.PPOcr.Onnx.PPOcrDetectionTask(modelPath))
             {
                 modelSha256 = task.ModelIdentity;
                 foreach (
@@ -171,7 +171,7 @@ internal static class Program
         string outputDirectory,
         string frameName,
         byte[] imageBytes,
-        DP.Vision.OnnxDetection.PPOcrDetectionOutput evidence
+        DP.Vision.PPOcr.Onnx.PPOcrDetectionOutput evidence
     )
     {
         var values = evidence.CopyValues();

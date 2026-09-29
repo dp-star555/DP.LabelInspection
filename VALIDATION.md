@@ -45,7 +45,7 @@ DP.Vision增加独立的WinForms/WPF多节点、多视图、图层选择浏览�
 ## 历史：删除重复工程（破坏性工程变更）
 
 - 已删除四个旧工程目录、csproj及解决方案项：`DP.LabelInspection.Barcode.Zxing`、`DP.LabelInspection.Ocr.Onnx`、`DP.LabelInspection.Vision.OpenCv`、`DP.LabelInspection.Vision.OnnxDetection`。
-- 业务运行时统一到 `DP.LabelInspection.Runtime`；DB检测器实际算法归入 `DP.Vision.OnnxDetection`，不依赖标签工程。没有旧命名空间或程序集类型转发；所有样例、探针、测试和工程引用已更新。
+- 业务运行时统一到 `DP.LabelInspection.Runtime`；DB检测器实际算法归入 `DP.Vision.OnnxDetection`（该工程在后续 PP-OCR 收敛中并入 `DP.Vision.PPOcr.Onnx`，DB候选提取移到标签侧 `Runtime/Text/Detection`），不依赖标签工程。没有旧命名空间或程序集类型转发；所有样例、探针、测试和工程引用已更新。
 - 清除旧bin/obj及构建服务器缓存后重建，锁定恢复通过；标签两框架各 **203通过**，Release零警告/错误，完整真实OCR及原生WinForms/WPF通过。新增程序集边界回归。
 - 日志 `artifacts/project-consolidation-verification.log`；通用Vision完整验证 `../DP.Vision/artifacts/project-consolidation-verification.log`，core各60、算法各24通过。真实DB候选37、OCR/CTC52/52保持原口径，不是工业精度证明。
 - 发布脚本要求新Runtime/检测程序集存在，并拒绝四个已删除DLL。`artifacts/project-consolidation-package` 的四种组合均从发布目录独立运行通过；日志 `artifacts/project-consolidation-package.log`、`artifacts/project-consolidation-published.log`。旧dist与历史验收包不修改，不代表当前结构。

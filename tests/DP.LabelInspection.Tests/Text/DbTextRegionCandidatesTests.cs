@@ -6,7 +6,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using DP.LabelInspection.Runtime;
 using DP.Vision.Algorithms;
-using DP.Vision.OnnxDetection;
+using DP.Vision.PPOcr.Onnx;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
 

@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
-using DP.Vision.OnnxDetection;
+using DP.Vision.PPOcr.Onnx;
 using OpenCvSharp;
 
 namespace DP.LabelInspection.Runtime;

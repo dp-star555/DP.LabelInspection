@@ -107,9 +107,8 @@
           "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Storage": "[0.2.0-preview.1, )",
-          "DP.Vision.Onnx": "[0.1.0-preview.2, )",
-          "DP.Vision.OnnxDetection": "[0.1.0-preview.2, )",
           "DP.Vision.OpenCv": "[0.1.0-preview.2, )",
+          "DP.Vision.PPOcr.Onnx": "[0.1.0-preview.2, )",
           "DP.Vision.Zxing": "[0.1.0-preview.2, )"
         }
       },
@@ -130,28 +129,19 @@
           "DP.Vision": "[0.1.0-preview.2, )"
         }
       },
-      "dp.vision.onnx": {
-        "type": "Project",
-        "dependencies": {
-          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
-          "Microsoft.ML.OnnxRuntime": "[1.28.0, )"
-        }
-      },
-      "dp.vision.onnxdetection": {
-        "type": "Project",
-        "dependencies": {
-          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
-          "Microsoft.ML.OnnxRuntime": "[1.28.0, )",
-          "OpenCvSharp4": "[4.10.0.20240616, )",
-          "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
-        }
-      },
       "dp.vision.opencv": {
         "type": "Project",
         "dependencies": {
           "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
           "OpenCvSharp4": "[4.10.0.20240616, )",
           "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
+        }
+      },
+      "dp.vision.ppocr.onnx": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "Microsoft.ML.OnnxRuntime": "[1.28.0, )"
         }
       },
       "dp.vision.zxing": {
@@ -263,9 +253,8 @@
           "DP.LabelInspection.Adapter.Vision": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Core": "[0.2.0-preview.1, )",
           "DP.LabelInspection.Storage": "[0.2.0-preview.1, )",
-          "DP.Vision.Onnx": "[0.1.0-preview.2, )",
-          "DP.Vision.OnnxDetection": "[0.1.0-preview.2, )",
           "DP.Vision.OpenCv": "[0.1.0-preview.2, )",
+          "DP.Vision.PPOcr.Onnx": "[0.1.0-preview.2, )",
           "DP.Vision.Zxing": "[0.1.0-preview.2, )"
         }
       },
@@ -286,28 +275,19 @@
           "DP.Vision": "[0.1.0-preview.2, )"
         }
       },
-      "dp.vision.onnx": {
-        "type": "Project",
-        "dependencies": {
-          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
-          "Microsoft.ML.OnnxRuntime": "[1.28.0, )"
-        }
-      },
-      "dp.vision.onnxdetection": {
-        "type": "Project",
-        "dependencies": {
-          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
-          "Microsoft.ML.OnnxRuntime": "[1.28.0, )",
-          "OpenCvSharp4": "[4.10.0.20240616, )",
-          "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
-        }
-      },
       "dp.vision.opencv": {
         "type": "Project",
         "dependencies": {
           "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
           "OpenCvSharp4": "[4.10.0.20240616, )",
           "OpenCvSharp4.runtime.win": "[4.10.0.20240616, )"
+        }
+      },
+      "dp.vision.ppocr.onnx": {
+        "type": "Project",
+        "dependencies": {
+          "DP.Vision.Algorithms": "[0.1.0-preview.2, )",
+          "Microsoft.ML.OnnxRuntime": "[1.28.0, )"
         }
       },
       "dp.vision.zxing": {

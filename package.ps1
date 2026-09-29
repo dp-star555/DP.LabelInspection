@@ -13,7 +13,7 @@ foreach ($target in @('net48','net8.0-windows')) {
     foreach ($ui in @('WinForms','Wpf')) {
         $directory = Join-Path $destination "$target/$ui"
         Run-Dotnet @('publish',"samples/DP.LabelInspection.Demo.$ui/DP.LabelInspection.Demo.$ui.csproj",'-c','Release','-f',$target,'--no-restore','--self-contained','false','-o',$directory)
-        foreach ($assembly in @('DP.Vision.dll','DP.Vision.UI.dll','DP.Vision.Algorithms.dll','DP.Vision.OpenCv.dll','DP.Vision.Onnx.dll','DP.Vision.Zxing.dll','DP.Vision.OnnxDetection.dll','DP.LabelInspection.Adapter.Vision.dll','DP.LabelInspection.Runtime.dll')) {
+        foreach ($assembly in @('DP.Vision.dll','DP.Vision.UI.dll','DP.Vision.Algorithms.dll','DP.Vision.OpenCv.dll','DP.Vision.PPOcr.Onnx.dll','DP.Vision.Zxing.dll','DP.LabelInspection.Adapter.Vision.dll','DP.LabelInspection.Runtime.dll')) {
             if (!(Test-Path (Join-Path $directory $assembly))) { throw "Missing migrated runtime assembly: $assembly ($target/$ui)" }
         }
         foreach ($removed in @('DP.LabelInspection.Vision.OpenCv','DP.LabelInspection.Vision.OnnxDetection','DP.LabelInspection.Ocr.Onnx','DP.LabelInspection.Barcode.Zxing')) {

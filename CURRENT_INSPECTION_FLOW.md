@@ -75,7 +75,7 @@ WinForms工作台“批量训练(B)”：载入多张良品图，每张图为若
 
 ## 工程边界
 
-不再保留四个旧算法工程或其程序集：`Barcode.Zxing / Ocr.Onnx / Vision.OpenCv / Vision.OnnxDetection`。标签业务装配集中到 `DP.LabelInspection.Runtime`；通用算法在 `DP.Vision.*`，实际DB候选检测也已迁到 `DP.Vision.OnnxDetection`。旧命名空间已移除，没有类型转发，宿主必须更新引用。
+不再保留四个旧算法工程或其程序集：`Barcode.Zxing / Ocr.Onnx / Vision.OpenCv / Vision.OnnxDetection`。标签业务装配集中到 `DP.LabelInspection.Runtime`；通用算法在 `DP.Vision.*`；PP-OCRv4 模型推理（检测与识别）在 `DP.Vision.PPOcr.Onnx`，DB候选提取在标签侧 `DP.LabelInspection.Runtime/Text/Detection`。旧命名空间已移除，没有类型转发，宿主必须更新引用。
 
 ## 正式入口
 

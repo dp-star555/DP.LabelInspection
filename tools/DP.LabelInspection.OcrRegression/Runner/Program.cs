@@ -8,7 +8,7 @@ using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Runtime;
 using Bridge = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter;
-using VisionRecognizer = DP.Vision.Onnx.OnnxTextLineRecognizer;
+using VisionRecognizer = DP.Vision.PPOcr.Onnx.OnnxTextLineRecognizer;
 using VisionPreprocessor = DP.Vision.OpenCv.OpenCvTextLinePreprocessor;
 using DP.LabelInspection.Storage;
 using Newtonsoft.Json.Linq;
@@ -283,7 +283,7 @@ internal static class Program
             }
 
             using (
-                var detector = new DP.Vision.OnnxDetection.OnnxTextRegionDetector(
+                var detectionTask = new DP.Vision.PPOcr.Onnx.PPOcrDetectionTask(
                     Path.Combine(
                         Path.GetDirectoryName(Path.GetFullPath(args[0]))!,
                         "ch_PP-OCRv4_det_infer.onnx"
@@ -291,8 +291,10 @@ internal static class Program
                 )
             )
             {
+                // 原引用的 frames/regular-heldout.png 在当前样例集中不存在；改用同样存在的独立验证帧
+                // pst-heldout.png（2592×1944，检测候选数与历史记录的 37 一致）。若恢复原资产，改回文件名即可。
                 var frame = new OpenCvImageCodec().Decode(
-                    File.ReadAllBytes(Path.Combine(args[1], "frames", "regular-heldout.png"))
+                    File.ReadAllBytes(Path.Combine(args[1], "frames", "pst-heldout.png"))
                 );
                 using var discoveryBackend = new OpenCvInspectionBackend(
                     libraries: store,
@@ -315,7 +317,9 @@ internal static class Program
                 );
                 var discovery = discoveryEngine.Inspect(discoveryRequest);
                 using var discoveryPixels = Bridge.ToVision(frame);
-                int detected = detector.Detect(discoveryPixels, default).Count;
+                var discoveryInput = PPOcrDetectionPreparer.Prepare(discoveryPixels, default);
+                var discoveryEvidence = detectionTask.Detect(discoveryInput, default);
+                int detected = DbTextRegionCandidates.Extract(discoveryEvidence, default).Count;
                 if (
                     detected < 1
                     || discovery.Verdict != EInspectionVerdict.Ng
@@ -328,7 +332,7 @@ internal static class Program
                 }
 
                 Console.WriteLine(
-                    $"DISCOVERY model={detector.ModelIdentity}; authoring_candidates={detected}; no_configured_ROI=NG; discovery is not acceptance"
+                    $"DISCOVERY model={detectionTask.ModelIdentity}; authoring_candidates={detected}; no_configured_ROI=NG; discovery is not acceptance"
                 );
             }
 
@@ -374,7 +378,7 @@ internal static class Program
             }
 
             if (
-                typeof(DP.Vision.Onnx.OnnxTextLineRecognizer)
+                typeof(DP.Vision.PPOcr.Onnx.OnnxTextLineRecognizer)
                     .Assembly.GetReferencedAssemblies()
                     .Any(a =>
                         a.Name!.Contains("OpenCv")
