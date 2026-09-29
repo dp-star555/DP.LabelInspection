@@ -89,6 +89,7 @@
 | `AnomalyTrainingSession` | [src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSession.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingSession.cs) |
 | `EAnomalyTrainingKind` | [src/DP.LabelInspection.Core/Libraries/Anomaly/EAnomalyTrainingKind.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/EAnomalyTrainingKind.cs) |
 | `InspectionEngine` | [src/DP.LabelInspection.Core/Inspection/InspectionEngine.cs](src/DP.LabelInspection.Core/Inspection/InspectionEngine.cs) |
+| `ContentVerification` | [src/DP.LabelInspection.Core/Inspection/ContentVerification.cs](src/DP.LabelInspection.Core/Inspection/ContentVerification.cs) |
 | `RoiWorkflow` | [src/DP.LabelInspection.Core/Inspection/RoiWorkflow.cs](src/DP.LabelInspection.Core/Inspection/RoiWorkflow.cs) |
 | `GlyphDraftCandidate` | [src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftCandidate.cs](src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftCandidate.cs) |
 | `GlyphDraftSession` | [src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs](src/DP.LabelInspection.Core/Libraries/Drafting/GlyphDraftSession.cs) |
@@ -199,6 +200,7 @@
 | `VisionTextInputTests` | [tests/DP.LabelInspection.Tests/Text/VisionTextInputTests.cs](tests/DP.LabelInspection.Tests/Text/VisionTextInputTests.cs) |
 | `FieldBindingTests` | [tests/DP.LabelInspection.Tests/Workflow/FieldBindingTests.cs](tests/DP.LabelInspection.Tests/Workflow/FieldBindingTests.cs) |
 | `RequiredAppearanceTests` | [tests/DP.LabelInspection.Tests/Workflow/RequiredAppearanceTests.cs](tests/DP.LabelInspection.Tests/Workflow/RequiredAppearanceTests.cs) |
+| `ContentVerificationTests` | [tests/DP.LabelInspection.Tests/Workflow/ContentVerificationTests.cs](tests/DP.LabelInspection.Tests/Workflow/ContentVerificationTests.cs) |
 | `RoiWorkflowTests` | [tests/DP.LabelInspection.Tests/Workflow/RoiWorkflowTests.cs](tests/DP.LabelInspection.Tests/Workflow/RoiWorkflowTests.cs) |
 | `FieldBindingTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/FieldBindingTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/FieldBindingTests/Backend.cs) |
 | `RequiredAppearanceTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RequiredAppearanceTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RequiredAppearanceTests/Backend.cs) |

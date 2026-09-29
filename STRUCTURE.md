@@ -7,7 +7,7 @@
 | 工程 | 功能目录及职责 |
 |---|---|
 | `DP.LabelInspection.Contracts` | `Imaging`图像契约；`Geometry`原图几何；`Inspection/Configuration`配方与项目；`Inspection/Execution`引擎和阶段契约；`Inspection/Results`报告与证据；`Rules`内容约束；`Libraries`独立字库；`Libraries/Candidates`参考制作；`Codes`码数据与质量；`Text`识别、检测、分割与质量 |
-| `DP.LabelInspection.Core` | `Inspection`引擎与逐ROI调度（唯一检测流程）；`Libraries/Anomaly`方法B批量训练采集；`Libraries/Drafting`候选编辑与跨图暂存 |
+| `DP.LabelInspection.Core` | `Inspection`引擎与逐ROI调度（唯一检测流程）及独立的内容核对规则`ContentVerification`；`Libraries/Anomaly`方法B批量训练采集；`Libraries/Drafting`候选编辑与跨图暂存 |
 | `DP.LabelInspection.Runtime` | `Hosting`宿主组装根（存储、编解码、训练与定位实现、按需创建引擎；因此引用Storage）；`Inspection`后台与ROI会话（按定位/质量A/质量B分文件）；`Anomaly`方法B业务组合（字符组、库条目、阈值下限，算子在DP.Vision）；`Libraries`固定版本库缓存；`Imaging`编解码与报告标注图；`Surfaces`固定及空白质量组合。定位、读码、OCR、分割、单字比较、码质检、异常检测算子均在DP.Vision |
 | `DP.LabelInspection.Storage` | `Persistence`持久化入口，其私有序列化辅助类型独立存放在`Internal/InspectionStore` |
 | `DP.LabelInspection.Adapter.Vision` | `Algorithms`算法契约转换；`Display`图像与显示几何转换 |
