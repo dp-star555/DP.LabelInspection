@@ -211,7 +211,7 @@ public sealed partial class OpenCvInspectionBackend
             var reader = _recognizer ?? throw new InvalidOperationException(
                 "请先加载OCR模型，或输入人工确认的单行文字后重新切割。 "
             );
-            recognition = Bridge.ToLabel(reader.Recognize(frame, bounds, token));
+            recognition = reader.Recognize(frame, bounds, token);
         }
 
         string text = confirmedText ?? recognition!.Text;

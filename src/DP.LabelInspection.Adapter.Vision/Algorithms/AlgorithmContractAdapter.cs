@@ -132,17 +132,4 @@ public static class AlgorithmContractAdapter
         ).WithExecutionBlocker(f.Kind == A.EQualityFindingKind.Blocker);
     }
 
-    /// <summary>保留原始CTC观测、置信度和实际模型标识。</summary>
-    /// <param name = "r">中立OCR结果，包含全部CTC观测及模型哈希。</param>
-    public static L.TextLineRecognition ToLabel(A.TextLineRecognition r)
-    {
-        return new L.TextLineRecognition(
-            r.Bounds,
-            r.ModelSha256,
-            r.InputWidth,
-            r.ContentWidth,
-            r.Steps.Select(s => new L.CtcStep(s.ClassIndex, s.Confidence)),
-            r.Tokens.Select(t => new L.CtcToken(t.Text, t.Start, t.End, t.Confidence))
-        );
-    }
 }

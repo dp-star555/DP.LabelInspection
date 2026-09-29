@@ -21,7 +21,7 @@
 
 9. 算子下沉到DP.Vision（需与DP.Vision分支 `claude/vision-operators` 一起合并）：逐字符异常检测（字符归一化、逐字局部块比较、缺墨检查、多样性选样、热力图）改为Vision `ICharacterAnomalyDetector` / `OpenCvCharacterAnomalyDetector`，标签侧只保留字符组键、库条目、组内阈值下限和报告措辞；受限ECC平移改为Vision `ITranslationRegistrar` / `OpenCvTranslationRegistrar`，忽略区掩码由 `InspectionMask.Compose` 生成（固定/空白质检掩码图用 `InspectionMask.ToImage`）；批量训练样本框对齐改为注入Vision `ITemplateLocator`。删除 `CharacterCells` / `CharacterLine` / `CharacterCell` / `CharacterInkLoss` / `TranslationRegistration`、后台 `Gray` 副本、训练会话手写NCC与灰度缓存、无调用的标签侧码质检接口（`IBarcodePrintInspector` 等）及Runtime包装类。实拍标签回归转储与迁移前逐字节一致；ECC在随机平移/忽略区上与旧实现逐次一致。
 
-10. 类型统一：标签侧 `PixelRect` 结构已删除，改为 DP.Vision `PixelBounds` 的全局别名（`Directory.Build.props` 的 `<Using Alias="PixelRect">`），源码写法与持久化JSON（`[x,y,w,h]`）不变；`AlgorithmContractAdapter` 中矩形互转删除，调用处直接传递。外部宿主若引用 `DP.LabelInspection.Contracts.PixelRect` 全名，需改为 `DP.Vision.Algorithms.PixelBounds` 或加同样的别名。`BarcodePrintOptions` 同样改为Vision类型的全局别名（逐字段一致）。`BarcodeObservation` / `BarcodeModuleGrid` 暂不统一：标签侧网格角点为像素中心坐标、Vision为像素边缘坐标（相差0.5），直接替换会使QR模块网格及已保存报告中的网格偏移半个像素，须先定义报告迁移。
+10. 类型统一：标签侧 `PixelRect` 结构已删除，改为 DP.Vision `PixelBounds` 的全局别名（`Directory.Build.props` 的 `<Using Alias="PixelRect">`），源码写法与持久化JSON（`[x,y,w,h]`）不变；`AlgorithmContractAdapter` 中矩形互转删除，调用处直接传递。外部宿主若引用 `DP.LabelInspection.Contracts.PixelRect` 全名，需改为 `DP.Vision.Algorithms.PixelBounds` 或加同样的别名。`BarcodePrintOptions` 同样改为Vision类型的全局别名（逐字段一致）。OCR结果 `TextLineRecognition` / `CtcStep` / `CtcToken` 也直接使用Vision类型（逐字段一致，报告JSON不变）。`BarcodeObservation` / `BarcodeModuleGrid` 暂不统一：标签侧网格角点为像素中心坐标、Vision为像素边缘坐标（相差0.5），直接替换会使QR模块网格及已保存报告中的网格偏移半个像素，须先定义报告迁移。
 
 ## 尚未完成（阻止删除旧类型/发布标准化SDK）
 

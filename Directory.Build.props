@@ -18,6 +18,10 @@
     <Using Include="DP.Vision.Algorithms.PixelBounds" Alias="PixelRect" />
     <!-- 码印刷检查参数与DP.Vision逐字段一致，直接使用Vision类型（配方JSON属性名不变）。码观测与模块网格不统一：标签侧网格角点为像素中心坐标，Vision为像素边缘坐标。 -->
     <Using Include="DP.Vision.Algorithms.BarcodePrintOptions" Alias="BarcodePrintOptions" />
+    <!-- OCR单行识别结果及其CTC观测与DP.Vision逐字段一致，直接使用Vision类型。 -->
+    <Using Include="DP.Vision.Algorithms.TextLineRecognition" Alias="TextLineRecognition" />
+    <Using Include="DP.Vision.Algorithms.CtcStep" Alias="CtcStep" />
+    <Using Include="DP.Vision.Algorithms.CtcToken" Alias="CtcToken" />
   </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />

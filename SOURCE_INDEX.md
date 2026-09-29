@@ -78,9 +78,6 @@
 | `TaskDataSnapshot` | [src/DP.LabelInspection.Contracts/Rules/TaskDataSnapshot.cs](src/DP.LabelInspection.Contracts/Rules/TaskDataSnapshot.cs) |
 | `GlyphComparison` | [src/DP.LabelInspection.Contracts/Text/Quality/GlyphComparison.cs](src/DP.LabelInspection.Contracts/Text/Quality/GlyphComparison.cs) |
 | `GlyphInspection` | [src/DP.LabelInspection.Contracts/Text/Quality/GlyphInspection.cs](src/DP.LabelInspection.Contracts/Text/Quality/GlyphInspection.cs) |
-| `CtcStep` | [src/DP.LabelInspection.Contracts/Text/Recognition/CtcStep.cs](src/DP.LabelInspection.Contracts/Text/Recognition/CtcStep.cs) |
-| `CtcToken` | [src/DP.LabelInspection.Contracts/Text/Recognition/CtcToken.cs](src/DP.LabelInspection.Contracts/Text/Recognition/CtcToken.cs) |
-| `TextLineRecognition` | [src/DP.LabelInspection.Contracts/Text/Recognition/TextLineRecognition.cs](src/DP.LabelInspection.Contracts/Text/Recognition/TextLineRecognition.cs) |
 | `CharacterPatch` | [src/DP.LabelInspection.Contracts/Text/Segmentation/CharacterPatch.cs](src/DP.LabelInspection.Contracts/Text/Segmentation/CharacterPatch.cs) |
 | `CharacterSegmentation` | [src/DP.LabelInspection.Contracts/Text/Segmentation/CharacterSegmentation.cs](src/DP.LabelInspection.Contracts/Text/Segmentation/CharacterSegmentation.cs) |
 | `AnomalyTrainingImage` | [src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingImage.cs](src/DP.LabelInspection.Core/Libraries/Anomaly/AnomalyTrainingImage.cs) |

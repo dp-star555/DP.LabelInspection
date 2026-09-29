@@ -219,9 +219,7 @@ public sealed partial class OpenCvInspectionBackend
                 return new RegionInspectionResult(
                     r.Name,
                     Array.Empty<InspectionFinding>(),
-                    recognition: Bridge.ToLabel(
-                        _owner._recognizer!.Recognize(source, r.Bounds, token)
-                    )
+                    recognition: _owner._recognizer!.Recognize(source, r.Bounds, token)
                 );
             }
 
