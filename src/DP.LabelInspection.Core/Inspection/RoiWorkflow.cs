@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Runtime.ExceptionServices;
 using System.Threading;
+using System.Threading.Tasks;
 using DP.LabelInspection.Contracts;
 
 namespace DP.LabelInspection.Core;
@@ -13,20 +16,36 @@ internal static class RoiWorkflow
     /// <summary>调度本轮检测，按依赖顺序处理引导源，再按配方顺序返回区域结果。</summary>
     /// <param name = "request">本轮不可变原图、配方、引导数据及参考资源。</param>
     /// <param name = "backend">创建本轮算法会话并提供名称与能力的后台。</param>
+    /// <param name = "parallelism">最多并行执行的ROI数；会话实现 <see cref = "IConcurrentRoiSession"/> 时才生效。</param>
     /// <param name = "token">协作式取消标记；取消传播到调用方，不转换成局部缺陷。</param>
     /// <returns>包含全部配置ROI结果和明确执行状态的报告；无有效项目不能放行。</returns>
     internal static InspectionReport Run(
         InspectionRequest request,
         IInspectionBackend backend,
+        int parallelism,
         CancellationToken token
     )
     {
         var watch = Stopwatch.StartNew();
         var configured = request.Recipe.Regions.Where(r => r.Kind != ERegionKind.Ignore).ToArray();
         using var session = backend.OpenSession(request);
-        var results = new Dictionary<string, RegionInspectionResult>(StringComparer.Ordinal);
-        var active = new HashSet<string>(StringComparer.Ordinal);
+        var results = new ConcurrentDictionary<string, RegionInspectionResult>(StringComparer.Ordinal);
+        var active = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
         bool measuredAlignment = false;
+        if (parallelism > 1 && session is IConcurrentRoiSession)
+        {
+            // 不从其他ROI取引导值的ROI互不依赖，先并行执行；其余ROI随后按配方顺序执行并复用已缓存的来源结果。
+            var independent = configured
+                .Where(r =>
+                    !request.Recipe.Bindings.Any(b => b.Target == r.Name && b.Source == EBindingSource.Region)
+                )
+                .ToArray();
+            if (independent.Length > 1)
+            {
+                RunParallel(independent, parallelism, roi => Process(roi), token);
+            }
+        }
+
         foreach (var roi in configured)
         {
             token.ThrowIfCancellationRequested();
@@ -130,7 +149,7 @@ internal static class RoiWorkflow
                 findings.Add(new InspectionFinding(code, message, EInspectionVerdict.Ng, region.Bounds));
             }
 
-            if (!active.Add(config.Name))
+            if (!active.TryAdd(config.Name, 0))
             {
                 Fail("binding_cycle", "ROI引导值依赖循环，不能取得独立先行读数。");
                 pre = ERoiStageState.Failed;
@@ -446,8 +465,37 @@ internal static class RoiWorkflow
             }
             finally
             {
-                active.Remove(config.Name);
+                active.TryRemove(config.Name, out _);
             }
+        }
+    }
+
+    /// <summary>并行执行各ROI；ROI内的算法异常已转为该ROI的发现，这里只可能传出取消或不可恢复的异常，原样抛出。</summary>
+    private static void RunParallel(
+        IReadOnlyList<InspectionRegion> regions,
+        int parallelism,
+        Action<InspectionRegion> process,
+        CancellationToken token
+    )
+    {
+        try
+        {
+            Parallel.ForEach(
+                regions,
+                new ParallelOptions { MaxDegreeOfParallelism = parallelism, CancellationToken = token },
+                process
+            );
+        }
+        catch (AggregateException error)
+        {
+            var inner = error.Flatten().InnerExceptions;
+            if (token.IsCancellationRequested && inner.All(e => e is OperationCanceledException))
+            {
+                throw new OperationCanceledException(token);
+            }
+
+            ExceptionDispatchInfo.Capture(inner[0]).Throw();
+            throw;
         }
     }
 

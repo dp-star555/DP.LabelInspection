@@ -359,4 +359,59 @@ public sealed partial class RoiWorkflowTests
             }
         }
     }
+
+    private static InspectionRequest ParallelRequest()
+    {
+        var regions = new[] { "a", "b", "odd", "c", "d" }
+            .Select((n, i) => Region(n, i * 16, quality: false))
+            .Concat(new[] { Region("e", 0, quality: false) })
+            .ToArray();
+        regions[5] = new InspectionRegion("e", ERegionKind.Text, new PixelRect(0, 20, 20, 20), true).WithTasks(
+            new RoiInspectionTasks(true, false)
+        );
+        return Request(regions, new[] { new FieldBinding("e", EBindingSource.Region, "a") });
+    }
+
+    /// <summary>
+    /// 并行度大于1且会话声明可并发时，不取其他ROI引导值的ROI并行执行；依赖ROI在来源完成后执行、来源只读取一次；
+    /// 报告按配方顺序且与串行完全相同。
+    /// </summary>
+    [TestMethod]
+    public void IndependentRoisRunInParallelWithSerialResults()
+    {
+        var serialProbe = new ConcurrentOverlapProbe();
+        InspectionReport serial;
+        using (var engine = new InspectionEngine(serialProbe))
+        {
+            serial = engine.Inspect(ParallelRequest());
+        }
+
+        Assert.AreEqual(1, serialProbe.MaximumActive);
+        var probe = new ConcurrentOverlapProbe();
+        using var parallelEngine = new InspectionEngine(probe) { MaximumParallelRois = 4 };
+        var parallel = parallelEngine.Inspect(ParallelRequest());
+        Assert.IsTrue(probe.MaximumActive > 1, probe.MaximumActive.ToString());
+        Assert.IsTrue(probe.Reads.Values.All(n => n == 1));
+        CollectionAssert.AreEqual(
+            new[] { "a", "b", "odd", "c", "d", "e" },
+            parallel.Analysis.Regions.Select(r => r.RegionName).ToArray()
+        );
+        Assert.AreEqual(serial.Verdict, parallel.Verdict);
+        CollectionAssert.AreEqual(
+            serial.Analysis.Regions.SelectMany(r => r.Findings.Select(f => r.RegionName + ":" + f.Code + ":" + f.Message)).ToArray(),
+            parallel.Analysis.Regions.SelectMany(r => r.Findings.Select(f => r.RegionName + ":" + f.Code + ":" + f.Message)).ToArray()
+        );
+        Assert.IsTrue(parallel.Analysis.Regions.Single(r => r.RegionName == "e").Findings.Any(f => f.Code == "binding_match"));
+    }
+
+    /// <summary>会话未声明可并发时，即使设置了并行度也按配方顺序串行执行。</summary>
+    [TestMethod]
+    public void UndeclaredSessionsStaySerial()
+    {
+        var probe = new OverlapProbe();
+        using var engine = new InspectionEngine(probe) { MaximumParallelRois = 4 };
+        engine.Inspect(ParallelRequest());
+        Assert.AreEqual(1, probe.MaximumActive);
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => engine.MaximumParallelRois = 0);
+    }
 }

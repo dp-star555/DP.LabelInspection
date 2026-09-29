@@ -23,22 +23,30 @@ public sealed partial class OpenCvInspectionBackend
             if (
                 _request.Recipe.Mode == EInspectionMode.Template
                 && _request.Recipe.Alignment == EAlignmentMode.Translation
-                && !_located
             )
             {
-                _located = true;
-                using var actualSource = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
-                using var referenceSource =
-                    _request.VisionReference?.Retain() ?? Bridge.ToVision(_request.Reference!);
-                var offset = Register(actualSource, referenceSource, token);
-                if (offset == null)
+                // 整图只配准一次；并发的ROI在此等待同一结果。配准抛出异常（如取消）时不标记完成，不会套用未测得的零偏移。
+                lock (_locateGate)
                 {
-                    _alignmentFailed = true;
-                }
-                else
-                {
-                    OffsetX = (int)Math.Round(offset.OffsetX);
-                    OffsetY = (int)Math.Round(offset.OffsetY);
+                    if (!_located)
+                    {
+                        using var actualSource =
+                            _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
+                        using var referenceSource =
+                            _request.VisionReference?.Retain() ?? Bridge.ToVision(_request.Reference!);
+                        var offset = Register(actualSource, referenceSource, token);
+                        if (offset == null)
+                        {
+                            _alignmentFailed = true;
+                        }
+                        else
+                        {
+                            OffsetX = (int)Math.Round(offset.OffsetX);
+                            OffsetY = (int)Math.Round(offset.OffsetY);
+                        }
+
+                        _located = true;
+                    }
                 }
             }
 

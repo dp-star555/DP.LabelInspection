@@ -38,6 +38,7 @@ public sealed class LabelInspectionHost : IDisposable
         AnomalyTrainer = _cnn == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(_cnn);
         TemplateLocator = new DP.Vision.OpenCv.OpenCvTemplateLocator();
         RecognitionModel = options.RecognitionModel;
+        MaximumParallelRois = options.MaximumParallelRois;
     }
 
     /// <summary>按参数组装宿主。</summary>
@@ -58,6 +59,9 @@ public sealed class LabelInspectionHost : IDisposable
 
     /// <summary>批量训练样本框自动对齐所用的模板定位。</summary>
     public DP.Vision.Algorithms.ITemplateLocator TemplateLocator { get; }
+
+    /// <summary>创建的引擎每次检测最多并行执行的ROI数。</summary>
+    public int MaximumParallelRois { get; }
 
     /// <summary>组装时指定的OCR模型路径。</summary>
     public string? RecognitionModel { get; }
@@ -93,7 +97,10 @@ public sealed class LabelInspectionHost : IDisposable
                     recognizer: recognizer
                 ),
                 true
-            );
+            )
+            {
+                MaximumParallelRois = MaximumParallelRois,
+            };
         }
         catch
         {

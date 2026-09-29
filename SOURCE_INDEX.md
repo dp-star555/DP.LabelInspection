@@ -37,6 +37,7 @@
 | `AnomalySettings` | [src/DP.LabelInspection.Contracts/Inspection/Configuration/AnomalySettings.cs](src/DP.LabelInspection.Contracts/Inspection/Configuration/AnomalySettings.cs) |
 | `EInspectionCapabilities` | [src/DP.LabelInspection.Contracts/Inspection/Execution/EInspectionCapabilities.cs](src/DP.LabelInspection.Contracts/Inspection/Execution/EInspectionCapabilities.cs) |
 | `ERoiStageState` | [src/DP.LabelInspection.Contracts/Inspection/Execution/ERoiStageState.cs](src/DP.LabelInspection.Contracts/Inspection/Execution/ERoiStageState.cs) |
+| `IConcurrentRoiSession` | [src/DP.LabelInspection.Contracts/Inspection/Execution/IConcurrentRoiSession.cs](src/DP.LabelInspection.Contracts/Inspection/Execution/IConcurrentRoiSession.cs) |
 | `IInspectionBackend` | [src/DP.LabelInspection.Contracts/Inspection/Execution/IInspectionBackend.cs](src/DP.LabelInspection.Contracts/Inspection/Execution/IInspectionBackend.cs) |
 | `IInspectionEngine` | [src/DP.LabelInspection.Contracts/Inspection/Execution/IInspectionEngine.cs](src/DP.LabelInspection.Contracts/Inspection/Execution/IInspectionEngine.cs) |
 | `IRoiInspectionSession` | [src/DP.LabelInspection.Contracts/Inspection/Execution/IRoiInspectionSession.cs](src/DP.LabelInspection.Contracts/Inspection/Execution/IRoiInspectionSession.cs) |
@@ -205,6 +206,8 @@
 | `FieldBindingTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/FieldBindingTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/FieldBindingTests/Backend.cs) |
 | `RequiredAppearanceTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RequiredAppearanceTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RequiredAppearanceTests/Backend.cs) |
 | `RoiWorkflowTests.Backend` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/Backend.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/Backend.cs) |
+| `RoiWorkflowTests.OverlapProbe` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/OverlapProbe.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/OverlapProbe.cs) |
+| `RoiWorkflowTests.ConcurrentOverlapProbe` | [tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/ConcurrentOverlapProbe.cs](tests/DP.LabelInspection.Tests/Workflow/TestDoubles/RoiWorkflowTests/ConcurrentOverlapProbe.cs) |
 | `BenchmarkConfig` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkConfig.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkConfig.cs) |
 | `BenchmarkExporter` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkExporter.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkExporter.cs) |
 | `BenchmarkImage` | [tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkImage.cs](tools/DP.LabelInspection.AnomalyBenchmark/Runner/BenchmarkImage.cs) |

@@ -54,6 +54,8 @@ public sealed class LabelInspectionHostTests
             using (var second = host.CreateEngine())
             {
                 Assert.IsFalse(second.Capabilities.HasFlag(EInspectionCapabilities.Ocr));
+                Assert.AreEqual(host.MaximumParallelRois, second.MaximumParallelRois);
+                Assert.IsTrue(second.MaximumParallelRois >= 1);
             }
 
             Assert.AreEqual(1, host.Store.History().Count);

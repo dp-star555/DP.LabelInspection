@@ -27,6 +27,12 @@ public sealed class LabelInspectionHostOptions
     /// <summary>方法B的CNN骨干网络（ONNX）路径；null时训练使用手工特征，已有的两种特征模型都可检测（CNN模型需要此项）。</summary>
     public string? AnomalyBackbone { get; set; }
 
+    /// <summary>
+    /// 每次检测最多并行执行的ROI数，默认取处理器数与4中的较小者。宿主只使用内置算法（均线程安全），
+    /// 因此创建的引擎可并行执行不从其他ROI取引导值的ROI；设为1即按配方顺序串行。
+    /// </summary>
+    public int MaximumParallelRois { get; set; } = Math.Max(1, Math.Min(4, Environment.ProcessorCount));
+
     /// <summary>启动时安装的种子字库JSON文件（已有同一种子时不重置用户版本）。</summary>
     public IList<string> SeedLibraryFiles { get; } = new List<string>();
 }

@@ -29,6 +29,18 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
     /// <inheritdoc/>
     public EInspectionCapabilities Capabilities => _backend.Capabilities;
 
+    private int _maximumParallelRois = 1;
+
+    /// <summary>
+    /// 一次检测内最多并行执行的ROI数（默认1，即按配方顺序串行）。大于1时，不从其他ROI取引导值的ROI并行执行，
+    /// 前提是后台会话实现 <see cref = "IConcurrentRoiSession"/>；报告仍按配方顺序输出，判定与串行相同。
+    /// </summary>
+    public int MaximumParallelRois
+    {
+        get => _maximumParallelRois;
+        set => _maximumParallelRois = value >= 1 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+    }
+
     /// <inheritdoc/>
     public Task<InspectionReport> InspectAsync(
         InspectionRequest request,
@@ -62,7 +74,7 @@ public sealed class InspectionEngine : IInspectionEngine, IGlyphCandidateService
                 throw new ArgumentException("Recipe and image dimensions differ.");
             }
 
-            return RoiWorkflow.Run(request, _backend, cancellationToken);
+            return RoiWorkflow.Run(request, _backend, _maximumParallelRois, cancellationToken);
         }
     }
 

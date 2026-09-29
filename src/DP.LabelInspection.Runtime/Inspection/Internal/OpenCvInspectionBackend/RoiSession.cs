@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -11,23 +12,23 @@ namespace DP.LabelInspection.Runtime;
 
 public sealed partial class OpenCvInspectionBackend
 {
-    private sealed partial class RoiSession : IRoiInspectionSession, IRoiAnomalySession
+    private sealed partial class RoiSession : IConcurrentRoiSession, IRoiAnomalySession
     {
         private readonly OpenCvInspectionBackend _owner;
         private readonly InspectionRequest _request;
-        private readonly Dictionary<string, GlyphLibrarySnapshot> _libraries = new Dictionary<
-            string,
-            GlyphLibrarySnapshot
-        >(StringComparer.Ordinal);
-        private readonly Dictionary<
+        // 各ROI只写入自己名称下的条目；多个ROI可并发执行（IConcurrentRoiSession）。
+        private readonly ConcurrentDictionary<string, GlyphLibrarySnapshot> _libraries =
+            new ConcurrentDictionary<string, GlyphLibrarySnapshot>(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<
             string,
             (AnomalyModelEntry Entry, A.PatchAnomalyModel Model, A.IPatchAnomalyDetector Detector)
-        > _anomaly = new Dictionary<
+        > _anomaly = new ConcurrentDictionary<
             string,
             (AnomalyModelEntry, A.PatchAnomalyModel, A.IPatchAnomalyDetector)
         >(StringComparer.Ordinal);
-        private readonly Dictionary<string, Dictionary<string, CharacterAnomalyModel>> _characterModels =
-            new Dictionary<string, Dictionary<string, CharacterAnomalyModel>>(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<string, Dictionary<string, CharacterAnomalyModel>> _characterModels =
+            new ConcurrentDictionary<string, Dictionary<string, CharacterAnomalyModel>>(StringComparer.Ordinal);
+        private readonly object _locateGate = new object();
         private bool _located,
             _alignmentFailed,
             _disposed;
