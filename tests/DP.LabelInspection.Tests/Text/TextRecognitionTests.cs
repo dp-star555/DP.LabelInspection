@@ -51,7 +51,7 @@ public sealed partial class TextRecognitionTests
     {
         var frame = new ImageFrame(1, 1, EImagePixelFormat.Bgr24, new byte[] { 0, 127, 255 });
         using var source = Bridge.ToVision(frame);
-        var input = new VisionPreprocessor().Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), default);
+        var input = new VisionPreprocessor().Prepare(source, new PixelRect(0, 0, 1, 1), default);
         var values = input.CopyValues();
         Assert.AreEqual(320, input.Width);
         Assert.AreEqual(48, input.ContentWidth);
@@ -72,10 +72,10 @@ public sealed partial class TextRecognitionTests
         var frame = new ImageFrame(700, 48, EImagePixelFormat.Gray8, pixels);
         using var source = Bridge.ToVision(frame);
         var prep = new VisionPreprocessor();
-        var tiny = prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), default).CopyValues();
+        var tiny = prep.Prepare(source, new PixelRect(0, 0, 1, 1), default).CopyValues();
         Assert.AreEqual(1f, tiny[0]);
         Assert.AreEqual(1f, tiny[2 * 48 * 320]);
-        var wide = prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 700, 48)), default);
+        var wide = prep.Prepare(source, new PixelRect(0, 0, 700, 48), default);
         Assert.AreEqual(700, wide.Width);
         Assert.AreEqual(700, wide.ContentWidth);
     }
@@ -88,13 +88,13 @@ public sealed partial class TextRecognitionTests
         var frame = new ImageFrame(100, 1, EImagePixelFormat.Gray8, new byte[100]);
         using var source = Bridge.ToVision(frame);
         Assert.ThrowsExactly<ArgumentException>(() =>
-            prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 100, 1)), default)
+            prep.Prepare(source, new PixelRect(0, 0, 100, 1), default)
         );
         Assert.ThrowsExactly<ArgumentException>(() =>
-            prep.Prepare(source, Bridge.ToVision(new PixelRect(99, 0, 2, 1)), default)
+            prep.Prepare(source, new PixelRect(99, 0, 2, 1), default)
         );
         Assert.ThrowsExactly<OperationCanceledException>(() =>
-            prep.Prepare(source, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), new CancellationToken(true))
+            prep.Prepare(source, new PixelRect(0, 0, 1, 1), new CancellationToken(true))
         );
         Assert.ThrowsExactly<ArgumentException>(() =>
             new InspectionRegion("bad", ERegionKind.Blank, new PixelRect(0, 0, 1, 1), true)

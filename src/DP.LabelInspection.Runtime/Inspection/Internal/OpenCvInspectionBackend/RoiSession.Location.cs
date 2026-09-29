@@ -92,13 +92,13 @@ public sealed partial class OpenCvInspectionBackend
                 return null;
             }
 
-            var bounds = Bridge.ToVision(fixedRegion.Bounds);
+            var bounds = fixedRegion.Bounds;
             var mask = A.InspectionMask.Compose(
                 reference,
                 new Geometry[] { bounds.ToGeometry() },
                 _request
                     .Recipe.Regions.Where(v => v.Kind == ERegionKind.Ignore)
-                    .Select(v => Bridge.ToVision(v.Bounds).Intersect(bounds))
+                    .Select(v => v.Bounds.Intersect(bounds))
                     .Where(b => b != null)
                     .Select(b => (Geometry)b!.Value.ToGeometry()),
                 token

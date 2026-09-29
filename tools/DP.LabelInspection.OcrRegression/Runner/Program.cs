@@ -205,7 +205,7 @@ internal static class Program
                 using var visionImage = Bridge.ToVision(frame);
                 var result = recognizer.Recognize(
                     visionImage,
-                    Bridge.ToVision(new PixelRect(0, 0, frame.Width, frame.Height)),
+                    new PixelRect(0, 0, frame.Width, frame.Height),
                     default
                 );
                 if (result.Text != item[1])
@@ -217,7 +217,7 @@ internal static class Program
 
                 using var physical = new DP.Vision.OpenCv.OpenCvCharacterSegmenter().Segment(
                     visionImage,
-                    Bridge.ToVision(new PixelRect(0, 0, frame.Width, frame.Height)),
+                    new PixelRect(0, 0, frame.Width, frame.Height),
                     result.Text
                 );
                 var segmented = Bridge.ToLabel(physical);
@@ -338,7 +338,7 @@ internal static class Program
             {
                 recognizer.Recognize(
                     tiny,
-                    Bridge.ToVision(new PixelRect(0, 0, 1, 1)),
+                    new PixelRect(0, 0, 1, 1),
                     new System.Threading.CancellationToken(true)
                 );
                 throw new InvalidOperationException("Cancellation was ignored.");
@@ -365,7 +365,7 @@ internal static class Program
             recognizer.Dispose();
             try
             {
-                recognizer.Recognize(tiny, Bridge.ToVision(new PixelRect(0, 0, 1, 1)), default);
+                recognizer.Recognize(tiny, new PixelRect(0, 0, 1, 1), default);
                 throw new InvalidOperationException("Disposed recognizer accepted work.");
             }
             catch (ObjectDisposedException)

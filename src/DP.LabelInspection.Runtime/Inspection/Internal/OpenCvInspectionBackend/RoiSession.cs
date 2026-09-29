@@ -220,7 +220,7 @@ public sealed partial class OpenCvInspectionBackend
                     r.Name,
                     Array.Empty<InspectionFinding>(),
                     recognition: Bridge.ToLabel(
-                        _owner._recognizer!.Recognize(source, Bridge.ToVision(r.Bounds), token)
+                        _owner._recognizer!.Recognize(source, r.Bounds, token)
                     )
                 );
             }
@@ -228,7 +228,7 @@ public sealed partial class OpenCvInspectionBackend
             if (r.Kind == ERegionKind.Barcode)
             {
                 using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
-                var measured = _owner._barcode!.Read(source, Bridge.ToVision(r.Bounds), token);
+                var measured = _owner._barcode!.Read(source, r.Bounds, token);
                 return new RegionInspectionResult(
                     r.Name,
                     Array.Empty<InspectionFinding>(),

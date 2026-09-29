@@ -266,10 +266,10 @@ public sealed partial class OpenCvInspectionBackend
             {
                 using var source = _request.VisionSource?.Retain() ?? Bridge.ToVision(_request.Actual);
                 using var measured = r.Field.EqualCells
-                    ? _owner._segmenter.EqualCells(source, Bridge.ToVision(r.Bounds), r.Field.Expected!)
+                    ? _owner._segmenter.EqualCells(source, r.Bounds, r.Field.Expected!)
                     : _owner._segmenter.Segment(
                         source,
-                        Bridge.ToVision(r.Bounds),
+                        r.Bounds,
                         evidence.Recognition?.Text ?? "",
                         token
                     );

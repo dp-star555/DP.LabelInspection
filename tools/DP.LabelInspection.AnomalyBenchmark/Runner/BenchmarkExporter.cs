@@ -329,7 +329,7 @@ internal sealed class BenchmarkExporter
                 var shift = aligner?.LineShift(gray, box) ?? new Point(0, 0);
                 var roi = new PixelRect(box.X + shift.X, box.Y + shift.Y, box.Width, box.Height);
                 using var measured = segmenter.Segment(pixels,
-                    DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(roi), text);
+                    roi, text);
                 var segmentation = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToLabel(measured);
                 if (segmentation.Status != "provisional")
                 {

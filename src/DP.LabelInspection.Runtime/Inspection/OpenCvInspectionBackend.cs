@@ -211,13 +211,13 @@ public sealed partial class OpenCvInspectionBackend
             var reader = _recognizer ?? throw new InvalidOperationException(
                 "请先加载OCR模型，或输入人工确认的单行文字后重新切割。 "
             );
-            recognition = Bridge.ToLabel(reader.Recognize(frame, Bridge.ToVision(bounds), token));
+            recognition = Bridge.ToLabel(reader.Recognize(frame, bounds, token));
         }
 
         string text = confirmedText ?? recognition!.Text;
         using var measured = _segmenter is DP.Vision.Algorithms.IGlyphCandidateSegmenter candidates
-            ? candidates.SegmentCandidates(frame, Bridge.ToVision(bounds), text, token)
-            : _segmenter.Segment(frame, Bridge.ToVision(bounds), text, token);
+            ? candidates.SegmentCandidates(frame, bounds, text, token)
+            : _segmenter.Segment(frame, bounds, text, token);
         token.ThrowIfCancellationRequested();
         return new GlyphCandidateExtraction(recognition, confirmedText, Bridge.ToLabel(measured));
     }

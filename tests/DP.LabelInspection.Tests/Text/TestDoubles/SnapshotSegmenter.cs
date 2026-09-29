@@ -12,7 +12,7 @@ internal sealed class SnapshotSegmenter
     {
         using var source = Bridge.ToVision(frame);
         using var result = new DP.Vision.OpenCv.OpenCvCharacterSegmenter().Segment(
-            source, Bridge.ToVision(bounds), text, token);
+            source, bounds, text, token);
         return Bridge.ToLabel(result);
     }
 }

@@ -187,13 +187,13 @@ public sealed class CharacterAnomalyDetector
             .Inspect(
                 image,
                 characters.Select(c => ToVision(c, Alphanumeric(c) ? c.Character : null)).ToArray(),
-                Bridge.ToVision(crop),
+                crop,
                 key => models(key)?.Reference,
                 inkLoss,
                 token
             );
         return new CharacterAnomalyResult(
-            Bridge.ToLabel(result.Crop),
+            result.Crop,
             result.Characters.Select(Score),
             result.HeatMap == null ? null : Bridge.ToLabel(result.HeatMap)
         );
@@ -207,7 +207,7 @@ public sealed class CharacterAnomalyDetector
         return new CharacterAnomalyScore(
             c.Character,
             c.TokenIndex,
-            Bridge.ToLabel(c.Bounds),
+            c.Bounds,
             o.Status switch
             {
                 ECharacterAnomalyStatus.Compared => "compared",
@@ -240,7 +240,7 @@ public sealed class CharacterAnomalyDetector
         string? key
     )
     {
-        return new CharacterAnomalyCharacter(c.Character, c.TokenIndex, Bridge.ToVision(c.Bounds), key);
+        return new CharacterAnomalyCharacter(c.Character, c.TokenIndex, c.Bounds, key);
     }
 
     /// <summary>标签行样本转为Vision行：同一标签图对象只转换一次（同一来源），未排除的字母/数字带“组/字符”模型键。</summary>

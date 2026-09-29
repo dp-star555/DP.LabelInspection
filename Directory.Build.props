@@ -13,6 +13,10 @@
     <!-- 下方明确固定net48参考程序集版本，避免本机已安装的目标框架包改变锁定依赖图。 -->
     <AutomaticallyUseReferenceAssemblyPackages>false</AutomaticallyUseReferenceAssemblyPackages>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- 原图整数范围统一使用DP.Vision的PixelBounds；PixelRect保留为全局别名，源码写法与持久化JSON格式均不变。 -->
+    <Using Include="DP.Vision.Algorithms.PixelBounds" Alias="PixelRect" />
+  </ItemGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" PrivateAssets="all" />
   </ItemGroup>

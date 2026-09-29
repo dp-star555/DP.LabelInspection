@@ -22,7 +22,7 @@
 | `CanvasPolyline` | [src/DP.LabelInspection.Contracts/Geometry/CanvasPolyline.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasPolyline.cs) |
 | `CanvasRegion` | [src/DP.LabelInspection.Contracts/Geometry/CanvasRegion.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasRegion.cs) |
 | `CanvasRun` | [src/DP.LabelInspection.Contracts/Geometry/CanvasRun.cs](src/DP.LabelInspection.Contracts/Geometry/CanvasRun.cs) |
-| `PixelRect` | [src/DP.LabelInspection.Contracts/Geometry/PixelRect.cs](src/DP.LabelInspection.Contracts/Geometry/PixelRect.cs) |
+| `PixelRectExtensions` | [src/DP.LabelInspection.Contracts/Geometry/PixelRectExtensions.cs](src/DP.LabelInspection.Contracts/Geometry/PixelRectExtensions.cs) |
 | `EImagePixelFormat` | [src/DP.LabelInspection.Contracts/Imaging/EImagePixelFormat.cs](src/DP.LabelInspection.Contracts/Imaging/EImagePixelFormat.cs) |
 | `IImageCodec` | [src/DP.LabelInspection.Contracts/Imaging/IImageCodec.cs](src/DP.LabelInspection.Contracts/Imaging/IImageCodec.cs) |
 | `ImageFrame` | [src/DP.LabelInspection.Contracts/Imaging/ImageFrame.cs](src/DP.LabelInspection.Contracts/Imaging/ImageFrame.cs) |

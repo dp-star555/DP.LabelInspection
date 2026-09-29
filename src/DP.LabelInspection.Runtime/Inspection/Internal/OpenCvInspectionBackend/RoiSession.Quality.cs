@@ -37,10 +37,10 @@ public sealed partial class OpenCvInspectionBackend
                     || r.Field.BarcodeType == EBarcodeKind.Auto
                         && reading.Barcodes.Count == 1 && reading.Barcodes[0].Format == "QR_CODE";
                 var result = qr
-                    ? _owner._qrQuality.Inspect(source, Bridge.ToVision(r.Bounds),
+                    ? _owner._qrQuality.Inspect(source, r.Bounds,
                         reading.Barcodes.Select(Bridge.ToVision).ToArray(),
                         Bridge.ToVision(r.Field.BarcodePrint), token)
-                    : _owner._linearQuality.Inspect(source, Bridge.ToVision(r.Bounds),
+                    : _owner._linearQuality.Inspect(source, r.Bounds,
                         reading.Barcodes.Select(Bridge.ToVision).ToArray(),
                         Bridge.ToVision(r.Field.BarcodePrint), token);
                 return new RoiQualityMeasurement(
@@ -209,7 +209,7 @@ public sealed partial class OpenCvInspectionBackend
                 using var measured = strategy.Inspect(
                     new A.TextQualityRequest(
                         actual,
-                        Bridge.ToVision(r.Bounds),
+                        r.Bounds,
                         hypothesis,
                         r.Field.EqualCells,
                         references,
@@ -244,7 +244,7 @@ public sealed partial class OpenCvInspectionBackend
                     var character = new CharacterPatch(
                         g.Character.Character,
                         g.Character.TokenIndex,
-                        Bridge.ToLabel(g.Character.Bounds),
+                        g.Character.Bounds,
                         Bridge.ToLabel(g.Character.Patch),
                         g.Character.NeighborInkRemoved
                     );

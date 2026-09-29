@@ -60,20 +60,6 @@ public static class AlgorithmContractAdapter
             : A.EGlyphBinarization.Fixed;
     }
 
-    /// <summary>保留离散像素坐标。</summary>
-    /// <param name = "r">标签侧原图整数矩形。</param>
-    public static A.PixelBounds ToVision(L.PixelRect r)
-    {
-        return new A.PixelBounds(r.X, r.Y, r.Width, r.Height);
-    }
-
-    /// <summary>保留离散像素坐标。</summary>
-    /// <param name = "r">中立的原图整数像素范围。</param>
-    public static L.PixelRect ToLabel(A.PixelBounds r)
-    {
-        return new L.PixelRect(r.X, r.Y, r.Width, r.Height);
-    }
-
     /// <summary>在释放中立图像租约之前复制物理证据。</summary>
     /// <param name = "s">借用的中立物理分割结果；释放前复制其字符图块。</param>
     public static L.CharacterSegmentation ToLabel(A.CharacterSegmentation s)
@@ -86,7 +72,7 @@ public static class AlgorithmContractAdapter
             s.Characters.Select(c => new L.CharacterPatch(
                 c.Character,
                 c.TokenIndex,
-                ToLabel(c.Bounds),
+                c.Bounds,
                 ToLabel(c.Patch),
                 c.NeighborInkRemoved
             ))
@@ -100,7 +86,7 @@ public static class AlgorithmContractAdapter
         return new L.BarcodeObservation(
             s.Text,
             s.Format,
-            ToLabel(s.Bounds),
+            s.Bounds,
             s.ModuleGrid == null
                 ? null
                 : new L.BarcodeModuleGrid(
@@ -119,7 +105,7 @@ public static class AlgorithmContractAdapter
         return new A.BarcodeObservation(
             s.Text,
             s.Format,
-            ToVision(s.Bounds),
+            s.Bounds,
             s.ModuleGrid == null
                 ? null
                 : new A.BarcodeModuleGrid(
@@ -156,7 +142,7 @@ public static class AlgorithmContractAdapter
             f.Kind == A.EQualityFindingKind.Defect ? L.EInspectionVerdict.Ng
                 : f.Kind == A.EQualityFindingKind.Blocker ? L.EInspectionVerdict.Review
                 : L.EInspectionVerdict.Ok,
-            f.Bounds.HasValue ? ToLabel(f.Bounds.Value) : (L.PixelRect?)null,
+            f.Bounds.HasValue ? f.Bounds.Value : (PixelRect?)null,
             f.AreaPixels
         ).WithExecutionBlocker(f.Kind == A.EQualityFindingKind.Blocker);
     }
@@ -166,7 +152,7 @@ public static class AlgorithmContractAdapter
     public static L.TextLineRecognition ToLabel(A.TextLineRecognition r)
     {
         return new L.TextLineRecognition(
-            ToLabel(r.Bounds),
+            r.Bounds,
             r.ModelSha256,
             r.InputWidth,
             r.ContentWidth,
