@@ -1292,6 +1292,13 @@ public sealed class GlyphQuickBuilderControl : UserControl
         }
 
         form.Controls.Add(page);
+        GuardClose(form, page);
+        form.ShowDialog(owner);
+    }
+
+    /// <summary>关闭宿主窗口前先取消并等待进行中的识别，并确认是否丢弃未入库的草稿。</summary>
+    internal static void GuardClose(Form form, GlyphQuickBuilderControl page)
+    {
         bool closing = false;
         form.FormClosing += async (_, e) =>
         {
@@ -1323,6 +1330,5 @@ public sealed class GlyphQuickBuilderControl : UserControl
                 closing = false;
             }
         };
-        form.ShowDialog(owner);
     }
 }
