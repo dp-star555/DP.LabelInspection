@@ -72,6 +72,7 @@
 | `FitToWindow` / `ActualSize` / `Zoom` | 画布视图 |
 | `EditRegionRules` / `EditFieldBindings` / `EditTaskData` / `EditThresholds` | 原侧栏的编辑窗口 |
 | `OpenGlyphLibrary` / `OpenGlyphQuickBuilder` / `OpenAnomalyLibraryManager` / `OpenAnomalyBatchTraining` | 字库与异常模型库窗口 |
+| `OpenGlyphLibraries(startWithQuickBuilder)` / `OpenAnomalyLibraries(startWithBatchTraining)` | 合并窗口：“字库”含单字库与多图制库两页；“异常模型”含模型库与批量训练两页，关闭时对新发布版本询问是否绑定到ROI。宿主只需各放一个入口按钮 |
 | `AdoptExploredTextRegions` / `ClearRegions` / `CancelInspection` | 原侧栏的其余操作 |
 | `RegionsChanged` / `BusyChanged` / `SelectedRegionName` / `SelectedRegionChanged` | 宿主同步自己的界面 |
 | `Options` / `Bindings` / `LibraryManager` / `AnomalyLibraryManager` | 当前状态 |

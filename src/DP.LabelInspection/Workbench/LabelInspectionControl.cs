@@ -715,6 +715,122 @@ public sealed class LabelInspectionControl : UserControl
         OpenBatchTraining();
     }
 
+    /// <summary>打开“字库”窗口：单字库管理与多图制库两个分页，字库相关操作都在其中完成。</summary>
+    /// <param name = "startWithQuickBuilder">是否先显示多图制库分页。</param>
+    public void OpenGlyphLibraries(bool startWithQuickBuilder = false)
+    {
+        EnsureIdle();
+        var manager = _libraryManager ?? throw new InvalidOperationException("宿主尚未连接字库管理器。");
+        var service = _engine as IGlyphCandidateService;
+        using var form = new Form
+        {
+            Text = "字库 · 单字模板管理 / 多图制库",
+            Width = 1380,
+            Height = 960,
+            MinimumSize = new Size(1120, 780),
+            StartPosition = FormStartPosition.CenterParent,
+        };
+        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var library = new GlyphLibraryControl { Dock = DockStyle.Fill };
+        library.AttachManager(manager);
+        if (service != null)
+        {
+            library.AttachCandidateService(service);
+        }
+
+        var builder = new GlyphQuickBuilderControl { Dock = DockStyle.Fill };
+        builder.AttachServices(manager, service);
+        if (_actual != null)
+        {
+            builder.SetImage(_actual);
+        }
+
+        var libraryPage = new TabPage("单字库");
+        libraryPage.Controls.Add(library);
+        var builderPage = new TabPage("多图制库");
+        builderPage.Controls.Add(builder);
+        tabs.TabPages.Add(libraryPage);
+        tabs.TabPages.Add(builderPage);
+        tabs.SelectedTab = startWithQuickBuilder ? builderPage : libraryPage;
+        // 多图制库发布的新版本切回单字库分页即可看到。
+        tabs.SelectedIndexChanged += (_, _) =>
+        {
+            if (tabs.SelectedTab == libraryPage)
+            {
+                library.AttachManager(manager);
+            }
+        };
+        form.Controls.Add(tabs);
+        GlyphQuickBuilderControl.GuardClose(form, builder);
+        form.ShowDialog(FindForm());
+    }
+
+    /// <summary>
+    /// 打开“异常模型”窗口（质量方法B）：异常模型库管理与批量训练两个分页；关闭时对新发布的版本询问是否绑定到ROI。
+    /// </summary>
+    /// <param name = "startWithBatchTraining">是否先显示批量训练分页。</param>
+    public void OpenAnomalyLibraries(bool startWithBatchTraining = false)
+    {
+        EnsureIdle();
+        var manager = _anomalyManager ?? throw new InvalidOperationException("宿主尚未连接异常模型库管理器。");
+        using var form = new Form
+        {
+            Text = "异常模型（质量方法B）· 模型库 / 批量训练",
+            Width = 1400,
+            Height = 900,
+            MinimumSize = new Size(1080, 700),
+            StartPosition = FormStartPosition.CenterParent,
+        };
+        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var editor = CreateAnomalyEditor();
+        var libraryPage = new TabPage("异常模型库");
+        libraryPage.Controls.Add(editor);
+        tabs.TabPages.Add(libraryPage);
+        var batchPage = new TabPage("批量训练");
+        AnomalyBatchTrainingControl? batch = null;
+        (string LibraryId, int Revision)? before = null;
+        if (_anomalyTrainer != null)
+        {
+            batch = PrepareBatch();
+            before = batch.LastPublished;
+            batchPage.Controls.Add(batch);
+        }
+        else
+        {
+            batchPage.Controls.Add(new Label { Text = "宿主未连接训练实现，不能批量训练。", AutoSize = true, Padding = new Padding(12) });
+        }
+
+        tabs.TabPages.Add(batchPage);
+        tabs.SelectedTab = startWithBatchTraining ? batchPage : libraryPage;
+        // 批量训练发布的新版本切回模型库分页即可看到。
+        tabs.SelectedIndexChanged += (_, _) =>
+        {
+            if (tabs.SelectedTab == libraryPage)
+            {
+                editor.AttachManager(manager, _anomalyTrainer);
+            }
+        };
+        form.Controls.Add(tabs);
+        try
+        {
+            form.ShowDialog(FindForm());
+        }
+        finally
+        {
+            // 训练页在本控件生命周期内保留，关闭窗口不丢失已载入的图和框。
+            if (batch != null)
+            {
+                batchPage.Controls.Remove(batch);
+            }
+        }
+
+        OfferAnomalyBinding(editor);
+        if (batch != null)
+        {
+            OfferBatchBinding(before);
+        }
+    }
+
     /// <summary>
     /// 在当前待检图上显示宿主已有的报告（例如生产运行的报告），与试检测结果的显示一致。
     /// 报告坐标须为当前ROI/待检图坐标；调用前先用<see cref="SetActualImage"/>与<see cref="ApplyRecipe"/>载入同一帧及所用配方。
@@ -1401,8 +1517,16 @@ public sealed class LabelInspectionControl : UserControl
             Height = 700,
             StartPosition = FormStartPosition.CenterParent,
         };
-        var editor = new AnomalyLibraryControl();
-        editor.AttachManager(_anomalyManager, _anomalyTrainer);
+        var editor = CreateAnomalyEditor();
+        form.Controls.Add(editor);
+        form.ShowDialog(FindForm());
+        OfferAnomalyBinding(editor);
+    }
+
+    private AnomalyLibraryControl CreateAnomalyEditor()
+    {
+        var editor = new AnomalyLibraryControl { Dock = DockStyle.Fill };
+        editor.AttachManager(_anomalyManager!, _anomalyTrainer);
         editor.SetRegions(_regions);
         if (_actual != null && (LastReport?.Verdict == EInspectionVerdict.Ok))
         {
@@ -1410,8 +1534,11 @@ public sealed class LabelInspectionControl : UserControl
             editor.AddGoodImage(_actual, "当前图像");
         }
 
-        form.Controls.Add(editor);
-        form.ShowDialog(FindForm());
+        return editor;
+    }
+
+    private void OfferAnomalyBinding(AnomalyLibraryControl editor)
+    {
         if (editor.LastPublished is not { } published)
         {
             return;
@@ -1483,6 +1610,35 @@ public sealed class LabelInspectionControl : UserControl
 
     private void OpenBatchTraining()
     {
+        var batch = PrepareBatch();
+        var before = batch.LastPublished;
+        using (
+            var form = new Form
+            {
+                Text = "异常模型批量训练（质量方法B）· 多图多框、一次训练",
+                Width = 1400,
+                Height = 900,
+                StartPosition = FormStartPosition.CenterParent,
+            }
+        )
+        {
+            form.Controls.Add(batch);
+            try
+            {
+                form.ShowDialog(FindForm());
+            }
+            finally
+            {
+                form.Controls.Remove(batch);
+            }
+        }
+
+        OfferBatchBinding(before);
+    }
+
+    /// <summary>准备在本控件生命周期内保留的批量训练页，并同步当前配方ROI。</summary>
+    private AnomalyBatchTrainingControl PrepareBatch()
+    {
         if (_anomalyManager == null || _anomalyTrainer == null)
         {
             throw new InvalidOperationException("宿主尚未连接异常模型库管理器及训练实现。");
@@ -1512,29 +1668,13 @@ public sealed class LabelInspectionControl : UserControl
         }
 
         _batch.SetRecipe(_regions);
-        var before = _batch.LastPublished;
-        using (
-            var form = new Form
-            {
-                Text = "异常模型批量训练（质量方法B）· 多图多框、一次训练",
-                Width = 1400,
-                Height = 900,
-                StartPosition = FormStartPosition.CenterParent,
-            }
-        )
-        {
-            form.Controls.Add(_batch);
-            try
-            {
-                form.ShowDialog(FindForm());
-            }
-            finally
-            {
-                form.Controls.Remove(_batch);
-            }
-        }
+        _batch.Dock = DockStyle.Fill;
+        return _batch;
+    }
 
-        if (_batch.LastPublished is not { } published || Equals(published, before))
+    private void OfferBatchBinding((string LibraryId, int Revision)? before)
+    {
+        if (_batch?.LastPublished is not { } published || Equals(published, before))
         {
             return;
         }
