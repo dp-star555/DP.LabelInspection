@@ -58,3 +58,4 @@
 - **不在本轮范围**：算法能力扩展、工业准确率认证和新硬件接入。
 
 原资料阶段只整理与核对引用。当前实现/回归入口见[首版说明](../../../DP.WorkFlow/docs/nodes/label-inspection.md)，不把历史统计算作本次新执行结果。SDK已有验证见[VALIDATION.md](../../VALIDATION.md)，能力边界见[当前检测流程](../../CURRENT_INSPECTION_FLOW.md)。
+- [放置：由宿主定位驱动的 ROI](04-placement.md)：宿主传入配方→原图的仿射，SDK 只对 ROI 范围取样，支持平移/旋转/缩放。
