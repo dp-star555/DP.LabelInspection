@@ -57,6 +57,22 @@ public sealed class InspectionPlacementTests
     }
 
     [TestMethod]
+    public void Rectify_LeavesPixelsOutsideImageBlack_InsteadOfRepeatingEdge()
+    {
+        using var lease = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(Gradient(40, 40));
+        using var actual = new V.ImageFrame("outside", lease);
+        // 整数平移：配方 (0,0) → 原图 (-5,-5)，在原图外；配方 (6,6) → 原图 (1,1)。
+        using (var label = new InspectionPlacement(1, 0, -5, 0, 1, -5).Rectify(actual, 20, 20))
+        {
+            Assert.AreEqual((byte)0, Pixel(label.Image, 0, 0));
+            Assert.AreEqual((byte)((1 + 3 * 1) % 256), Pixel(label.Image, 6, 6));
+        }
+        // 非整数平移同样：落在原图左侧外的像素为0，而不是复制第0列。
+        using (var label = new InspectionPlacement(1, 0, -5.5, 0, 1, 0).Rectify(actual, 20, 20))
+            Assert.AreEqual((byte)0, Pixel(label.Image, 0, 10));
+    }
+
+    [TestMethod]
     public void RoiPlacedOutsideImage_IsRejected()
     {
         var recipe = Recipe(60, 60, new PixelRect(2, 2, 40, 40));

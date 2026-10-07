@@ -52,14 +52,19 @@ internal static class PlacedSampler
                         continue;
                     filled[index] = true;
                     int offset = index * channels;
+                    // 落在原图外的像素保持为0（黑），不重复边缘像素，避免摆正图出现拉伸条纹。
                     if (integer)
                     {
-                        int sx = Clamp(x + dx, 0, info.Width - 1), sy = Clamp(y + dy, 0, info.Height - 1);
+                        int sx = x + dx, sy = y + dy;
+                        if (sx < 0 || sy < 0 || sx >= info.Width || sy >= info.Height)
+                            continue;
                         Buffer.BlockCopy(source, (sy * info.Width + sx) * channels, target, offset, channels);
                         continue;
                     }
 
                     var (px, py) = placement.Map(x + 0.5, y + 0.5);
+                    if (px < 0 || py < 0 || px > info.Width || py > info.Height)
+                        continue;
                     Bilinear(source, info.Width, info.Height, channels, px - 0.5, py - 0.5, target, offset);
                 }
             }
@@ -84,6 +89,4 @@ internal static class PlacedSampler
             target[offset + c] = (byte)Math.Max(0, Math.Min(255, Math.Round(value)));
         }
     }
-
-    private static int Clamp(int value, int minimum, int maximum) => value < minimum ? minimum : value > maximum ? maximum : value;
 }
