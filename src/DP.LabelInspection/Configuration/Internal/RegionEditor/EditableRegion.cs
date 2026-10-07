@@ -10,7 +10,7 @@ namespace DP.LabelInspection;
 
 internal static partial class RegionEditor
 {
-    private sealed class EditableRegion
+    internal sealed class EditableRegion
     {
         /// <summary>复制ROI配置为属性面板编辑状态，不修改原始快照。</summary>
         /// <param name = "r">要复制为属性面板可编辑状态的不可变ROI配置。</param>

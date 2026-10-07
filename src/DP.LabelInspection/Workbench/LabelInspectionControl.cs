@@ -90,6 +90,16 @@ public sealed class LabelInspectionControl : UserControl
     private DP.Vision.ImageFrame? _visionActual;
     private DP.Vision.ImageFrame? _visionReference;
     private readonly Label _referenceMode = new Label { AutoSize = true };
+    private readonly CheckBox _editRois = new CheckBox { Text = "选中/调整ROI", AutoSize = true };
+    private readonly Label _sidebarLine = new Label
+    {
+        Dock = DockStyle.Left,
+        AutoSize = false,
+        Width = 1,
+        BackColor = SystemColors.ControlDark,
+    };
+    private readonly CanvasViewBar _viewBar;
+    private bool _sidebarVisible = true;
     private CancellationTokenSource? _cancel;
     private Task<InspectionReport>? _active;
     private int _regionNumber;
@@ -101,11 +111,7 @@ public sealed class LabelInspectionControl : UserControl
         Dock = DockStyle.Fill;
         Font = new Font("Microsoft YaHei UI", 9);
         MinimumSize = new Size(600, 400);
-        _kind.Format += (_, e) =>
-            e.Value =
-                e.ListItem is EBarcodeKind type ? (type == EBarcodeKind.QrCode ? "二维码（QR）" : "一维条码")
-                : e.ListItem is ERegionKind kind && kind == ERegionKind.Barcode ? "条码（自动）"
-                : UiText.Get("Kind" + e.ListItem);
+        _kind.Format += (_, e) => e.Value = FormatKind(e.ListItem!);
         foreach (var value in Enum.GetValues(typeof(ERegionKind)))
         {
             _kind.Items.Add(value);
@@ -119,27 +125,26 @@ public sealed class LabelInspectionControl : UserControl
         BuildSidebar(details, glyphTab);
         var canvas = new Panel { Dock = DockStyle.Fill };
         canvas.Controls.Add(_viewer);
-        canvas.Controls.Add(new CanvasViewBar(_viewer));
+        canvas.Controls.Add(_viewBar = new CanvasViewBar(_viewer));
         _split.Panel1.Controls.Add(canvas);
         _split.Panel2.Controls.Add(details);
         _split.Panel2.Controls.Add(_status);
         _split.SizeChanged += (_, _) => InitializeSplit();
         // 停靠按Z序倒序处理：侧栏先占左侧，其后分隔线，余下区域给画布与结果。
         Controls.Add(_split);
-        Controls.Add(
-            new Label
-            {
-                Dock = DockStyle.Left,
-                AutoSize = false,
-                Width = 1,
-                BackColor = SystemColors.ControlDark,
-            }
-        );
+        Controls.Add(_sidebarLine);
         Controls.Add(_sidebar);
         _status.Message = UiText.Get("Unattached");
         UpdateReferenceMode();
         WireCanvas(details, glyphTab);
+        DrawKinds = _kind.Items.Cast<object>().Select(item => new RegionDrawKind(item, FormatKind(item))).ToArray();
+        _kind.SelectedIndexChanged += (_, _) => DrawKindChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    private static string FormatKind(object item) =>
+        item is EBarcodeKind type ? (type == EBarcodeKind.QrCode ? "二维码（QR）" : "一维条码")
+        : item is ERegionKind kind && kind == ERegionKind.Barcode ? "条码（自动）"
+        : UiText.Get("Kind" + item);
 
     private TabControl BuildResults(out TabPage glyphTab)
     {
@@ -210,174 +215,39 @@ public sealed class LabelInspectionControl : UserControl
         var roi = _sidebar.AddGroup("ROI");
         roi.Add(new Label { Text = UiText.Get("Drag"), AutoSize = true });
         roi.Add(_kind);
-        var editRois = roi.Add(new CheckBox { Text = "选中/调整ROI", AutoSize = true });
+        var editRois = roi.Add(_editRois);
         _tips.SetToolTip(editRois, "开启后左键选中并移动/缩放ROI；按住Shift仍可新建");
         editRois.CheckedChanged += (_, _) =>
         {
             _viewer.EditRegions = editRois.Checked;
             _viewer.Invalidate();
+            EditRegionsModeChanged?.Invoke(this, EventArgs.Empty);
         };
-        var edit = roi.AddButton(
-            "编辑ROI/规则",
-            () =>
-            {
-                EnsureIdle();
-                var edited = RegionEditor.Edit(_regions, _libraryManager, _anomalyManager);
-                if (edited != null)
-                {
-                    SetRegions(edited);
-                }
-            }
-        );
+        var edit = roi.AddButton("编辑ROI/规则", EditRegionRules);
         _tips.SetToolTip(edit, "在表格中编辑ROI名称、类型、检查项目及规则");
-        var explore = roi.AddButton(
-            "采用探索文字ROI",
-            () =>
-            {
-                EnsureIdle();
-                if (LastReport == null)
-                {
-                    throw new InvalidOperationException("先在无参考、无ROI模式执行探索。");
-                }
-
-                var regions = LastReport
-                    .Analysis.Regions.Where(r =>
-                        r.RegionName.StartsWith("auto-text-", StringComparison.Ordinal)
-                    )
-                    .Select(r => new
-                    {
-                        Result = r,
-                        Bounds = r.Recognition?.Bounds
-                            ?? r.Findings.FirstOrDefault(f => f.Bounds.HasValue)?.Bounds,
-                    })
-                    .Where(r => r.Bounds.HasValue)
-                    .Select(r => new InspectionRegion(
-                        r.Result.RegionName,
-                        ERegionKind.Text,
-                        r.Bounds!.Value,
-                        true
-                    ))
-                    .ToArray();
-                if (regions.Length == 0)
-                {
-                    throw new InvalidOperationException("没有可采用的文字候选。");
-                }
-
-                SetRegions(regions);
-            }
-        );
+        var explore = roi.AddButton("采用探索文字ROI", AdoptExploredTextRegions);
         _tips.SetToolTip(explore, "把无参考、无ROI探索检测找到的文字区域转为ROI");
         roi.Add(_clear);
         _tips.SetToolTip(_clear, "删除全部ROI及字段绑定");
         _idleOnly.Add(roi);
 
         var rules = _sidebar.AddGroup("规则与数据");
-        var bind = rules.AddButton(
-            "字段绑定",
-            () =>
-            {
-                EnsureIdle();
-                var bindings = BindingEditor.Edit(_regions, _bindings);
-                if (bindings != null)
-                {
-                    SetBindings(bindings);
-                }
-            }
-        );
+        var bind = rules.AddButton("字段绑定", EditFieldBindings);
         _tips.SetToolTip(bind, "设置ROI之间或ROI与任务数据之间的内容约束");
-        var data = rules.AddButton(
-            "本次任务数据",
-            () =>
-            {
-                EnsureIdle();
-                var snapshot = BindingEditor.TaskData();
-                if (snapshot != null)
-                {
-                    SetTaskData(snapshot.CycleId, snapshot);
-                }
-            }
-        );
+        var data = rules.AddButton("本次任务数据", EditTaskData);
         _tips.SetToolTip(data, "为当前图像提供本周期业务数据；载入新图后自动清除");
-        var thresholds = rules.AddButton(
-            "阈值",
-            () =>
-            {
-                EnsureIdle();
-                string? text = EditorDialogs.Ask(
-                    "阈值：墨迹,原图容差,最小面积,对比度,清晰度",
-                    string.Join(
-                        ",",
-                        _options.InkThreshold,
-                        _options.TolerancePixels,
-                        _options.MinimumDefectArea,
-                        _options.MinimumContrast,
-                        _options.MinimumSharpness
-                    )
-                );
-                if (text == null)
-                {
-                    return;
-                }
-
-                var p = text.Split(',');
-                if (p.Length != 5)
-                {
-                    throw new ArgumentException("需要5个参数。");
-                }
-
-                _options = new InspectionOptions(
-                    int.Parse(p[0]),
-                    int.Parse(p[1]),
-                    int.Parse(p[2]),
-                    double.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture),
-                    double.Parse(p[4], System.Globalization.CultureInfo.InvariantCulture)
-                );
-            }
-        );
+        var thresholds = rules.AddButton("阈值", EditThresholds);
         _tips.SetToolTip(thresholds, "墨迹、原图容差、最小面积、对比度及清晰度阈值");
         _idleOnly.Add(rules);
 
         var library = _sidebar.AddGroup("单字库");
-        var glyphs = library.AddButton(
-            "单字库",
-            () =>
-            {
-                EnsureIdle();
-                OpenLibrary(null);
-            }
-        );
+        var glyphs = library.AddButton("单字库", OpenGlyphLibrary);
         _tips.SetToolTip(glyphs, "管理单字模板库及版本");
-        var quick = library.AddButton(
-            "多图制库",
-            () =>
-            {
-                EnsureIdle();
-                GlyphQuickBuilderControl.ShowPage(
-                    FindForm(),
-                    _libraryManager ?? throw new InvalidOperationException("宿主未连接字库管理器。"),
-                    _engine as IGlyphCandidateService,
-                    _actual
-                );
-            }
-        );
+        var quick = library.AddButton("多图制库", OpenGlyphQuickBuilder);
         _tips.SetToolTip(quick, "从多张图像的字符候选制作单字库新版本");
-        var anomaly = library.AddButton(
-            "异常模型库(B)",
-            () =>
-            {
-                EnsureIdle();
-                OpenAnomalyLibrary();
-            }
-        );
+        var anomaly = library.AddButton("异常模型库(B)", OpenAnomalyLibraryManager);
         _tips.SetToolTip(anomaly, "质量方法B：管理异常模型库（版本、导入导出、归档），也可按ROI快速训练");
-        var batch = library.AddButton(
-            "批量训练(B)",
-            () =>
-            {
-                EnsureIdle();
-                OpenBatchTraining();
-            }
-        );
+        var batch = library.AddButton("批量训练(B)", OpenAnomalyBatchTraining);
         _tips.SetToolTip(
             batch,
             "质量方法B：多张良品图、每图框多个样本，整ROI与逐字符模型一次训练并作为一个版本发布，可保存采集下次继续"
@@ -388,9 +258,7 @@ public sealed class LabelInspectionControl : UserControl
         {
             if (_active == null)
             {
-                _regions.Clear();
-                _bindings = Array.Empty<FieldBinding>();
-                RefreshRegions();
+                ClearRegions();
             }
         };
         _cancelButton.Click += (_, _) => _cancel?.Cancel();
@@ -585,6 +453,8 @@ public sealed class LabelInspectionControl : UserControl
         {
             group.Enabled = !busy;
         }
+
+        BusyChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <inheritdoc/>
@@ -601,6 +471,274 @@ public sealed class LabelInspectionControl : UserControl
 
     /// <summary>完整报告显示后在UI线程触发。</summary>
     public event EventHandler<InspectionCompletedEventArgs>? InspectionCompleted;
+
+    /// <summary>
+    /// 是否显示左侧操作栏（检测、参考模式、ROI、规则与数据、单字库）。宿主把这些操作放到自己的工具栏/属性页时设为false，
+    /// 并改用对应的公开方法（<see cref="EditRegionRules"/>、<see cref="OpenGlyphLibrary"/>等）。
+    /// </summary>
+    [DefaultValue(true)]
+    public bool SidebarVisible
+    {
+        get => _sidebarVisible;
+        set
+        {
+            _sidebarVisible = value;
+            _sidebar.Visible = value;
+            _sidebarLine.Visible = value;
+        }
+    }
+
+    /// <summary>是否显示画布上方的缩放工具条；宿主提供自己的工具栏时可隐藏，并调用<see cref="FitToWindow"/>等。</summary>
+    [DefaultValue(true)]
+    public bool CanvasToolbarVisible
+    {
+        get => _canvasToolbarVisible;
+        set
+        {
+            _canvasToolbarVisible = value;
+            _viewBar.Visible = value;
+        }
+    }
+
+    private bool _canvasToolbarVisible = true;
+
+    /// <summary>画布适应窗口。</summary>
+    public void FitToWindow() => _viewer.FitToWindow();
+
+    /// <summary>画布1:1显示。</summary>
+    public void ActualSize() => _viewer.ActualSize();
+
+    /// <summary>以画布中心缩放。</summary>
+    /// <param name = "factor">缩放倍数，大于1放大。</param>
+    public void Zoom(float factor) => _viewer.ZoomAt(factor, new Point(_viewer.Width / 2, _viewer.Height / 2));
+
+    /// <summary>左键拖动新建ROI时可选的区域类型（含一维条码/二维码）。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public IReadOnlyList<RegionDrawKind> DrawKinds { get; }
+
+    /// <summary>左键拖动新建ROI时使用的区域类型。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public RegionDrawKind DrawKind
+    {
+        get => DrawKinds.First(k => Equals(k.Item, _kind.SelectedItem));
+        set => _kind.SelectedItem = (value ?? throw new ArgumentNullException(nameof(value))).Item;
+    }
+
+    /// <summary><see cref="DrawKind"/>改变后触发。</summary>
+    public event EventHandler? DrawKindChanged;
+
+    /// <summary>是否为“选中/调整ROI”模式：左键选中并移动/缩放ROI，按住Shift仍可新建。</summary>
+    [DefaultValue(false)]
+    public bool EditRegionsMode
+    {
+        get => _editRois.Checked;
+        set => _editRois.Checked = value;
+    }
+
+    /// <summary><see cref="EditRegionsMode"/>改变后触发。</summary>
+    public event EventHandler? EditRegionsModeChanged;
+
+    /// <summary>ROI或字段绑定改变（画布绘制/调整、编辑、清空、载入配方等）后触发。</summary>
+    public event EventHandler? RegionsChanged;
+
+    /// <summary>开始或结束试检测时触发；宿主据此启用/禁用自己的按钮。</summary>
+    public event EventHandler? BusyChanged;
+
+    /// <summary>画布上选中的ROI名称；未选中为null。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public string? SelectedRegionName =>
+        _viewer.SelectedRegionIndex >= 0 && _viewer.SelectedRegionIndex < _regions.Count
+            ? _regions[_viewer.SelectedRegionIndex].Name
+            : null;
+
+    /// <summary>画布上选中的ROI改变后触发。</summary>
+    public event EventHandler? SelectedRegionChanged
+    {
+        add => _viewer.SelectedRegionChanged += value;
+        remove => _viewer.SelectedRegionChanged -= value;
+    }
+
+    /// <summary>当前检测阈值。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public InspectionOptions Options => _options;
+
+    /// <summary>当前字段绑定。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public IReadOnlyList<FieldBinding> Bindings => _bindings;
+
+    /// <summary>已连接的字库管理器；未连接为null。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public IGlyphLibraryManager? LibraryManager => _libraryManager;
+
+    /// <summary>已连接的异常模型库管理器；未连接为null。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public IAnomalyLibraryManager? AnomalyLibraryManager => _anomalyManager;
+
+    /// <summary>请求取消正在进行的试检测，不等待。</summary>
+    public void CancelInspection() => _cancel?.Cancel();
+
+    /// <summary>在窗口中编辑ROI名称、类型、检测项目及规则，保存后生效。</summary>
+    public void EditRegionRules()
+    {
+        EnsureIdle();
+        var edited = RegionEditor.Edit(_regions, _libraryManager, _anomalyManager);
+        if (edited != null)
+        {
+            SetRegions(edited);
+        }
+    }
+
+    /// <summary>把无参考、无ROI探索检测找到的文字区域转为ROI。</summary>
+    public void AdoptExploredTextRegions()
+    {
+        EnsureIdle();
+        if (LastReport == null)
+        {
+            throw new InvalidOperationException("先在无参考、无ROI模式执行探索。");
+        }
+
+        var regions = LastReport
+            .Analysis.Regions.Where(r => r.RegionName.StartsWith("auto-text-", StringComparison.Ordinal))
+            .Select(r => new
+            {
+                Result = r,
+                Bounds = r.Recognition?.Bounds ?? r.Findings.FirstOrDefault(f => f.Bounds.HasValue)?.Bounds,
+            })
+            .Where(r => r.Bounds.HasValue)
+            .Select(r => new InspectionRegion(r.Result.RegionName, ERegionKind.Text, r.Bounds!.Value, true))
+            .ToArray();
+        if (regions.Length == 0)
+        {
+            throw new InvalidOperationException("没有可采用的文字候选。");
+        }
+
+        SetRegions(regions);
+    }
+
+    /// <summary>删除全部ROI及字段绑定。</summary>
+    public void ClearRegions()
+    {
+        EnsureIdle();
+        _regions.Clear();
+        _bindings = Array.Empty<FieldBinding>();
+        RefreshRegions();
+    }
+
+    /// <summary>在窗口中设置ROI之间或ROI与任务数据之间的内容约束。</summary>
+    public void EditFieldBindings()
+    {
+        EnsureIdle();
+        var bindings = BindingEditor.Edit(_regions, _bindings);
+        if (bindings != null)
+        {
+            SetBindings(bindings);
+        }
+    }
+
+    /// <summary>在窗口中为当前图像录入本周期业务数据；载入新图后自动清除。</summary>
+    public void EditTaskData()
+    {
+        EnsureIdle();
+        var snapshot = BindingEditor.TaskData();
+        if (snapshot != null)
+        {
+            SetTaskData(snapshot.CycleId, snapshot);
+        }
+    }
+
+    /// <summary>在窗口中编辑墨迹、原图容差、最小面积、对比度及清晰度阈值。</summary>
+    public void EditThresholds()
+    {
+        EnsureIdle();
+        string? text = EditorDialogs.Ask(
+            "阈值：墨迹,原图容差,最小面积,对比度,清晰度",
+            string.Join(
+                ",",
+                _options.InkThreshold,
+                _options.TolerancePixels,
+                _options.MinimumDefectArea,
+                _options.MinimumContrast,
+                _options.MinimumSharpness
+            )
+        );
+        if (text == null)
+        {
+            return;
+        }
+
+        var p = text.Split(',');
+        if (p.Length != 5)
+        {
+            throw new ArgumentException("需要5个参数。");
+        }
+
+        _options = new InspectionOptions(
+            int.Parse(p[0]),
+            int.Parse(p[1]),
+            int.Parse(p[2]),
+            double.Parse(p[3], System.Globalization.CultureInfo.InvariantCulture),
+            double.Parse(p[4], System.Globalization.CultureInfo.InvariantCulture)
+        );
+        RefreshRegions();
+    }
+
+    /// <summary>打开单字模板库管理窗口。</summary>
+    public void OpenGlyphLibrary()
+    {
+        EnsureIdle();
+        OpenLibrary(null);
+    }
+
+    /// <summary>打开多图制库窗口，从多张图像的字符候选制作单字库新版本。</summary>
+    public void OpenGlyphQuickBuilder()
+    {
+        EnsureIdle();
+        GlyphQuickBuilderControl.ShowPage(
+            FindForm(),
+            _libraryManager ?? throw new InvalidOperationException("宿主未连接字库管理器。"),
+            _engine as IGlyphCandidateService,
+            _actual
+        );
+    }
+
+    /// <summary>打开异常模型库（质量方法B）管理窗口。</summary>
+    public void OpenAnomalyLibraryManager()
+    {
+        EnsureIdle();
+        OpenAnomalyLibrary();
+    }
+
+    /// <summary>打开异常模型批量训练（质量方法B）窗口。</summary>
+    public void OpenAnomalyBatchTraining()
+    {
+        EnsureIdle();
+        OpenBatchTraining();
+    }
+
+    /// <summary>
+    /// 在当前待检图上显示宿主已有的报告（例如生产运行的报告），与试检测结果的显示一致。
+    /// 报告坐标须为当前ROI/待检图坐标；调用前先用<see cref="SetActualImage"/>与<see cref="ApplyRecipe"/>载入同一帧及所用配方。
+    /// </summary>
+    /// <param name = "report">要显示的完整报告。</param>
+    public void ShowReport(InspectionReport report)
+    {
+        EnsureIdle();
+        if (report == null)
+        {
+            throw new ArgumentNullException(nameof(report));
+        }
+
+        if (_actual == null)
+        {
+            throw new InvalidOperationException("尚未载入待检图。");
+        }
+
+        RefreshRegions();
+        // 条码比对等明细需要请求中的原图快照。
+        LastRequest = CreateRequest();
+        LastReport = report;
+        Display(report);
+    }
 
     /// <summary>连接宿主拥有的引擎，控件不创建或释放引擎。</summary>
     /// <param name = "engine">SDK引擎实现。</param>
@@ -950,6 +1088,8 @@ public sealed class LabelInspectionControl : UserControl
                 )
             );
         }
+
+        RegionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void Display(InspectionReport report)
