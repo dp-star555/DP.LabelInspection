@@ -62,6 +62,23 @@
 
 控件内部还包含规则编辑、字段绑定、任务数据调试、ROI手势、单字证据、补库等入口，可复用，而不是全部重画一套配置界面。
 
+**宿主自行布局时**（例如把操作放到自己的工具栏和属性页）：
+
+| 成员 | 用途 |
+|---|---|
+| `SidebarVisible` / `CanvasToolbarVisible` | 隐藏左侧操作栏、画布缩放条；画布和下方证据/单字结果保留 |
+| `DrawKinds` / `DrawKind` / `DrawKindChanged` | 左键拖动新建ROI的类型（含一维条码/二维码），放进宿主下拉框 |
+| `EditRegionsMode` / `EditRegionsModeChanged` | “选中/调整ROI”模式 |
+| `FitToWindow` / `ActualSize` / `Zoom` | 画布视图 |
+| `EditRegionRules` / `EditFieldBindings` / `EditTaskData` / `EditThresholds` | 原侧栏的编辑窗口 |
+| `OpenGlyphLibrary` / `OpenGlyphQuickBuilder` / `OpenAnomalyLibraryManager` / `OpenAnomalyBatchTraining` | 字库与异常模型库窗口 |
+| `AdoptExploredTextRegions` / `ClearRegions` / `CancelInspection` | 原侧栏的其余操作 |
+| `RegionsChanged` / `BusyChanged` / `SelectedRegionName` / `SelectedRegionChanged` | 宿主同步自己的界面 |
+| `Options` / `Bindings` / `LibraryManager` / `AnomalyLibraryManager` | 当前状态 |
+| `ShowReport(report)` | 在当前待检图上显示宿主已有的报告（如生产运行），显示方式与试检测一致；报告坐标须为当前ROI坐标 |
+
+`RegionRulesControl(workbench)` 是可嵌入宿主页面的ROI规则编辑（ROI列表＋所选ROI的类型、检测项目与规则、绑定字库/异常模型库、字段绑定、清空），与“编辑ROI/规则”窗口内容相同，但修改即时写回工作台；画布上新建/调整ROI后自动刷新，画布选中ROI同步选中。无效组合（名称重复、库缺版本等）不写回并在说明区提示。
+
 **需要注意的实际行为：**
 
 1. `SetActualImage`总会清空旧TaskData/CycleId；保留ROI时须显式传`clearRegions:false`，然后再注入本次任务数据。
