@@ -9,7 +9,12 @@ namespace DP.LabelInspection.Contracts;
 /// <summary>与UI无关的检测输入，不要求文件路径或原生图像对象。运行时像素只来自Vision原图租约。</summary>
 public sealed class InspectionRequest : IDisposable
 {
+    /// <summary>放置取样时每个 ROI 向外多取的像素，供定位、异常检测边距等使用。</summary>
+    public const int PlacementMargin = 16;
+
+    // 检测实际使用的输入：未放置时即原图；放置时为配方尺寸、只在 ROI 范围取样的画布。
     private readonly V.ImageFrame _visionActual;
+    private readonly V.ImageFrame? _visionOriginal;
     private readonly V.ImageFrame? _visionReference;
     private bool _disposed;
 
@@ -18,7 +23,8 @@ public sealed class InspectionRequest : IDisposable
         InspectionRecipe recipe,
         V.ImageFrame? reference,
         string? cycleId,
-        TaskDataSnapshot? taskData
+        TaskDataSnapshot? taskData,
+        InspectionPlacement? placement
     )
     {
         if (actual == null)
@@ -30,17 +36,27 @@ public sealed class InspectionRequest : IDisposable
         if (reference != null)
             CheckLayout(reference.Image);
         V.ImageFrame? retained = null;
+        V.ImageFrame? placed = null;
         try
         {
             retained = actual.Retain();
+            if (placement != null)
+            {
+                placed = PlacedSampler.Sample(actual, recipe, placement, PlacementMargin);
+                _visionOriginal = retained;
+                _visionActual = placed;
+            }
+            else
+                _visionActual = retained;
             _visionReference = reference?.Retain();
-            _visionActual = retained;
         }
         catch
         {
+            placed?.Dispose();
             retained?.Dispose();
             throw;
         }
+        Placement = placement;
         FrameId = actual.FrameId;
         CycleId = cycleId;
         TaskData = taskData;
@@ -53,13 +69,18 @@ public sealed class InspectionRequest : IDisposable
     /// <param name = "cycleId">本周期业务身份。</param>
     /// <param name = "taskData">本周期引导数据。</param>
     /// <returns>拥有独立Vision租约的检测请求。</returns>
+    /// <param name = "placement">
+    /// 可选放置：配方坐标到原图坐标的仿射（来自宿主定位）。提供时只对每个 ROI（外扩 <see cref="PlacementMargin"/>）按放置从原图取样，
+    /// 检测在配方坐标下进行，报告坐标也是配方坐标；参考图须为配方尺寸。为空时原图即配方坐标（原有行为）。
+    /// </param>
     public static InspectionRequest FromVision(
         V.ImageFrame actual,
         InspectionRecipe recipe,
         V.ImageFrame? reference = null,
         string? cycleId = null,
-        TaskDataSnapshot? taskData = null
-    ) => new InspectionRequest(actual, recipe, reference, cycleId, taskData);
+        TaskDataSnapshot? taskData = null,
+        InspectionPlacement? placement = null
+    ) => new InspectionRequest(actual, recipe, reference, cycleId, taskData, placement);
 
     private static void CheckLayout(V.IImageSource image)
     {
@@ -130,8 +151,25 @@ public sealed class InspectionRequest : IDisposable
     /// <summary>配方快照。</summary>
     public InspectionRecipe Recipe { get; }
 
+    /// <summary>本次放置；为空表示原图即配方坐标。报告中的坐标均为配方坐标，显示到原图时用它换算。</summary>
+    public InspectionPlacement? Placement { get; }
+
+    /// <summary>原始输入图（放置前）的宽度。</summary>
+    public int OriginalWidth => (_visionOriginal ?? _visionActual).Image.Info.Width;
+
+    /// <summary>原始输入图（放置前）的高度。</summary>
+    public int OriginalHeight => (_visionOriginal ?? _visionActual).Image.Info.Height;
+
+    /// <summary>把原始输入图（放置前）复制为独立快照；未放置时与 <see cref="CreateActualSnapshot"/> 相同。</summary>
+    public PixelSnapshot CreateOriginalSnapshot()
+    {
+        if (_disposed)
+            throw new ObjectDisposedException(nameof(InspectionRequest));
+        return ToSnapshot((_visionOriginal ?? _visionActual).Image);
+    }
+
     /// <summary>
-    /// 把本次请求的原图租约复制为独立标签快照，供持久化、显示等确实需要像素的接口使用。
+    /// 把本次检测实际使用的图像（放置时为配方坐标画布，只有 ROI 范围有像素）复制为独立标签快照，供持久化、显示等确实需要像素的接口使用。
     /// 每次调用都会复制整帧，因此不要在检测热路径上调用。
     /// </summary>
     /// <returns>调用方拥有的独立快照；不是本次检测的运行时输入。</returns>
@@ -182,6 +220,7 @@ public sealed class InspectionRequest : IDisposable
         try
         {
             _visionActual.Dispose();
+            _visionOriginal?.Dispose();
         }
         finally
         {
