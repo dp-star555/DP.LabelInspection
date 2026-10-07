@@ -71,8 +71,19 @@ public sealed class LabelInspectionHost : IDisposable
     /// 指定OCR模型时加载识别器（由后台拥有）。可多次调用，例如更换OCR模型；旧引擎由调用方释放。
     /// </summary>
     /// <param name = "recognitionModel">OCR模型路径；null时使用组装参数中的模型，仍为null则不加载OCR。</param>
-    public InspectionEngine CreateEngine(string? recognitionModel = null)
+    public InspectionEngine CreateEngine(string? recognitionModel = null) =>
+        CreateEngineFromRepositories(Store, Store.AnomalyLibraries, recognitionModel);
+
+    /// <summary>使用宿主捕获的不可变资源仓创建引擎，检测过程中不重新从可变目录读取库版本。</summary>
+    /// <param name="libraries">本轮字库快照仓，不由引擎释放。</param>
+    /// <param name="anomalyModels">本轮异常库快照仓，不由引擎释放。</param>
+    /// <param name="recognitionModel">可选识别模型；空时使用宿主配置。</param>
+    /// <returns>由调用方拥有的检测引擎。</returns>
+    public InspectionEngine CreateEngineFromRepositories(IGlyphLibraryRepository libraries,
+        IAnomalyLibraryRepository anomalyModels, string? recognitionModel = null)
     {
+        if (libraries == null) throw new ArgumentNullException(nameof(libraries));
+        if (anomalyModels == null) throw new ArgumentNullException(nameof(anomalyModels));
         if (_disposed)
         {
             throw new ObjectDisposedException(nameof(LabelInspectionHost));
@@ -90,8 +101,8 @@ public sealed class LabelInspectionHost : IDisposable
             return new InspectionEngine(
                 new OpenCvInspectionBackend(
                     ownsRecognizer: true,
-                    libraries: Store,
-                    anomalyModels: Store.AnomalyLibraries,
+                    libraries: libraries,
+                    anomalyModels: anomalyModels,
                     anomalyDetectors: _anomalyDetectors,
                     barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
                     recognizer: recognizer

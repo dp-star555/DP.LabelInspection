@@ -718,6 +718,10 @@ public sealed class AnomalyTrainingSession
         }
 
         var drawn = Locator.Locate(target, box, template, templateBounds, 0);
-        return best.Score > drawn.Score + 1e-9 ? best.Bounds!.Value : box;
+        // Locate的无角度/尺度搜索只做平移；新版位姿结果不再带旧整数Bounds。
+        if (best.Score <= drawn.Score + 1e-9 || Math.Abs(best.AngleDegrees) > 1e-9 || Math.Abs(best.Scale - 1) > 1e-9)
+            return box;
+        var origin = best.Transform!.ToImage(new DP.Vision.Algorithms.Coordinate2D(0, 0));
+        return new PixelRect((int)Math.Round(origin.X), (int)Math.Round(origin.Y), box.Width, box.Height);
     }
 }

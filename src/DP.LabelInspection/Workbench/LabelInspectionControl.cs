@@ -789,6 +789,10 @@ public sealed class LabelInspectionControl : UserControl
     [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
     public InspectionReport? LastReport { get; private set; }
 
+    /// <summary>当前是否有尚未结束的原生试检测；宿主据此禁用资源替换与提交。</summary>
+    [Browsable(false), DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)]
+    public bool IsInspectionRunning => _active != null;
+
     /// <summary>连接独立字库编辑操作，引擎存储仍由宿主配置。</summary>
     /// <param name = "manager">宿主拥有的字库管理器。</param>
     public void AttachLibraryManager(IGlyphLibraryManager manager)

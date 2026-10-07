@@ -154,23 +154,15 @@ public sealed class CodeRepairTests
             pixels
         );
         using var frame = new DP.Vision.ImageFrame("current-qr", image);
-        var pose = new DP.Vision.Algorithms.TemplatePoseTransform(
-            width,
-            size,
+        var coordinates = DP.Vision.Algorithms.VisionCoordinateBuilder.FromPose(
+            new DP.Vision.Algorithms.VisionCoordinateDefinition("qr-location", "QR定位", reference: "template-signature"),
+            frame,
             new DP.Vision.PointD(width / 2d, size / 2d),
-            Math.PI / 2,
-            1
-        );
-        var coordinates = new DP.Vision.Algorithms.LocatedCoordinateSystem(
-            "qr-location",
-            "template-signature",
-            frame.FrameId,
-            width,
-            size,
-            pose
+            Math.PI / 2
         );
         var local = coordinates.ToLocalGeometry(
-            new DP.Vision.RectangleGeometry(new DP.Vision.PointD(size / 2d, size / 2d), size, size)
+            // 留出1px白色静区，避免旋转往返的浮点尾差被严格边界校验当作越界。
+            new DP.Vision.RectangleGeometry(new DP.Vision.PointD(size / 2d, size / 2d), size - 2, size - 2)
         );
         DP.Vision.Algorithms.IMaskedBarcodeReader reader = new DP.Vision.Zxing.ZxingBarcodeDecoder();
         var result = DP.Vision.Algorithms.LocatedBarcodeReading.ReadLocated(
@@ -182,13 +174,8 @@ public sealed class CodeRepairTests
         );
         Assert.AreEqual(DP.Vision.Algorithms.EAlgorithmStatus.Completed, result.Status);
         Assert.AreEqual("POSE-CODE", result.Observations.Single().Text);
-        var foreign = new DP.Vision.Algorithms.LocatedCoordinateSystem(
-            "qr-location",
-            "template-signature",
-            "other-frame",
-            width,
-            size,
-            pose
+        var foreign = new DP.Vision.Algorithms.VisionCoordinateSystem(
+            coordinates.Definition, "other-frame", width, size, coordinates.LocalToImage
         );
         Assert.ThrowsExactly<InvalidOperationException>(() =>
             DP.Vision.Algorithms.LocatedBarcodeReading.ReadLocated(

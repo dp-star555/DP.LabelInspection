@@ -29,15 +29,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
         _root = Path.GetFullPath(root ?? throw new ArgumentNullException(nameof(root)));
         _codec = codec ?? throw new ArgumentNullException(nameof(codec));
         Directory.CreateDirectory(_root);
-        _json = new JsonSerializerSettings
-        {
-            TypeNameHandling = TypeNameHandling.None,
-            MaxDepth = 64,
-            ContractResolver = new RecipeResolver(),
-            Formatting = Formatting.Indented,
-        };
-        _json.Converters.Add(new FrameConverter(codec));
-        _json.Converters.Add(new RectConverter());
+        _json = CreateSerializationSettings(codec);
         AnomalyLibraries = new AnomalyLibraryStore(_root);
     }
 
@@ -404,20 +396,14 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     /// <param name = "recipe">需要序列化的固定配方，不隐式升级字库引用。</param>
     public string SerializeRecipe(InspectionRecipe recipe)
     {
-        return JsonConvert.SerializeObject(recipe, _json);
+        return new InspectionRecipeSerializer(_codec).Serialize(recipe);
     }
 
     /// <summary>通过带校验的构造函数加载原生DP配方。</summary>
     /// <param name = "json">待解析的原生DP配方JSON，通过构造校验加载。</param>
     public InspectionRecipe DeserializeRecipe(string json)
     {
-        if (json.Length > 1024 * 1024)
-        {
-            throw new ArgumentException("Recipe too large.");
-        }
-
-        return JsonConvert.DeserializeObject<InspectionRecipe>(json, _json)
-            ?? throw new InvalidDataException("Empty recipe.");
+        return new InspectionRecipeSerializer(_codec).Deserialize(json);
     }
 
     /// <summary>以事务方式保存完整任务，包含精确配方、参考快照、像素及结果。</summary>

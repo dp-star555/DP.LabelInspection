@@ -92,6 +92,13 @@ internal sealed class ActionGroup : TableLayoutPanel
     private void ApplyEmphasis()
     {
         var bold = new Font(Font, FontStyle.Bold);
+        // WinForms会跳过与旧Font值相等的赋值；此时释放旧Font会让控件继续持有已释放的GDI对象。
+        if (_fonts.Count == 1 && _fonts[0].Equals(bold))
+        {
+            bold.Dispose();
+            foreach (var control in _emphasized) control.Font = _fonts[0];
+            return;
+        }
         foreach (var control in _emphasized)
         {
             control.Font = bold;
