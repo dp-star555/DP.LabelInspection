@@ -792,6 +792,9 @@ internal static class UiInteractionProbe
         control.SetRegions(original);
     }
 
+    private static ToolStripItem ToolButton(Control root, string text) =>
+        Descendants(root).OfType<ToolStrip>().SelectMany(s => s.Items.Cast<ToolStripItem>()).Single(i => i.Text == text);
+
     internal static async Task VerifyQuickLibrary(
         IGlyphLibraryManager manager,
         IGlyphCandidateService service,
@@ -840,10 +843,6 @@ internal static class UiInteractionProbe
             row.Cells["Use"].Value = true;
         }
 
-        var reviewed = Descendants(page)
-            .OfType<CheckBox>()
-            .Single(c => c.Text.StartsWith("已核对", StringComparison.Ordinal));
-        reviewed.Checked = true;
         int revision = page.SaveSelected();
         if (revision != 2 || manager.Load(id, revision).Glyphs.Count != 4)
         {
@@ -855,7 +854,6 @@ internal static class UiInteractionProbe
         page.Candidates.Rows[0].Cells["Character"].Value = "C";
         page.Candidates.Rows[0].Cells["Use"].Value = true;
         page.Candidates.Rows[1].Cells["Use"].Value = true;
-        reviewed.Checked = true;
         revision = page.SaveSelected();
         if (revision != 3 || !manager.Load(id, revision).Glyphs.ContainsKey("C"))
         {
@@ -897,7 +895,6 @@ internal static class UiInteractionProbe
         if (
             page.Candidates.Rows.Count != 8
             || page.LastExtraction?.Segmentation.Status != "review_required"
-            || reviewed.Checked
         )
         {
             throw new InvalidOperationException("Thin-bridge candidates were lost or silently approved.");
@@ -925,9 +922,9 @@ internal static class UiInteractionProbe
             new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)40, 512).ToArray()),
             "manual-first.png"
         );
-        var modes = Descendants(page).OfType<ComboBox>().Single(c => c.Items.Contains("手工补画字块"));
+        var modes = Descendants(page).OfType<ModernUI.WinForms.ModernSelect>().Single(c => c.Items.Contains("单字框"));
         var editor = FindViewer(page)!;
-        modes.SelectedItem = "手工补画字块";
+        modes.SelectedItem = "单字框";
         var viewport = typeof(ImageViewerControl).GetMethod(
             "Viewport",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance
@@ -951,7 +948,7 @@ internal static class UiInteractionProbe
             throw new InvalidOperationException("Native manual crop failed without automatic candidates.");
         }
 
-        modes.SelectedItem = "手动切开（点切线）";
+        modes.SelectedItem = "切开粘连字";
         var cut = Screen(12, 8);
         SendMessage(editor.Handle, 0x0201, new IntPtr(1), Pack(cut));
         SendMessage(editor.Handle, 0x0202, IntPtr.Zero, Pack(cut));
@@ -962,31 +959,30 @@ internal static class UiInteractionProbe
             );
         }
 
-        modes.SelectedItem = "调整候选框";
+        // 单字框模式下直接点击即选中，拖边即调整，不需要切换“调整”模式。
+        modes.SelectedItem = "单字框";
         var select = Screen(6, 8);
         SendMessage(editor.Handle, 0x0201, new IntPtr(1), Pack(select));
         SendMessage(editor.Handle, 0x0202, IntPtr.Zero, Pack(select));
         var edge = Screen(2, 8);
         var moved = Screen(1, 8);
-        reviewed.Checked = true;
         SendMessage(editor.Handle, 0x0201, new IntPtr(1), Pack(edge));
         SendMessage(editor.Handle, 0x0200, new IntPtr(1), Pack(moved));
         SendMessage(editor.Handle, 0x0202, IntPtr.Zero, Pack(moved));
         if (
             ((DP.LabelInspection.Core.GlyphDraftCandidate)page.Candidates.Rows[0].Tag!).Bounds.X != 1
-            || reviewed.Checked
         )
         {
             throw new InvalidOperationException("Native manual boundary edit failed or retained approval.");
         }
 
-        Descendants(page).OfType<Button>().Single(c => c.Text == "撤销调整").PerformClick();
+        ToolButton(page, "撤销").PerformClick();
         if (((DP.LabelInspection.Core.GlyphDraftCandidate)page.Candidates.Rows[0].Tag!).Bounds.X != 2)
         {
             throw new InvalidOperationException("Manual edit undo failed.");
         }
 
-        Descendants(page).OfType<Button>().Single(c => c.Text == "重做").PerformClick();
+        ToolButton(page, "重做").PerformClick();
         if (((DP.LabelInspection.Core.GlyphDraftCandidate)page.Candidates.Rows[0].Tag!).Bounds.X != 1)
         {
             throw new InvalidOperationException("Manual edit redo failed.");
@@ -999,22 +995,19 @@ internal static class UiInteractionProbe
             row.Cells["Use"].Value = true;
         }
 
-        reviewed.Checked = true;
-        page.StageSelected();
+        // 勾选后直接保存到字库，每张图各发布一个修订，不经过待入库清单。
+        if (page.SaveSelected() != 4)
+        {
+            throw new InvalidOperationException("Selected manual glyphs were not saved directly.");
+        }
+
         page.SetImage(
             new PixelSnapshot(32, 16, EImagePixelFormat.Gray8, Enumerable.Repeat((byte)90, 512).ToArray()),
             "manual-second.png"
         );
-        if (page.PendingCount != 2 || page.Candidates.Rows.Count != 0)
-        {
-            throw new InvalidOperationException("Cross-image staging was discarded.");
-        }
-
         page.AddManualCandidate(new PixelRect(4, 2, 12, 12));
         page.Candidates.Rows[0].Cells["Character"].Value = "F";
         page.Candidates.Rows[0].Cells["Use"].Value = true;
-        reviewed.Checked = true;
-        page.StageSelected();
         using (var capture = new Bitmap(page.Width, page.Height))
         {
             page.DrawToBitmap(capture, page.ClientRectangle);
@@ -1022,11 +1015,10 @@ internal static class UiInteractionProbe
         }
 
         if (
-            page.SavePending() != 4
-            || page.PendingCount != 0
-            || manager.Load(id, 4).Glyphs.Count != 8
-            || manager.Load(id, 4).Glyphs["D"].Image.CopyPixels()[0] != 40
-            || manager.Load(id, 4).Glyphs["F"].Image.CopyPixels()[0] != 90
+            page.SaveSelected() != 5
+            || manager.Load(id, 5).Glyphs.Count != 8
+            || manager.Load(id, 5).Glyphs["D"].Image.CopyPixels()[0] != 40
+            || manager.Load(id, 5).Glyphs["F"].Image.CopyPixels()[0] != 90
         )
         {
             throw new InvalidOperationException(
