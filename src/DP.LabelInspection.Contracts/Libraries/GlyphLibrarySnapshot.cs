@@ -19,9 +19,33 @@ public sealed class GlyphLibrarySnapshot
         Id = id;
         Revision = revision;
         Name = name;
-        Glyphs = new ReadOnlyDictionary<string, GlyphReference>(
-            glyphs.ToDictionary(g => g.Character, StringComparer.Ordinal)
-        );
+        if (glyphs == null)
+        {
+            throw new ArgumentNullException(nameof(glyphs));
+        }
+
+        var references = new Dictionary<string, GlyphReference>(StringComparer.Ordinal);
+        long pixels = 0;
+        foreach (var glyph in glyphs)
+        {
+            if (glyph == null || references.Count >= GlyphLibraryLimits.MaximumReferences)
+            {
+                throw new ArgumentException("Invalid or excessive glyph references.", nameof(glyphs));
+            }
+
+            pixels += (long)glyph.Image.Width * glyph.Image.Height;
+            if (pixels > GlyphLibraryLimits.MaximumPixels)
+            {
+                throw new ArgumentException(
+                    "Glyph library exceeds 16000000 reference pixels.",
+                    nameof(glyphs)
+                );
+            }
+
+            references.Add(glyph.Character, glyph);
+        }
+
+        Glyphs = new ReadOnlyDictionary<string, GlyphReference>(references);
     }
 
     /// <summary>类别标识。</summary>

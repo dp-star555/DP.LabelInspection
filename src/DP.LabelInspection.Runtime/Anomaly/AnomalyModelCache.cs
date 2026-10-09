@@ -1,56 +1,78 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using DP.LabelInspection.Contracts;
 using DP.Vision.Algorithms;
+using DP.Vision.OpenCv;
 
 namespace DP.LabelInspection.Runtime;
 
-/// <summary>
-/// 检测后端内的异常模型缓存：库版本不可变，按“库标识+版本”缓存最近载入的版本，解析后的模型按模型字节SHA256缓存。
-/// 否则每次检测都要从磁盘读库、重新解析全部模型，模型对象每次都是新的，算法与缺墨检查按模型缓存的参考数据也无法复用。
-/// 线程安全。
-/// </summary>
-internal sealed class AnomalyModelCache
+/// <summary>有界模型运行实例缓存；厂商解析、原生所有权与在途租约集中在这里，业务不再解析DPPA。</summary>
+internal sealed class AnomalyModelCache : IDisposable
 {
-    private const int LibraryCapacity = 8;
-    private const int ModelCapacity = 4096;
-
     private readonly object _gate = new object();
-    private readonly PinnedRevisionCache<AnomalyLibrarySnapshot> _libraries =
-        new PinnedRevisionCache<AnomalyLibrarySnapshot>(LibraryCapacity);
-    private readonly Dictionary<string, PatchAnomalyModel> _models = new Dictionary<
-        string,
-        PatchAnomalyModel
-    >(StringComparer.Ordinal);
-
-    /// <summary>取库的某个版本；未缓存时由<paramref name = "repository"/>载入（异常原样抛出，不缓存失败）。</summary>
+    private readonly PinnedRevisionCache<AnomalyLibrarySnapshot> _libraries = new PinnedRevisionCache<AnomalyLibrarySnapshot>(8);
+    private readonly Dictionary<string, Slot> _models = new Dictionary<string, Slot>(StringComparer.Ordinal);
+    private bool _disposed;
+    private const int Capacity = 128;
+    private const long ByteBudget = 512L * 1024 * 1024;
     internal AnomalyLibrarySnapshot Library(IAnomalyLibraryRepository repository, string id, int revision)
+        => _libraries.Get(id, revision, () => repository.LoadAnomalyLibrary(id, revision));
+    internal Lease Acquire(AnomalyModelEntry entry, AnomalyImplementationRegistry implementations, CancellationToken token = default)
     {
-        return _libraries.Get(id, revision, () => repository.LoadAnomalyLibrary(id, revision));
+        token.ThrowIfCancellationRequested();
+        string key = entry.FeatureSource + ":" + entry.Sha256;
+        lock (_gate)
+        {
+            if (_disposed) throw new ObjectDisposedException(nameof(AnomalyModelCache));
+            if (!_models.TryGetValue(key, out var slot))
+            {
+                while (_models.Count >= Capacity || _models.Values.Sum(s => (long)s.Bytes) + entry.Length > ByteBudget)
+                {
+                    var idle = _models.Where(p => p.Value.Users == 0).OrderBy(p => p.Value.LastUsed).FirstOrDefault();
+                    if (idle.Value == null) throw new InvalidOperationException("异常模型缓存容量已满且实例仍在使用，请减少同时绑定的模型或分批运行。");
+                    _models.Remove(idle.Key); idle.Value.Runtime.Dispose();
+                }
+                var bytes = entry.CopyModel();
+                // 仅旧Patch格式通过兼容Adapter进入；新原生包由相应实现解释。
+                var asset = AnomalyModelAsset.IsAsset(bytes) ? AnomalyModelAsset.FromBytes(bytes)
+                    : PatchAnomalyImplementation.Capture(PatchAnomalyModel.FromBytes(bytes), entry.Width, entry.Height);
+                if (asset.ImplementationId != entry.FeatureSource) throw new System.IO.InvalidDataException("模型资产与库条目实现身份不匹配。");
+                var runtime = implementations.Resolve(asset.ImplementationId).Load(asset, token);
+                if (runtime.Asset.ContentSha256 != asset.ContentSha256)
+                { runtime.Dispose(); throw new System.IO.InvalidDataException("异常实现替换了请求的模型身份。"); }
+                slot = new Slot(runtime, entry.Length); _models.Add(key, slot);
+            }
+            slot.Users++; return new Lease(this, slot);
+        }
     }
-
-    /// <summary>解析条目中的模型（同一模型字节只解析一次）。</summary>
-    internal PatchAnomalyModel Model(AnomalyModelEntry entry)
+    private void Return(Slot slot)
+    {
+        lock (_gate) { slot.Users--; slot.LastUsed = DateTime.UtcNow; if (_disposed && slot.Users == 0) slot.Runtime.Dispose(); }
+    }
+    public void Dispose()
     {
         lock (_gate)
         {
-            if (_models.TryGetValue(entry.Sha256, out var cached))
-            {
-                return cached;
-            }
+            if (_disposed) return; _disposed = true;
+            foreach (var slot in _models.Values.Where(s => s.Users == 0)) slot.Runtime.Dispose();
+            _models.Clear();
         }
-
-        var model = PatchAnomalyModel.FromBytes(entry.CopyModel());
-        lock (_gate)
-        {
-            if (_models.Count >= ModelCapacity)
-            {
-                _models.Clear();
-            }
-
-            _models[entry.Sha256] = model;
-        }
-
-        return model;
+    }
+    internal sealed class Slot
+    {
+        internal Slot(ILoadedAnomalyModel runtime, int bytes) { Runtime = runtime; Bytes = bytes; LastUsed = DateTime.UtcNow; }
+        internal readonly ILoadedAnomalyModel Runtime;
+        internal readonly int Bytes;
+        internal int Users;
+        internal DateTime LastUsed;
+    }
+    internal sealed class Lease : IDisposable
+    {
+        private AnomalyModelCache? _owner; private readonly Slot _slot;
+        internal Lease(AnomalyModelCache owner, Slot slot) { _owner = owner; _slot = slot; }
+        internal ILoadedAnomalyModel Runtime => _slot.Runtime;
+        public void Dispose() { var owner = System.Threading.Interlocked.Exchange(ref _owner, null); owner?.Return(_slot); }
     }
 }

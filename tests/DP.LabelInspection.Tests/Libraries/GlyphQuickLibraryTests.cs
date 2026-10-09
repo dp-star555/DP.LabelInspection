@@ -93,11 +93,11 @@ public sealed partial class GlyphQuickLibraryTests
         Assert.AreEqual(1, store.Value.Load(id, 3).Glyphs.Count);
     }
 
-    /// <summary>字符参考有意限制为ASCII字母数字及有界图像。</summary>
+    /// <summary>字符参考支持Unicode单字，仍拒绝多字标签和过小图像。</summary>
     [TestMethod]
     public void ReferenceLimitsAreNotHidden()
     {
-        Assert.ThrowsExactly<ArgumentException>(() => Item("字"));
+        Assert.AreEqual("字", Item("字").Character);
         Assert.ThrowsExactly<ArgumentException>(() => Item("AB"));
         Assert.ThrowsExactly<ArgumentException>(() =>
             new GlyphImportItem("A", new PixelSnapshot(3, 4, EImagePixelFormat.Gray8, new byte[12]))

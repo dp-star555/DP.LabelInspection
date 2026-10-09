@@ -11,12 +11,18 @@ namespace DP.LabelInspection.Runtime;
 /// <summary>
 /// 逐字符局部块异常检测（质量方法B的逐字符模式）的业务组合，用于内容可变的文字：算子为DP.Vision的
 /// <see cref = "ICharacterAnomalyDetector"/>（字符按行几何归一化、局部块比较、缺墨检查）；本类只负责
-/// 模型键（字符组/字符，区分大小写的字母/数字）、库条目、组内阈值下限和报告措辞。
+/// 模型键（字符组/精确Unicode单字）、库条目、组内阈值下限和报告措辞。
 /// 字符身份与分割来自OCR和文字质量的分割（或显式等格）。
 /// </summary>
 public sealed class CharacterAnomalyDetector
 {
-    private readonly IPatchAnomalyDetector _algorithm;
+    private readonly IPatchAnomalyDetector? _algorithm;
+    private readonly IAnomalyImplementation? _implementation;
+
+    /// <summary>使用厂商中立模型实现。</summary>
+    /// <param name="implementation">已登记的明确实现。</param>
+    public CharacterAnomalyDetector(IAnomalyImplementation implementation)
+    { _implementation = implementation ?? throw new ArgumentNullException(nameof(implementation)); }
 
     /// <summary>使用手工特征实现。</summary>
     public CharacterAnomalyDetector()
@@ -66,27 +72,28 @@ public sealed class CharacterAnomalyDetector
         var entries = trained
             .Select(t =>
             {
-                var bytes = t.Model.ToBytes();
+                var bytes = _implementation == null ? t.Model.ToBytes() : t.Asset.ToBytes();
                 return new AnomalyModelEntry(
                     t.Key,
                     bytes,
                     Sha256(bytes),
-                    t.Model.FeatureSource,
+                    t.Asset.ImplementationId,
                     t.CellWidth,
                     t.CellHeight,
-                    t.Model.Radius,
+                    _implementation == null ? t.Model.Radius : 0,
                     t.Samples,
-                    t.Model.Threshold,
+                    t.Asset.Threshold,
                     0,
                     t.Options.Stride,
                     t.Options.MinimumArea,
                     t.Calibration,
                     EAnomalyModelScope.Character,
-                    t.InkThreshold
+                    t.InkThreshold,
+                    t.Normalization
                 );
             })
             .ToList();
-        return Floor(entries).AsReadOnly();
+        return (_implementation == null ? Floor(entries) : entries).AsReadOnly();
     }
 
     /// <summary>
@@ -199,12 +206,13 @@ public sealed class CharacterAnomalyDetector
 
     private ICharacterAnomalyDetector Operator()
     {
-        return new DP.Vision.OpenCv.OpenCvCharacterAnomalyDetector(_algorithm);
+        return _implementation != null ? new DP.Vision.OpenCv.OpenCvCharacterAnomalyDetector(_implementation)
+            : new DP.Vision.OpenCv.OpenCvCharacterAnomalyDetector(_algorithm!);
     }
 
     private static bool Alphanumeric(DP.LabelInspection.Contracts.CharacterPatch c)
     {
-        return c.Character.Length == 1 && FieldSettings.IsAlphanumeric(c.Character[0]);
+        return CharacterIdentity.IsGlyph(c.Character);
     }
 
     private static CharacterAnomalyCharacter ToVision(
@@ -215,7 +223,7 @@ public sealed class CharacterAnomalyDetector
         return new CharacterAnomalyCharacter(c.Character, c.TokenIndex, c.Bounds, key);
     }
 
-    /// <summary>标签行样本转为Vision行：同一标签图对象只转换一次（同一来源），未排除的字母/数字带“组/字符”模型键。</summary>
+    /// <summary>标签行样本转为Vision行：同一标签图对象只转换一次（同一来源），未排除的Unicode单字带“组/字符”模型键。</summary>
     private sealed class VisionLines : IDisposable
     {
         private readonly Dictionary<PixelSnapshot, DP.Vision.IImageSource> _images =
@@ -241,7 +249,8 @@ public sealed class CharacterAnomalyDetector
                                         ? AnomalyModelEntry.CharacterKey(s.Group, c.Character)
                                         : null
                                 )
-                        )
+                        ),
+                        s.LineBounds
                     );
                 })
                 .ToArray();
@@ -304,7 +313,8 @@ public sealed class CharacterAnomalyDetector
                     e.MinimumArea,
                     e.Calibration + $"；阈值取各字符阈值中位数{median:F3}（本字符{e.Threshold:F3}）",
                     e.Scope,
-                    e.InkThreshold
+                    e.InkThreshold,
+                    e.Normalization
                 )
         );
     }

@@ -24,6 +24,9 @@ public sealed class AnomalyBatchTrainingControl : UserControl
         Width = 280,
         DropDownStyle = ComboBoxStyle.DropDownList,
     };
+    private readonly ComboBox _implementations = new ComboBox { Width = 260, DropDownStyle = ComboBoxStyle.DropDownList, DisplayMember = "Key" };
+    /// <summary>最近发布资产是否包含独立ink_loss，不受随后改变训练选项影响。</summary>
+    public bool PublishedSupportsInkLoss { get; private set; } = true;
     private readonly ListBox _images = new ListBox { Dock = DockStyle.Fill, IntegralHeight = false };
     private readonly ImageViewerControl _viewer = new ImageViewerControl { Dock = DockStyle.Fill };
     private readonly DataGridView _models = Grid();
@@ -127,7 +130,8 @@ public sealed class AnomalyBatchTrainingControl : UserControl
             {
                 Name = "Label",
                 HeaderText = "身份",
-                Width = 45,
+                MaxInputLength = 2,
+                Width = 55,
             }
         );
         _characters.Columns.Add(
@@ -154,6 +158,8 @@ public sealed class AnomalyBatchTrainingControl : UserControl
         var top = Bar(DockStyle.Top);
         top.Controls.Add(Caption("异常模型库："));
         top.Controls.Add(_libraries);
+        top.Controls.Add(Caption("训练实现：")); top.Controls.Add(_implementations);
+        _implementations.SelectedIndexChanged += (_, __) => { if (_implementations.SelectedItem is KeyValuePair<string, IAnomalyModelTrainer> choice) _trainer = choice.Value; };
         Button(top, "刷新", () => Reload(Head?.Id));
         Button(
             top,
@@ -326,12 +332,14 @@ public sealed class AnomalyBatchTrainingControl : UserControl
     /// <param name = "manager">异常模型库管理器。</param>
     /// <param name = "trainer">训练实现。</param>
     /// <param name = "candidates">字符候选提取服务（OCR+分割）。</param>
+    /// <param name="trainers">可选实现快照。</param>
     /// <param name = "locator">内容固定样本框自动对齐所用的模板定位实现（宿主拥有）；null时不自动对齐。</param>
     public void AttachServices(
         IAnomalyLibraryManager manager,
         IAnomalyModelTrainer trainer,
         IGlyphCandidateService? candidates,
-        DP.Vision.Algorithms.ITemplateLocator? locator = null
+        DP.Vision.Algorithms.ITemplateLocator? locator = null,
+        IReadOnlyDictionary<string, IAnomalyModelTrainer>? trainers = null
     )
     {
         _manager = manager ?? throw new ArgumentNullException(nameof(manager));
@@ -339,7 +347,19 @@ public sealed class AnomalyBatchTrainingControl : UserControl
         _candidates = candidates;
         _locator = locator;
         _session.Locator = locator;
+        SetTrainingImplementations(trainers ?? new Dictionary<string, IAnomalyModelTrainer> { ["宿主默认训练器"] = trainer });
         Reload();
+    }
+
+    /// <summary>设置已登记的可选训练器，只影响下一次训练，不改变生产模型绑定。</summary>
+    /// <param name="trainers">名称和训练器快照；模型工厂及原生依赖由宿主拥有。</param>
+    public void SetTrainingImplementations(IReadOnlyDictionary<string, IAnomalyModelTrainer> trainers)
+    {
+        if (_extracting || !_implementations.Enabled) throw new InvalidOperationException("训练页忙碌，不能改变训练实现。");
+        if (trainers == null || trainers.Count == 0) throw new ArgumentException("没有可用训练实现。", nameof(trainers));
+        string? previous = (_implementations.SelectedItem as KeyValuePair<string, IAnomalyModelTrainer>?)?.Key;
+        _implementations.Items.Clear(); foreach (var entry in trainers) _implementations.Items.Add(entry);
+        _implementations.SelectedIndex = Enumerable.Range(0, _implementations.Items.Count).FirstOrDefault(i => ((KeyValuePair<string, IAnomalyModelTrainer>)_implementations.Items[i]!).Key == previous);
     }
 
     /// <summary>
@@ -474,6 +494,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
                 DateTimeOffset.UtcNow
             );
             int revision = Manager.PutAnomalyModels(head.Id, head.Revision, entries, true, provenance);
+            PublishedSupportsInkLoss = (trainer as IAnomalyModelTrainingCapabilities)?.SupportsInkLoss ?? true;
             LastPublished = (head.Id, revision);
             Reload(head.Id);
             _status.Text =
@@ -635,6 +656,7 @@ public sealed class AnomalyBatchTrainingControl : UserControl
             _session.SetInclude(_selected, row, cell.Value is bool b && b);
         }
 
+        UpdateCharacterSelectionState();
         RefreshCoverage();
     }
 
@@ -869,11 +891,28 @@ public sealed class AnomalyBatchTrainingControl : UserControl
                     sample.Include[i]
                 );
             }
+            UpdateCharacterSelectionState();
         }
         finally
         {
             _filling = filling;
         }
+    }
+
+    private void UpdateCharacterSelectionState()
+    {
+        var sample = _selected;
+        if (sample == null)
+            return;
+        bool unsupported = sample.Labels.Any(label => !DP.Vision.Algorithms.CharacterIdentity.IsGlyph(label));
+        foreach (DataGridViewRow row in _characters.Rows)
+        {
+            row.Cells["Use"].ReadOnly = unsupported;
+            row.Cells["Use"].ToolTipText = unsupported
+                ? sample.Problem ?? "此行不支持逐字符异常训练。"
+                : "是否作为逐字符训练样本";
+        }
+        _status.Text = sample.Problem ?? "逐字符异常模型B：可选择中文、字母、数字、标点和符号作为训练样本。";
     }
 
     private void RefreshCoverage()

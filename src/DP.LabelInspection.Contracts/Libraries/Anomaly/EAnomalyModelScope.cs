@@ -6,6 +6,6 @@ public enum EAnomalyModelScope
     /// <summary>整个ROI一个模型，模型键通常为ROI名称。</summary>
     Region = 0,
 
-    /// <summary>一个字符一个模型，模型键为该字符（ASCII字母或数字，区分大小写），用于内容可变的文字ROI。</summary>
+    /// <summary>一个字符一个模型，模型键为该字符（精确可见Unicode单字，区分大小写、全半角），用于内容可变的文字ROI。</summary>
     Character = 1,
 }

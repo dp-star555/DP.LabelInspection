@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
+using ModernUI.WinForms;
 
 namespace DP.LabelInspection;
 
@@ -48,16 +49,18 @@ public sealed class LabelInspectionControl : UserControl
     private readonly Button _clear = new Button { Text = UiText.Get("ClearRois"), AutoSize = true };
     private readonly VerdictBanner _status = new VerdictBanner();
     private readonly ActionSidebar _sidebar = new ActionSidebar { Dock = DockStyle.Left };
-    private readonly SplitContainer _split = new SplitContainer
+    private readonly ModernSplitter _split = new ModernSplitter
     {
         Dock = DockStyle.Fill,
+        FixedPanel = FixedPanel.None,
+        InitialPanel2Size = 0,
         Orientation = Orientation.Horizontal,
         SplitterWidth = 6,
     };
     private readonly List<ActionGroup> _idleOnly = new List<ActionGroup>();
     private readonly ToolTip _tips = new ToolTip();
     private bool _splitInitialized;
-    private readonly ListView _evidence = new ListView
+    private readonly ModernListView _evidence = new ModernListView
     {
         Dock = DockStyle.Fill,
         View = View.Details,
@@ -65,8 +68,8 @@ public sealed class LabelInspectionControl : UserControl
     };
     private readonly FlowLayoutPanel _glyphGallery = new FlowLayoutPanel
     {
-        Dock = DockStyle.Fill,
-        AutoScroll = true,
+        AutoSize = true,
+        AutoSizeMode = AutoSizeMode.GrowAndShrink,
     };
     private readonly Label _glyphFilterInfo = new Label
     {
@@ -78,6 +81,7 @@ public sealed class LabelInspectionControl : UserControl
     private IGlyphLibraryManager? _libraryManager;
     private IAnomalyLibraryManager? _anomalyManager;
     private IAnomalyModelTrainer? _anomalyTrainer;
+    private IReadOnlyDictionary<string, IAnomalyModelTrainer>? _anomalyTrainers;
     private DP.Vision.Algorithms.ITemplateLocator? _anomalyLocator;
     private InspectionOptions _options = new InspectionOptions();
     private IReadOnlyList<FieldBinding> _bindings = Array.Empty<FieldBinding>();
@@ -139,6 +143,7 @@ public sealed class LabelInspectionControl : UserControl
         WireCanvas(details, glyphTab);
         DrawKinds = _kind.Items.Cast<object>().Select(item => new RegionDrawKind(item, FormatKind(item))).ToArray();
         _kind.SelectedIndexChanged += (_, _) => DrawKindChanged?.Invoke(this, EventArgs.Empty);
+        InspectionUiStyle.Apply(this);
     }
 
     private static string FormatKind(object item) =>
@@ -146,9 +151,9 @@ public sealed class LabelInspectionControl : UserControl
         : item is ERegionKind kind && kind == ERegionKind.Barcode ? "条码（自动）"
         : UiText.Get("Kind" + item);
 
-    private TabControl BuildResults(out TabPage glyphTab)
+    private ModernTabControl BuildResults(out TabPage glyphTab)
     {
-        var details = new TabControl { Dock = DockStyle.Fill };
+        var details = new ModernTabControl { Dock = DockStyle.Fill };
         var evidenceTab = new TabPage("检查证据");
         glyphTab = new TabPage("缺陷标记 / 单字");
         evidenceTab.Controls.Add(_evidence);
@@ -173,7 +178,7 @@ public sealed class LabelInspectionControl : UserControl
             }
         );
         glyphBar.Controls.Add(_glyphFilterInfo);
-        glyphTab.Controls.Add(_glyphGallery);
+        glyphTab.Controls.Add(new ModernScrollView { Dock = DockStyle.Fill, Content = _glyphGallery });
         glyphTab.Controls.Add(glyphBar);
         details.TabPages.Add(evidenceTab);
         details.TabPages.Add(glyphTab);
@@ -187,7 +192,7 @@ public sealed class LabelInspectionControl : UserControl
         return details;
     }
 
-    private void BuildSidebar(TabControl details, TabPage glyphTab)
+    private void BuildSidebar(ModernTabControl details, TabPage glyphTab)
     {
         var run = _sidebar.AddGroup("检测");
         run.Add(_run);
@@ -295,7 +300,7 @@ public sealed class LabelInspectionControl : UserControl
         };
     }
 
-    private void WireCanvas(TabControl details, TabPage glyphTab)
+    private void WireCanvas(ModernTabControl details, TabPage glyphTab)
     {
         _evidence.SelectedIndexChanged += (_, _) =>
         {
@@ -730,7 +735,7 @@ public sealed class LabelInspectionControl : UserControl
             MinimumSize = new Size(1120, 780),
             StartPosition = FormStartPosition.CenterParent,
         };
-        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var tabs = new ModernTabControl { Dock = DockStyle.Fill };
         var library = new GlyphLibraryControl { Dock = DockStyle.Fill };
         library.AttachManager(manager);
         if (service != null)
@@ -739,7 +744,7 @@ public sealed class LabelInspectionControl : UserControl
         }
 
         var builder = new GlyphQuickBuilderControl { Dock = DockStyle.Fill };
-        builder.AttachServices(manager, service);
+        builder.AttachServices(manager, service, library.SelectedLibraryId);
         if (_actual != null)
         {
             builder.SetImage(_actual);
@@ -752,16 +757,23 @@ public sealed class LabelInspectionControl : UserControl
         tabs.TabPages.Add(libraryPage);
         tabs.TabPages.Add(builderPage);
         tabs.SelectedTab = startWithQuickBuilder ? builderPage : libraryPage;
-        // 多图制库发布的新版本切回单字库分页即可看到。
+        // 浏览和制库共用选库；切回浏览时读取制库新修订，不重建制库草稿。
         tabs.SelectedIndexChanged += (_, _) =>
         {
             if (tabs.SelectedTab == libraryPage)
+                library.RefreshLibraries(builder.SelectedLibraryId);
+            else if (tabs.SelectedTab == builderPage)
             {
-                library.AttachManager(manager);
+                try { builder.RefreshLibraries(library.SelectedLibraryId); }
+                catch (InvalidOperationException error)
+                {
+                    MessageBox.Show(form, error.Message, "制库目标保持不变");
+                }
             }
         };
         form.Controls.Add(tabs);
         GlyphQuickBuilderControl.GuardClose(form, builder);
+        InspectionUiStyle.Apply(form);
         form.ShowDialog(FindForm());
     }
 
@@ -781,7 +793,7 @@ public sealed class LabelInspectionControl : UserControl
             MinimumSize = new Size(1080, 700),
             StartPosition = FormStartPosition.CenterParent,
         };
-        var tabs = new TabControl { Dock = DockStyle.Fill };
+        var tabs = new ModernTabControl { Dock = DockStyle.Fill };
         var editor = CreateAnomalyEditor();
         var libraryPage = new TabPage("异常模型库");
         libraryPage.Controls.Add(editor);
@@ -811,6 +823,7 @@ public sealed class LabelInspectionControl : UserControl
             }
         };
         form.Controls.Add(tabs);
+        InspectionUiStyle.Apply(form);
         try
         {
             form.ShowDialog(FindForm());
@@ -1058,14 +1071,18 @@ public sealed class LabelInspectionControl : UserControl
     /// <summary>连接异常模型库（质量方法B）的管理及训练，引擎使用的模型库仍由宿主配置。</summary>
     /// <param name = "manager">宿主拥有的异常模型库管理器。</param>
     /// <param name = "trainer">宿主拥有的训练实现；null时只能管理、导入导出。</param>
+    /// <param name="trainers">可选厂商训练器；只影响制作，不改变生产资产绑定。</param>
     /// <param name = "locator">批量训练中内容固定样本框自动对齐所用的模板定位实现（宿主拥有，例如DP.Vision OpenCvTemplateLocator）；null时不自动对齐。</param>
     public void AttachAnomalyLibraryManager(
         IAnomalyLibraryManager manager,
         IAnomalyModelTrainer? trainer = null,
-        DP.Vision.Algorithms.ITemplateLocator? locator = null
+        DP.Vision.Algorithms.ITemplateLocator? locator = null,
+        IReadOnlyDictionary<string, IAnomalyModelTrainer>? trainers = null
     )
     {
         EnsureIdle();
+        _anomalyTrainers = trainers;
+        if (_batch != null && trainer != null) _batch.AttachServices(manager, trainer, _engine as IGlyphCandidateService, locator, trainers);
         _anomalyManager = manager ?? throw new ArgumentNullException(nameof(manager));
         _anomalyTrainer = trainer;
         _anomalyLocator = locator;
@@ -1331,10 +1348,8 @@ public sealed class LabelInspectionControl : UserControl
                         {
                             Filter = "PNG|*.png",
                             FileName =
-                                "glyph-"
-                                + ((int)glyph.Character.Character[0]).ToString("D3")
-                                + "-"
-                                + glyph.Character.Character
+                                "glyph-U"
+                                + char.ConvertToUtf32(glyph.Character.Character, 0).ToString("X4")
                                 + ".png",
                         };
                         if (d.ShowDialog() == DialogResult.OK)
@@ -1480,27 +1495,15 @@ public sealed class LabelInspectionControl : UserControl
             throw new InvalidOperationException("宿主尚未连接字库管理器。");
         }
 
-        using var form = new Form
-        {
-            Text = "单字模板管理 · 任意组合复用",
-            Width = 1080,
-            Height = 760,
-            StartPosition = FormStartPosition.CenterParent,
-        };
-        var editor = new GlyphLibraryControl();
-        editor.AttachManager(_libraryManager);
-        if (_engine is IGlyphCandidateService service)
-        {
-            editor.AttachCandidateService(service);
-        }
-
         if (candidate != null)
         {
-            editor.SetCandidate(candidate.Patch, candidate.Character);
+            GlyphQuickBuilderControl.ShowPage(FindForm(), _libraryManager,
+                _engine as IGlyphCandidateService, candidate.Patch, candidateCharacter: candidate.Character);
         }
-
-        form.Controls.Add(editor);
-        form.ShowDialog(FindForm());
+        else
+        {
+            OpenGlyphLibraries();
+        }
     }
 
     private void OpenAnomalyLibrary()
@@ -1652,7 +1655,7 @@ public sealed class LabelInspectionControl : UserControl
                 _anomalyManager,
                 _anomalyTrainer,
                 _engine as IGlyphCandidateService,
-                _anomalyLocator
+                _anomalyLocator, _anomalyTrainers
             );
             if (_actual != null)
             {
@@ -1679,7 +1682,7 @@ public sealed class LabelInspectionControl : UserControl
             return;
         }
 
-        var bound = _batch.Session.Bindings(published.LibraryId, published.Revision);
+        var bound = _batch.Session.Bindings(published.LibraryId, published.Revision, _batch.PublishedSupportsInkLoss);
         if (bound.Count == 0)
         {
             return;
@@ -1710,7 +1713,9 @@ public sealed class LabelInspectionControl : UserControl
 
     private static void AddAction(Control parent, string text, Action action)
     {
-        parent.Controls.Add(ActionGroup.CreateButton(text, action));
+        var button = InspectionUiStyle.CreateButton(text);
+        button.Click += (_, _) => action();
+        parent.Controls.Add(button);
     }
 
     private static void AddPreview(Control card, PixelSnapshot frame, string label)

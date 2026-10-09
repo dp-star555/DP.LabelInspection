@@ -1,5 +1,6 @@
 using System;
 using System.Text.RegularExpressions;
+using DP.Vision.Algorithms;
 
 namespace DP.LabelInspection.Contracts;
 
@@ -13,7 +14,7 @@ public sealed class AnomalyModelEntry
 
     /// <summary>创建模型条目，复制模型字节。</summary>
     /// <param name = "key">库内模型键，通常为ROI名称，1–100字符。</param>
-    /// <param name = "model">序列化的模型字节，非空，不超过64MB。</param>
+    /// <param name = "model">序列化的模型字节，非空，不超过256MiB，完整原生模型及配套文件共同计入。</param>
     /// <param name = "sha256">模型字节的小写SHA256，须与字节一致。</param>
     /// <param name = "featureSource">特征来源（handcrafted或cnn:哈希@尺度），检测时须有同来源的实现。</param>
     /// <param name = "width">训练裁图宽度（像素）；位置相关模型要求检测裁图同尺寸。</param>
@@ -25,8 +26,9 @@ public sealed class AnomalyModelEntry
     /// <param name = "stride">检测块采样步长。</param>
     /// <param name = "minimumArea">异常区域最小面积（原图平方像素）。</param>
     /// <param name = "calibration">阈值标定说明。</param>
-    /// <param name = "scope">适用范围：整个ROI或单个字符；字符模型的键必须是单个ASCII字母或数字。</param>
+    /// <param name = "scope">适用范围：整个ROI或单个字符；字符模型的键为一个可见Unicode单字（可加字符组前缀）。</param>
     /// <param name = "inkThreshold">字符模型的缺墨阈值（墨量，0–1之间的比例）；null表示未标定，不做缺墨检查。</param>
+    /// <param name="normalization">字符模型行归一化方式；历史缺省为墨迹行几何。</param>
     public AnomalyModelEntry(
         string key,
         byte[] model,
@@ -42,7 +44,8 @@ public sealed class AnomalyModelEntry
         int minimumArea,
         string calibration = "",
         EAnomalyModelScope scope = EAnomalyModelScope.Region,
-        double? inkThreshold = null
+        double? inkThreshold = null,
+        ECharacterNormalization normalization = ECharacterNormalization.LineInk
     )
     {
         if (inkThreshold is double ink && (!(ink > 0) || ink > 1))
@@ -55,10 +58,15 @@ public sealed class AnomalyModelEntry
             throw new ArgumentOutOfRangeException(nameof(scope));
         }
 
+        if (
+            !Enum.IsDefined(typeof(ECharacterNormalization), normalization)
+            || scope == EAnomalyModelScope.Region && normalization != ECharacterNormalization.LineInk
+        )
+            throw new ArgumentException("模型归一化方式无效或与适用范围不一致。", nameof(normalization));
         if (scope == EAnomalyModelScope.Character && !IsCharacterKey(key))
         {
             throw new ArgumentException(
-                "Character models are keyed by one ASCII letter or digit, optionally prefixed by \"group/\".",
+                "字符模型键须为一个可见Unicode单字，可加字符组前缀；不支持空白或组合序列。",
                 nameof(key)
             );
         }
@@ -68,7 +76,7 @@ public sealed class AnomalyModelEntry
             throw new ArgumentException("Model key required.", nameof(key));
         }
 
-        if (model == null || model.Length == 0 || model.Length > 64 * 1024 * 1024)
+        if (model == null || model.Length == 0 || model.Length > AnomalyModelAsset.MaximumBytes)
         {
             throw new ArgumentException("Invalid model bytes.", nameof(model));
         }
@@ -108,6 +116,14 @@ public sealed class AnomalyModelEntry
             throw new ArgumentOutOfRangeException(nameof(threshold), "Invalid anomaly model metadata.");
         }
 
+        if (AnomalyModelAsset.IsAsset(model))
+        {
+            var asset = AnomalyModelAsset.FromBytes(model);
+            if (asset.ImplementationId != featureSource || asset.Width != width || asset.Height != height || asset.Threshold != threshold)
+                throw new ArgumentException("完整模型资产与库条目实现/输入尺寸/阈值不一致。", nameof(model));
+        }
+        else if (model.Length > 64 * 1024 * 1024)
+            throw new ArgumentException("历史DPPA模型仍限制64MiB；较大原生模型必须使用版本化完整资产包。", nameof(model));
         Key = key;
         _model = (byte[])model.Clone();
         Sha256 = sha256;
@@ -123,6 +139,7 @@ public sealed class AnomalyModelEntry
         Calibration = calibration ?? "";
         Scope = scope;
         InkThreshold = inkThreshold;
+        Normalization = normalization;
     }
 
     /// <summary>
@@ -131,31 +148,40 @@ public sealed class AnomalyModelEntry
     /// </summary>
     public double? InkThreshold { get; }
 
+    /// <summary>字符模型训练时行归一化方式，历史模型为墨迹行几何。</summary>
+    public ECharacterNormalization Normalization { get; }
+
     /// <summary>适用范围：整个ROI或单个字符。</summary>
     public EAnomalyModelScope Scope { get; }
 
-    /// <summary>字符模型对应的字符（键的最后一个字符）；整ROI模型为null。</summary>
-    public string? Character => Scope == EAnomalyModelScope.Character ? Key.Substring(Key.Length - 1) : null;
+    /// <summary>字符模型对应的Unicode单字（不拆代理对）；整ROI模型为null。</summary>
+    public string? Character =>
+        Scope == EAnomalyModelScope.Character && ParseCharacterKey(Key, out _, out var character)
+            ? character
+            : null;
 
     /// <summary>
     /// 字符模型所属的字符组（键“组/字符”中的组，通常为文字ROI名称或同一字体的几行共用的名称）；未分组的字符模型为null，整ROI模型为null。
     /// 不同字体、字号的行分组训练，阈值按本组样本标定，不被其他字体的同一字符抬高。
     /// </summary>
     public string? Group =>
-        Scope == EAnomalyModelScope.Character && Key.Length > 1 ? Key.Substring(0, Key.Length - 2) : null;
+        Scope == EAnomalyModelScope.Character && ParseCharacterKey(Key, out var group, out _) ? group : null;
 
     /// <summary>字符模型的键：“字符”或“组/字符”。</summary>
     /// <param name = "group">字符组；null表示不分组。</param>
-    /// <param name = "character">单个ASCII字母或数字。</param>
+    /// <param name = "character">一个可见Unicode单字，支持中文、标点及补充平面。</param>
     public static string CharacterKey(string? group, string character)
     {
-        string key = group == null ? character : group + "/" + character;
-        if (!IsCharacterKey(key))
+        if (group != null && !IsCharacterGroup(group))
         {
-            throw new ArgumentException("Invalid character group or character.");
+            throw new ArgumentException("字符分组须为1–60个字符，不能为空或包含“/”。", nameof(group));
         }
-
-        return key;
+        if (!CharacterIdentity.IsGlyph(character))
+            throw new ArgumentException(
+                "异常模型身份须为一个可见Unicode单字（中文、字母、数字、标点或符号），不支持空白或组合序列。",
+                nameof(character)
+            );
+        return group == null ? character : group + "/" + character;
     }
 
     /// <summary>字符组名称是否可用：1–60字符，不含“/”。</summary>
@@ -165,15 +191,30 @@ public sealed class AnomalyModelEntry
         return !string.IsNullOrWhiteSpace(group) && group!.Length <= 60 && group.IndexOf('/') < 0;
     }
 
-    private static bool IsCharacterKey(string? key)
-    {
-        if (key == null || key.Length == 0 || !FieldSettings.IsAlphanumeric(key[key.Length - 1]))
-        {
-            return false;
-        }
+    private static bool IsCharacterKey(string? key) => ParseCharacterKey(key, out _, out _);
 
-        return key.Length == 1
-            || key[key.Length - 2] == '/' && IsCharacterGroup(key.Substring(0, key.Length - 2));
+    private static bool ParseCharacterKey(string? key, out string? group, out string character)
+    {
+        group = null;
+        character = "";
+        if (string.IsNullOrEmpty(key))
+            return false;
+        int length =
+            key!.Length >= 2
+            && char.IsHighSurrogate(key[key.Length - 2])
+            && char.IsLowSurrogate(key[key.Length - 1])
+                ? 2
+                : 1;
+        character = key.Substring(key.Length - length);
+        if (!CharacterIdentity.IsGlyph(character))
+            return false;
+        if (key.Length == length)
+            return true;
+        int delimiter = key.Length - length - 1;
+        if (key[delimiter] != '/')
+            return false;
+        group = key.Substring(0, delimiter);
+        return IsCharacterGroup(group);
     }
 
     /// <summary>库内模型键。</summary>
@@ -184,6 +225,10 @@ public sealed class AnomalyModelEntry
 
     /// <summary>特征来源。</summary>
     public string FeatureSource { get; }
+
+    /// <summary>真实实现名称，厂商原生资产不再误显示为“手工”。</summary>
+    public string ImplementationDisplay => FeatureSource == "handcrafted" ? "手工Patch"
+        : FeatureSource.StartsWith("cnn", StringComparison.Ordinal) ? "CNN Patch" : FeatureSource;
 
     /// <summary>训练裁图宽度。</summary>
     public int Width { get; }
@@ -240,7 +285,8 @@ public sealed class AnomalyModelEntry
             MinimumArea,
             Calibration,
             Scope,
-            InkThreshold
+            InkThreshold,
+            Normalization
         );
     }
 
@@ -249,7 +295,7 @@ public sealed class AnomalyModelEntry
     {
         return (Scope == EAnomalyModelScope.Character ? "字符[" + Key + "]" : Key)
             + " · "
-            + (FeatureSource.StartsWith("cnn", StringComparison.Ordinal) ? "CNN" : "手工")
+            + ImplementationDisplay
             + (LocalRadius > 0 ? "/位置相关" : "/与位置无关")
             + " · "
             + TrainingImages

@@ -12,9 +12,17 @@ namespace DP.LabelInspection.Runtime;
 /// 按ROI使用局部块异常检测（PatchCore式，仅良品训练）：从整张良品图裁取ROI训练模型，检测时输出原图坐标的异常区域。
 /// 图像须已与配方对齐（固定相机或调用方先做定位）；ROI四周多取少量像素，避免笔画贴边被截断。
 /// </summary>
-public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
+public sealed class RegionAnomalyDetector : IAnomalyModelTrainer, IAnomalyModelTrainingCapabilities
 {
-    private readonly IPatchAnomalyDetector _algorithm;
+    private readonly IPatchAnomalyDetector? _algorithm;
+    private readonly IAnomalyImplementation? _implementation;
+    /// <inheritdoc/>
+    public bool SupportsInkLoss => _implementation == null || _implementation is DP.Vision.OpenCv.PatchAnomalyImplementation;
+
+    /// <summary>使用厂商中立实现，训练与推理能力分开校验。</summary>
+    /// <param name="implementation">明确登记的实现。</param>
+    public RegionAnomalyDetector(IAnomalyImplementation implementation)
+    { _implementation = implementation ?? throw new ArgumentNullException(nameof(implementation)); }
 
     /// <summary>使用OpenCV实现。</summary>
     public RegionAnomalyDetector()
@@ -69,7 +77,7 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         var crops = good.Select(g => Bridge.ToVision(g.Crop(Crop(g, region)))).ToList();
         try
         {
-            return _algorithm.Train(crops, options, token);
+            return (_algorithm ?? throw new NotSupportedException("原生模型应通过TrainEntry制作资产。")).Train(crops, options, token);
         }
         finally
         {
@@ -95,9 +103,22 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         CancellationToken token = default
     )
     {
-        if (image == null || region == null || model == null || options == null)
-            throw new ArgumentNullException(nameof(image));
+        if (image == null || region == null || model == null || options == null) throw new ArgumentNullException(nameof(image));
+        var crop = CropFor(image.Info.Width, image.Info.Height, region.Bounds);
+        using var runtime = new DP.Vision.OpenCv.PatchAnomalyImplementation(model.FeatureSource, _algorithm!)
+            .Load(DP.Vision.OpenCv.PatchAnomalyImplementation.Capture(model, crop.Width, crop.Height));
+        return Inspect(image, region, runtime, new AnomalyDetectionOptions(options.Threshold, options.MinimumArea), token);
+    }
 
+    /// <summary>厂商中立的ROI测量，统一映射回原图。</summary>
+    /// <param name="image">借用原图。</param>
+    /// <param name="region">当前ROI。</param>
+    /// <param name="runtime">借用模型实例。</param>
+    /// <param name="options">本次阈值及面积。</param>
+    /// <param name="token">取消标记。</param>
+    public RegionAnomalyResult Inspect(DP.Vision.IImageSource image, InspectionRegion region,
+        ILoadedAnomalyModel runtime, AnomalyDetectionOptions options, CancellationToken token = default)
+    {
         var crop = CropFor(image.Info.Width, image.Info.Height, region.Bounds);
         using var source = DP.Vision.ImageSourceExtensions.Crop(
             image,
@@ -106,7 +127,7 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
             crop.Width,
             crop.Height
         );
-        using var result = _algorithm.Detect(source, model, options, token);
+        using var result = runtime.Inspect(source, options, token);
         var findings = result
             .Findings.Select(f =>
                 f.Bounds is { } b
@@ -154,6 +175,9 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
             throw new ArgumentException("Good images and a region are required.");
         }
 
+        if (_implementation != null)
+            return TrainSamples(good.Select(g => new RegionAnomalySample(g, region.Bounds)).ToArray(), region,
+                DefaultOptions(region).LocalRadius != null, key, token);
         options ??= DefaultOptions(region);
         var crop = Crop(good[0], region);
         var model = Train(good, region, options, token);
@@ -223,7 +247,18 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
                 images.Add(Bridge.ToVision(samples[i].Image.Crop(crops[i])));
             }
 
-            var model = _algorithm.Train(images, options, token);
+            if (_implementation != null)
+            {
+                var sources = samples.Select(s => samples.Select(x => x.Image).ToList().FindIndex(x => ReferenceEquals(x, s.Image))).ToArray();
+                var asset = (_implementation as IAnomalyTrainer ?? throw new NotSupportedException("所选实现只有推理能力，请导入模型。"))
+                    .Train(images, sources, new AnomalyTrainingOptions(positionDependent: positionDependent), token);
+                var packed = asset.ToBytes();
+                using var hash = System.Security.Cryptography.SHA256.Create();
+                return new AnomalyModelEntry(key ?? region.Name, packed,
+                    BitConverter.ToString(hash.ComputeHash(packed)).Replace("-", "").ToLowerInvariant(), asset.ImplementationId,
+                    asset.Width, asset.Height, 0, asset.TrainingImages, asset.Threshold, Margin, 2, 6, asset.Calibration);
+            }
+            var model = _algorithm!.Train(images, options, token);
             var bytes = model.ToBytes();
             using var sha = System.Security.Cryptography.SHA256.Create();
             return new AnomalyModelEntry(
@@ -257,7 +292,8 @@ public sealed class RegionAnomalyDetector : IAnomalyModelTrainer
         CancellationToken token = default
     )
     {
-        return new CharacterAnomalyDetector(_algorithm).Train(lines, token);
+        return _implementation != null ? new CharacterAnomalyDetector(_implementation).Train(lines, token)
+            : new CharacterAnomalyDetector(_algorithm!).Train(lines, token);
     }
 
     /// <summary>按库条目记录的元数据重建检测参数（块大小取自模型本身，阈值取条目记录的阈值）。</summary>

@@ -9,7 +9,7 @@ namespace DP.LabelInspection.Contracts;
 public sealed class GlyphImportItem
 {
     /// <summary>校验当前字库字符与尺寸契约，源图像保持不可变。</summary>
-    /// <param name = "character">支持的独立ASCII字母或数字标签，大小写敏感。</param>
+    /// <param name = "character">独立Unicode字母、数字、中文、标点或符号标签，大小写敏感。</param>
     /// <param name = "image">独立不可变参考图块。</param>
     /// <param name = "binarization">二值化模式：otsu自动阈值或fixed固定阈值。</param>
     /// <param name = "provenanceJson">可选来源证据JSON，用于保留人工确认及原图来源。</param>

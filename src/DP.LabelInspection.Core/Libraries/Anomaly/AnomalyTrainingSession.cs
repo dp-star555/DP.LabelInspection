@@ -388,23 +388,62 @@ public sealed class AnomalyTrainingSession
         sample.Segmentation = segmentation;
         sample._labels = segmentation.Characters.Select(c => c.Character).ToArray();
         bool clean = segmentation.Status == "provisional" || segmentation.Status == "explicit_cells";
-        sample._include = segmentation.Characters.Select(_ => clean).ToArray();
-        sample.Problem = clean ? null : "切割需复核，字符默认未勾选：" + segmentation.Reason;
+        // 与参考字库共用Unicode单字身份；训练仍需可靠分割，不把OCR成功当作良品认证。
+        bool supported = sample._labels.All(IsTrainingCharacter);
+        sample._include = segmentation.Characters.Select(_ => clean && supported).ToArray();
+        UpdateCharacterProblem(sample);
     }
 
     /// <summary>修改逐字符样本中一个字符的身份。</summary>
     /// <param name = "sample">逐字符样本。</param>
     /// <param name = "index">字符序号。</param>
-    /// <param name = "label">单个ASCII字母或数字（区分大小写）。</param>
+    /// <param name = "label">一个可见Unicode单字，精确区分大小写和全半角。</param>
     public void SetLabel(AnomalyTrainingSample sample, int index, string label)
     {
-        if (label == null || label.Length != 1 || !FieldSettings.IsAlphanumeric(label[0]))
+        if (!IsTrainingCharacter(label))
         {
-            throw new ArgumentException("身份须为单个ASCII字母或数字（区分大小写）。", nameof(label));
+            throw new ArgumentException(
+                "身份须为一个可见Unicode单字（中文、字母、数字、标点或符号），不支持空白或组合序列。",
+                nameof(label)
+            );
         }
 
         sample._labels[index] = label;
+        UpdateCharacterProblem(sample);
     }
+
+    private static bool IsTrainingCharacter(string? label) =>
+        DP.Vision.Algorithms.CharacterIdentity.IsGlyph(label);
+
+    private static void UpdateCharacterProblem(AnomalyTrainingSample sample)
+    {
+        var unsupported = sample
+            ._labels.Where(label => !IsTrainingCharacter(label))
+            .Distinct(StringComparer.Ordinal)
+            .Take(8)
+            .ToArray();
+        if (unsupported.Length > 0)
+        {
+            sample.Problem =
+                "逐字符异常模型B的单字身份无效："
+                + string.Join("、", unsupported.Select(label => "“" + label + "”"))
+                + "。整行不加入训练，请在表格修改为一个可见Unicode单字；空白和组合序列不能作为独立模型。";
+            return;
+        }
+        var segmentation = sample.Segmentation;
+        sample.Problem =
+            segmentation != null
+            && segmentation.Status != "provisional"
+            && segmentation.Status != "explicit_cells"
+                ? "切割需复核，字符默认未勾选：" + segmentation.Reason
+                : null;
+    }
+
+    private static bool HasCharacterTrainingSamples(AnomalyTrainingSample sample) =>
+        sample.Model.Kind == EAnomalyTrainingKind.Characters
+        && sample.Segmentation != null
+        && sample._labels.All(IsTrainingCharacter)
+        && sample._include.Any(include => include);
 
     /// <summary>设置逐字符样本中一个字符是否作为训练样本。</summary>
     /// <param name = "sample">逐字符样本。</param>
@@ -412,6 +451,11 @@ public sealed class AnomalyTrainingSession
     /// <param name = "include">是否作为样本。</param>
     public void SetInclude(AnomalyTrainingSample sample, int index, bool include)
     {
+        if (include && !sample._labels.All(IsTrainingCharacter))
+        {
+            UpdateCharacterProblem(sample);
+            throw new ArgumentException(sample.Problem, nameof(include));
+        }
         sample._include[index] = include;
     }
 
@@ -441,7 +485,9 @@ public sealed class AnomalyTrainingSession
             var bounds = sample.Bounds;
             try
             {
-                using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(sample.Image.Image);
+                using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(
+                    sample.Image.Image
+                );
                 var result = await service
                     .ExtractGlyphCandidatesAsync(source, bounds, sample.ConfirmedText, token)
                     .ConfigureAwait(true);
@@ -466,7 +512,7 @@ public sealed class AnomalyTrainingSession
     public IReadOnlyList<KeyValuePair<string, int>> CharacterCoverage()
     {
         var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
-        foreach (var s in _samples.Where(s => s.Segmentation != null))
+        foreach (var s in _samples.Where(HasCharacterTrainingSamples))
         {
             for (int i = 0; i < s._labels.Length; i++)
             {
@@ -554,14 +600,7 @@ public sealed class AnomalyTrainingSession
             );
         }
 
-        var lines = _samples
-            .Where(s =>
-                s.Model.Kind == EAnomalyTrainingKind.Characters
-                && s.Segmentation != null
-                && s._include.Any(i => i)
-            )
-            .Select(s => s.ToCharacterSample())
-            .ToArray();
+        var lines = _samples.Where(HasCharacterTrainingSamples).Select(s => s.ToCharacterSample()).ToArray();
         if (lines.Length > 0)
         {
             token.ThrowIfCancellationRequested();
@@ -579,14 +618,23 @@ public sealed class AnomalyTrainingSession
 
     /// <summary>
     /// 发布后配方ROI的新配置：对应配方ROI的模型绑定到该版本并启用B；内容固定模型尺寸与配方ROI不同时按中心改为模型尺寸，
-    /// 逐字符模型选择逐字符模式。没有样本的模型不绑定。
+    /// 逐字符模型选择逐字符模式。没有有效训练样本的模型不绑定。
     /// </summary>
     /// <param name = "libraryId">模型库标识。</param>
     /// <param name = "revision">发布的版本。</param>
-    public IReadOnlyList<InspectionRegion> Bindings(string libraryId, int revision)
+    /// <param name="inkLoss">已发布训练实现是否包含旧ink_loss附加模型。</param>
+    public IReadOnlyList<InspectionRegion> Bindings(string libraryId, int revision, bool inkLoss = true)
     {
         var result = new List<InspectionRegion>();
-        foreach (var model in _models.Where(m => m.Region != null && _samples.Any(s => s.Model == m)))
+        foreach (
+            var model in _models.Where(m =>
+                m.Region != null
+                && _samples.Any(s =>
+                    s.Model == m
+                    && (m.Kind != EAnomalyTrainingKind.Characters || HasCharacterTrainingSamples(s))
+                )
+            )
+        )
         {
             var r = model.Region!;
             if (
@@ -599,7 +647,7 @@ public sealed class AnomalyTrainingSession
 
             var pin =
                 model.Kind == EAnomalyTrainingKind.Characters
-                    ? new AnomalySettings(libraryId, revision, model.CharacterGroup, perCharacter: true)
+                    ? new AnomalySettings(libraryId, revision, model.CharacterGroup, perCharacter: true, inkLoss: inkLoss)
                     : new AnomalySettings(libraryId, revision, model.Name == r.Name ? null : model.Name);
             result.Add(
                 r.WithAnomaly(pin)
@@ -719,7 +767,11 @@ public sealed class AnomalyTrainingSession
 
         var drawn = Locator.Locate(target, box, template, templateBounds, 0);
         // Locate的无角度/尺度搜索只做平移；新版位姿结果不再带旧整数Bounds。
-        if (best.Score <= drawn.Score + 1e-9 || Math.Abs(best.AngleDegrees) > 1e-9 || Math.Abs(best.Scale - 1) > 1e-9)
+        if (
+            best.Score <= drawn.Score + 1e-9
+            || Math.Abs(best.AngleDegrees) > 1e-9
+            || Math.Abs(best.Scale - 1) > 1e-9
+        )
             return box;
         var origin = best.Transform!.ToImage(new DP.Vision.Algorithms.Coordinate2D(0, 0));
         return new PixelRect((int)Math.Round(origin.X), (int)Math.Round(origin.Y), box.Width, box.Height);

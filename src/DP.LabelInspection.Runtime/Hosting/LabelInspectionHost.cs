@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
 using DP.LabelInspection.Storage;
@@ -15,9 +16,13 @@ public sealed class LabelInspectionHost : IDisposable
 {
     private readonly DP.Vision.OpenCv.OpenCvCnnPatchAnomalyDetector? _cnn;
     private readonly Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector> _anomalyDetectors;
+    private readonly DP.Vision.Algorithms.ITextLineRecognizer? _borrowedRecognizer;
+    private readonly DP.Vision.Algorithms.IAnomalyImplementation[] _implementations;
     private bool _disposed;
 
-    private LabelInspectionHost(LabelInspectionHostOptions options)
+    private LabelInspectionHost(LabelInspectionHostOptions options,
+        DP.Vision.Algorithms.ITextLineRecognizer? borrowedRecognizer = null,
+        string? anomalyFeatureSource = null, DP.Vision.Algorithms.IPatchAnomalyDetector? borrowedAnomaly = null)
     {
         Codec = new OpenCvImageCodec();
         Store = new InspectionStore(options.DataRoot, Codec);
@@ -29,13 +34,22 @@ public sealed class LabelInspectionHost : IDisposable
         _anomalyDetectors = new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>(
             StringComparer.Ordinal
         );
-        if (!string.IsNullOrWhiteSpace(options.AnomalyBackbone))
+        _borrowedRecognizer = borrowedRecognizer;
+        if (borrowedAnomaly != null)
+            _anomalyDetectors[anomalyFeatureSource!] = borrowedAnomaly;
+        else if (!string.IsNullOrWhiteSpace(options.AnomalyBackbone))
         {
             _cnn = new DP.Vision.OpenCv.OpenCvCnnPatchAnomalyDetector(options.AnomalyBackbone!);
             _anomalyDetectors[_cnn.FeatureSource] = _cnn;
         }
 
-        AnomalyTrainer = _cnn == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(_cnn);
+        var trainer = borrowedAnomaly ?? _cnn;
+        AnomalyTrainer = trainer == null ? new RegionAnomalyDetector() : new RegionAnomalyDetector(trainer);
+        _implementations = new DP.Vision.Algorithms.AnomalyImplementationRegistry(options.AnomalyImplementations).Implementations.ToArray();
+        var trainers = new Dictionary<string, IAnomalyModelTrainer>(StringComparer.Ordinal) { [trainer == null ? "OpenCV · 手工Patch" : "OpenCV · CNN Patch"] = AnomalyTrainer };
+        foreach (var implementation in _implementations)
+            if (implementation is DP.Vision.Algorithms.IAnomalyTrainer) trainers.Add(implementation.DisplayName, new RegionAnomalyDetector(implementation));
+        AnomalyTrainers = new System.Collections.ObjectModel.ReadOnlyDictionary<string, IAnomalyModelTrainer>(trainers);
         TemplateLocator = new DP.Vision.OpenCv.OpenCvTemplateLocator();
         RecognitionModel = options.RecognitionModel;
         MaximumParallelRois = options.MaximumParallelRois;
@@ -48,6 +62,22 @@ public sealed class LabelInspectionHost : IDisposable
         return new LabelInspectionHost(options ?? throw new ArgumentNullException(nameof(options)));
     }
 
+    /// <summary>使用外部模型租约装配宿主；宿主和引擎不释放借用的模型。</summary>
+    /// <param name="options">存储和执行配置；未借用的模型仍可按路径独立创建。</param>
+    /// <param name="recognizer">借用的OCR识别器；null时保持按路径创建的行为。</param>
+    /// <param name="anomalyFeatureSource">借用异常检测器的特征来源，与库模型身份一致。</param>
+    /// <param name="anomalyDetector">借用的异常骨干检测器；调用方负责串行化和释放。</param>
+    /// <returns>不拥有外部模型的宿主；调用方必须先释放引擎，再归还模型租约。</returns>
+    public static LabelInspectionHost CreateWithBorrowedModels(LabelInspectionHostOptions options,
+        DP.Vision.Algorithms.ITextLineRecognizer? recognizer,
+        string? anomalyFeatureSource, DP.Vision.Algorithms.IPatchAnomalyDetector? anomalyDetector)
+    {
+        if (options == null) throw new ArgumentNullException(nameof(options));
+        if (anomalyDetector != null && string.IsNullOrWhiteSpace(anomalyFeatureSource))
+            throw new ArgumentException("借用异常检测器必须提供特征来源。", nameof(anomalyFeatureSource));
+        return new LabelInspectionHost(options, recognizer, anomalyFeatureSource, anomalyDetector);
+    }
+
     /// <summary>PNG编解码与报告标注图。</summary>
     public OpenCvImageCodec Codec { get; }
 
@@ -56,6 +86,9 @@ public sealed class LabelInspectionHost : IDisposable
 
     /// <summary>方法B训练实现（手工特征，或配置了骨干网络时的CNN特征）。</summary>
     public IAnomalyModelTrainer AnomalyTrainer { get; }
+
+    /// <summary>可选训练能力（不包含仅推理实现）；选择训练器不修改生产配方绑定。</summary>
+    public IReadOnlyDictionary<string, IAnomalyModelTrainer> AnomalyTrainers { get; }
 
     /// <summary>批量训练样本框自动对齐所用的模板定位。</summary>
     public DP.Vision.Algorithms.ITemplateLocator TemplateLocator { get; }
@@ -78,9 +111,11 @@ public sealed class LabelInspectionHost : IDisposable
     /// <param name="libraries">本轮字库快照仓，不由引擎释放。</param>
     /// <param name="anomalyModels">本轮异常库快照仓，不由引擎释放。</param>
     /// <param name="recognitionModel">可选识别模型；空时使用宿主配置。</param>
+    /// <param name="preloadAnomalyModels">生产选定资产预热；null保持按需加载。</param>
+    /// <param name="cancellationToken">模型装配取消，原生运行安全返回后释放。</param>
     /// <returns>由调用方拥有的检测引擎。</returns>
     public InspectionEngine CreateEngineFromRepositories(IGlyphLibraryRepository libraries,
-        IAnomalyLibraryRepository anomalyModels, string? recognitionModel = null)
+        IAnomalyLibraryRepository anomalyModels, string? recognitionModel = null, IEnumerable<AnomalyModelEntry>? preloadAnomalyModels = null, System.Threading.CancellationToken cancellationToken = default)
     {
         if (libraries == null) throw new ArgumentNullException(nameof(libraries));
         if (anomalyModels == null) throw new ArgumentNullException(nameof(anomalyModels));
@@ -90,7 +125,8 @@ public sealed class LabelInspectionHost : IDisposable
         }
 
         string? model = recognitionModel ?? RecognitionModel;
-        var recognizer = string.IsNullOrWhiteSpace(model)
+        var borrowed = recognitionModel == null && _borrowedRecognizer != null;
+        var recognizer = borrowed ? _borrowedRecognizer : string.IsNullOrWhiteSpace(model)
             ? null
             : new DP.Vision.PPOcr.Onnx.OnnxTextLineRecognizer(
                 model!,
@@ -98,24 +134,25 @@ public sealed class LabelInspectionHost : IDisposable
             );
         try
         {
-            return new InspectionEngine(
-                new OpenCvInspectionBackend(
-                    ownsRecognizer: true,
+            var backend = new OpenCvInspectionBackend(
+                    ownsRecognizer: !borrowed,
                     libraries: libraries,
                     anomalyModels: anomalyModels,
                     anomalyDetectors: _anomalyDetectors,
+                    anomalyImplementations: _implementations,
                     barcode: new DP.Vision.Zxing.ZxingBarcodeDecoder(),
                     recognizer: recognizer
-                ),
-                true
-            )
+                );
+            try
             {
-                MaximumParallelRois = MaximumParallelRois,
-            };
+                if (preloadAnomalyModels != null) backend.PrepareAnomalyModels(preloadAnomalyModels, cancellationToken);
+                return new InspectionEngine(backend, true) { MaximumParallelRois = MaximumParallelRois };
+            }
+            catch { backend.Dispose(); throw; }
         }
         catch
         {
-            recognizer?.Dispose();
+            if (!borrowed) recognizer?.Dispose();
             throw;
         }
     }

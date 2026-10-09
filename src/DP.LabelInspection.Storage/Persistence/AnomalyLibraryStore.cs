@@ -21,6 +21,12 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
     /// <summary>模型库文档格式标识。</summary>
     public const string Schema = "dp.labelinspection.anomaly-library.v1";
 
+    /// <summary>包含Unicode或稳定行ROI模型的文档，旧SDK必须拒读，防止误用历史归一化。</summary>
+    public const string UnicodeSchema = "dp.labelinspection.anomaly-library.v2";
+
+    /// <summary>厂商模型完整资产包格式；旧SDK必须拒读。</summary>
+    public const string AssetSchema = "dp.labelinspection.anomaly-library.v3";
+
     private readonly string _root;
 
     /// <summary>在宿主指定根目录下的anomaly-libraries子目录保存模型库。</summary>
@@ -198,6 +204,15 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             entries[model.Key] = entry;
         }
 
+        if (
+            batch.Any(model =>
+                model.Normalization != DP.Vision.Algorithms.ECharacterNormalization.LineInk
+                || model.Scope == EAnomalyModelScope.Character
+                    && (model.Character!.Length != 1 || !FieldSettings.IsAlphanumeric(model.Character[0]))
+            )
+        )
+            if ((string?)doc["schema"] != AssetSchema) doc["schema"] = UnicodeSchema;
+        if (batch.Any(model => DP.Vision.Algorithms.AnomalyModelAsset.IsAsset(model.CopyModel()))) doc["schema"] = AssetSchema;
         doc["revision"] = expectedRevision + 1;
         Publish(doc, expectedRevision);
         return expectedRevision + 1;
@@ -262,6 +277,8 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
                 throw new InvalidDataException("Imported model hash mismatch: " + p.Name);
             }
 
+            // 导入前校验完整元数据，不发布无法使用的字符键或归一化方式。
+            _ = CreateEntry(p.Name, entry, bytes);
             WriteBlob(id, bytes, (string)entry["sha256"]!);
             entry.Remove("model_base64");
         }
@@ -304,10 +321,15 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
     {
         string sha = (string)entry["sha256"]!;
         var bytes = ReadBlob(id, sha);
+        return CreateEntry(key, entry, bytes);
+    }
+
+    private static AnomalyModelEntry CreateEntry(string key, JObject entry, byte[] bytes)
+    {
         return new AnomalyModelEntry(
             key,
             bytes,
-            sha,
+            (string)entry["sha256"]!,
             (string)entry["feature_source"]!,
             (int)entry["width"]!,
             (int)entry["height"]!,
@@ -319,7 +341,8 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             (int)entry["minimum_area"]!,
             (string?)entry["calibration"] ?? "",
             (EAnomalyModelScope)((int?)entry["scope"] ?? 0),
-            (double?)entry["ink_threshold"]
+            (double?)entry["ink_threshold"],
+            (DP.Vision.Algorithms.ECharacterNormalization)((int?)entry["normalization"] ?? 0)
         );
     }
 
@@ -341,13 +364,14 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
             { "calibration", model.Calibration },
             { "scope", (int)model.Scope },
             { "ink_threshold", model.InkThreshold },
+            { "normalization", (int)model.Normalization },
         };
     }
 
     private void Validate(JObject doc)
     {
         if (
-            (string?)doc["schema"] != Schema
+            ((string?)doc["schema"] != Schema && (string?)doc["schema"] != UnicodeSchema && (string?)doc["schema"] != AssetSchema)
             || doc["revision"] == null
             || (int?)doc["revision"] < 1
             || string.IsNullOrWhiteSpace((string?)doc["name"])
@@ -364,6 +388,9 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
                 !(p.Value is JObject e)
                 || string.IsNullOrWhiteSpace(p.Name)
                 || p.Name.Length > 100
+                || ((int?)e["normalization"] ?? 0) < 0
+                || ((int?)e["normalization"] ?? 0) > 1
+                || (string?)doc["schema"] == Schema && ((int?)e["normalization"] ?? 0) != 0
                 || !Regex.IsMatch(
                     (string?)e["sha256"] ?? "",
                     "^[0-9a-f]{64}$",
@@ -441,7 +468,9 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
 
     private byte[] ReadBlob(string id, string sha)
     {
-        var bytes = File.ReadAllBytes(Path.Combine(LibraryPath(id), "models", sha + ".bin"));
+        string path = Path.Combine(LibraryPath(id), "models", sha + ".bin");
+        if (new FileInfo(path).Length > DP.Vision.Algorithms.AnomalyModelAsset.MaximumBytes) throw new InvalidDataException("异常模型超过256MiB完整资产预算。");
+        var bytes = File.ReadAllBytes(path);
         if (InspectionStore.Hash(bytes) != sha)
         {
             throw new InvalidDataException("Stored anomaly model hash mismatch.");
@@ -484,7 +513,12 @@ public sealed class AnomalyLibraryStore : IAnomalyLibraryManager
 
     private static void WriteNew(string destination, byte[] bytes)
     {
-        string temp = destination + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        // 同目录保持原子移动，但不能再把64位SHA文件名也复制到临时名：
+        // .NET48的MAX_PATH下目标文件可用，追加GUID后的临时路径却可能无法创建。
+        string temp = Path.Combine(
+            Path.GetDirectoryName(destination)!,
+            Guid.NewGuid().ToString("N") + ".tmp"
+        );
         try
         {
             using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))

@@ -34,7 +34,7 @@ public sealed partial class OpenCvInspectionBackend
     private readonly PinnedRevisionCache<GlyphLibrarySnapshot> _glyphLibraries =
         new PinnedRevisionCache<GlyphLibrarySnapshot>(8);
     private readonly GlyphReferenceImageCache _referenceImages;
-    private readonly Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector> _anomalyDetectors;
+    private readonly DP.Vision.Algorithms.AnomalyImplementationRegistry _anomalyImplementations;
 
     /// <summary>除非明确转移所有权，参考及算法均为借用。</summary>
     /// <param name = "recognizer">可选真实单行识别器。</param>
@@ -46,6 +46,7 @@ public sealed partial class OpenCvInspectionBackend
     /// <param name = "linearQuality">可选Vision一维码质量策略，null使用默认实现。</param>
     /// <param name = "qrQuality">可选Vision QR质量策略，null使用默认实现。</param>
     /// <param name = "anomalyModels">可选固定版本异常模型库（方法B），仅借用。</param>
+    /// <param name="anomalyImplementations">厂商中立模型运行工厂快照，仅登记，不加载未选原生模型。</param>
     /// <param name = "anomalyDetectors">
     /// 按特征来源提供的额外异常检测实现（例如CNN骨干网络，键为其FeatureSource），仅借用；手工特征实现始终内置。
     /// </param>
@@ -61,7 +62,8 @@ public sealed partial class OpenCvInspectionBackend
         DP.Vision.Algorithms.IQrQualityInspector? qrQuality = null,
         IAnomalyLibraryRepository? anomalyModels = null,
         IReadOnlyDictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>? anomalyDetectors = null,
-        RefImages.IGlyphReferenceImageConverter? referenceImageConverter = null
+        RefImages.IGlyphReferenceImageConverter? referenceImageConverter = null,
+        IEnumerable<DP.Vision.Algorithms.IAnomalyImplementation>? anomalyImplementations = null
     )
         : this(
             new RegionQualityAlgorithms(
@@ -78,7 +80,8 @@ public sealed partial class OpenCvInspectionBackend
             qrQuality,
             anomalyModels: anomalyModels,
             anomalyDetectors: anomalyDetectors,
-            referenceImageConverter: referenceImageConverter
+            referenceImageConverter: referenceImageConverter,
+            anomalyImplementations: anomalyImplementations
         ) { }
 
     /// <summary>分别选择固定、空白、文字、配对及码策略进行组装，注入实现由宿主拥有。</summary>
@@ -94,6 +97,7 @@ public sealed partial class OpenCvInspectionBackend
     /// <param name = "textQuality">可选整段文字质量替代策略，null使用默认组合。</param>
     /// <param name = "matcher">可选字符到参考配对策略，供默认文字组合使用。</param>
     /// <param name = "anomalyModels">可选固定版本异常模型库（方法B），仅借用。</param>
+    /// <param name="anomalyImplementations">厂商中立模型运行工厂快照。</param>
     /// <param name = "anomalyDetectors">按特征来源提供的额外异常检测实现，仅借用；手工特征实现始终内置。</param>
     /// <param name = "referenceImageConverter">可选字库参考图转换实现，null使用整帧复制到Vision租约的默认实现。</param>
     public static OpenCvInspectionBackend WithQualityAlgorithms(
@@ -110,7 +114,8 @@ public sealed partial class OpenCvInspectionBackend
         DP.Vision.Algorithms.ICharacterMatcher? matcher = null,
         IAnomalyLibraryRepository? anomalyModels = null,
         IReadOnlyDictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>? anomalyDetectors = null,
-        RefImages.IGlyphReferenceImageConverter? referenceImageConverter = null
+        RefImages.IGlyphReferenceImageConverter? referenceImageConverter = null,
+        IEnumerable<DP.Vision.Algorithms.IAnomalyImplementation>? anomalyImplementations = null
     )
     {
         return new OpenCvInspectionBackend(
@@ -127,7 +132,8 @@ public sealed partial class OpenCvInspectionBackend
             matcher,
             anomalyModels,
             anomalyDetectors,
-            referenceImageConverter
+            referenceImageConverter,
+            anomalyImplementations
         );
     }
 
@@ -145,25 +151,19 @@ public sealed partial class OpenCvInspectionBackend
         DP.Vision.Algorithms.ICharacterMatcher? matcher = null,
         IAnomalyLibraryRepository? anomalyModels = null,
         IReadOnlyDictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>? anomalyDetectors = null,
-        RefImages.IGlyphReferenceImageConverter? referenceImageConverter = null
+        RefImages.IGlyphReferenceImageConverter? referenceImageConverter = null,
+        IEnumerable<DP.Vision.Algorithms.IAnomalyImplementation>? anomalyImplementations = null
     )
     {
         _textQuality = textQuality;
         _anomalyModels = anomalyModels;
-        _anomalyDetectors = new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>(
-            StringComparer.Ordinal
-        )
-        {
-            [DP.Vision.Algorithms.PatchAnomalyModel.Handcrafted] =
-                new DP.Vision.OpenCv.OpenCvPatchAnomalyDetector(),
-        };
-        foreach (
-            var pair in anomalyDetectors
-                ?? new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>()
-        )
-        {
-            _anomalyDetectors[pair.Key] = pair.Value ?? throw new ArgumentException("Null anomaly detector.");
-        }
+        var implementations = new Dictionary<string, DP.Vision.Algorithms.IAnomalyImplementation>(StringComparer.Ordinal)
+        { [DP.Vision.Algorithms.PatchAnomalyModel.Handcrafted] = new DP.Vision.OpenCv.PatchAnomalyImplementation() };
+        foreach (var pair in anomalyDetectors ?? new Dictionary<string, DP.Vision.Algorithms.IPatchAnomalyDetector>())
+            implementations[pair.Key] = new DP.Vision.OpenCv.PatchAnomalyImplementation(pair.Key, pair.Value);
+        foreach (var implementation in anomalyImplementations ?? Array.Empty<DP.Vision.Algorithms.IAnomalyImplementation>())
+            implementations.Add(implementation.ImplementationId, implementation);
+        _anomalyImplementations = new DP.Vision.Algorithms.AnomalyImplementationRegistry(implementations.Values);
         _matcher = matcher ?? new DP.Vision.Algorithms.OrdinalCharacterMatcher();
         _qualityAlgorithms = qualityAlgorithms ?? throw new ArgumentNullException(nameof(qualityAlgorithms));
         _recognizer = recognizer;
@@ -206,24 +206,22 @@ public sealed partial class OpenCvInspectionBackend
         token.ThrowIfCancellationRequested();
         if (
             confirmedText != null
-            && (
-                confirmedText.Length == 0
-                || confirmedText.Length > 128
-                || confirmedText.Any(c => c < 32 || c > 126)
-            )
+            && !DP.Vision.Algorithms.CharacterIdentity.TryTokenizeLine(confirmedText, out _)
         )
         {
             throw new ArgumentException(
-                "Confirmed line must contain 1–128 printable ASCII characters in a single horizontal line; only letters/digits become library candidates."
+                "Confirmed line must contain 1–128 printable Unicode characters in one horizontal line; letters, numbers, Chinese, punctuation and symbols may become library candidates."
             );
         }
 
         TextLineRecognition? recognition = null;
         if (confirmedText == null)
         {
-            var reader = _recognizer ?? throw new InvalidOperationException(
-                "请先加载OCR模型，或输入人工确认的单行文字后重新切割。 "
-            );
+            var reader =
+                _recognizer
+                ?? throw new InvalidOperationException(
+                    "请先加载OCR模型，或输入人工确认的单行文字后重新切割。 "
+                );
             recognition = reader.Recognize(frame, bounds, token);
         }
 
@@ -237,8 +235,7 @@ public sealed partial class OpenCvInspectionBackend
 
     /// <inheritdoc/>
     public string Name =>
-        "OpenCvSharp 4.10 / staged label inspection"
-        + (_recognizer == null ? "" : " + injected OCR");
+        "OpenCvSharp 4.10 / staged label inspection" + (_recognizer == null ? "" : " + injected OCR");
 
     /// <inheritdoc/>
     public EInspectionCapabilities Capabilities =>
@@ -249,12 +246,8 @@ public sealed partial class OpenCvInspectionBackend
         | EInspectionCapabilities.GlyphComparison
         | EInspectionCapabilities.TranslationAlignment
         | EInspectionCapabilities.BarcodeStructure
-        | (
-            _barcode == null ? EInspectionCapabilities.None : EInspectionCapabilities.BarcodeDecode
-        )
-        | (
-            _recognizer == null ? EInspectionCapabilities.None : EInspectionCapabilities.Ocr
-        );
+        | (_barcode == null ? EInspectionCapabilities.None : EInspectionCapabilities.BarcodeDecode)
+        | (_recognizer == null ? EInspectionCapabilities.None : EInspectionCapabilities.Ocr);
 
     private static PixelRect LegacyBounds(DP.Vision.RectD bounds, PixelRect scope)
     {
@@ -284,7 +277,20 @@ public sealed partial class OpenCvInspectionBackend
         );
     }
 
-    /// <summary>只释放明确转移的依赖，不保留原始图像帧。</summary>
+    /// <summary>预加载选定原生资产，复用本后台有界缓存；不会检测图像或加载未选实现。</summary>
+    /// <param name="entries">已固定修订/摘要的选定条目。</param>
+    /// <param name="token">取消令牌。</param>
+    public void PrepareAnomalyModels(IEnumerable<AnomalyModelEntry> entries, CancellationToken token = default)
+    {
+        foreach (var entry in entries)
+        {
+            token.ThrowIfCancellationRequested();
+            if (DP.Vision.Algorithms.AnomalyModelAsset.IsAsset(entry.CopyModel()))
+                using (_anomalyCache.Acquire(entry, _anomalyImplementations, token)) { }
+        }
+    }
+
+    /// <summary>释放拥有的算法与闲置异常实例，在途实例延迟至租约归还。</summary>
     public void Dispose()
     {
         if (_disposed)
@@ -300,5 +306,6 @@ public sealed partial class OpenCvInspectionBackend
 
         // 缓存由后台自己创建并拥有；已经借出的参考图租约仍然有效，由借出方各自释放。
         _referenceImages.Dispose();
+        _anomalyCache.Dispose();
     }
 }

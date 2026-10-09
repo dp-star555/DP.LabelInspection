@@ -113,7 +113,7 @@ public sealed partial class OpenCvInspectionBackend
                 return findings;
             }
 
-            if (!_owner._anomalyDetectors.TryGetValue(entry.FeatureSource, out var detector))
+            if (!_owner._anomalyImplementations.Contains(entry.FeatureSource))
             {
                 Fail(
                     "anomaly_feature_unavailable",
@@ -122,11 +122,9 @@ public sealed partial class OpenCvInspectionBackend
                 return findings;
             }
 
-            var model = _owner._anomalyCache.Model(entry);
-            if (model.FeatureSource != entry.FeatureSource)
-            {
-                throw new System.IO.InvalidDataException("Anomaly model metadata does not match its bytes.");
-            }
+            var lease = _owner._anomalyCache.Acquire(entry, _owner._anomalyImplementations);
+            _anomalyLeases.Add(lease);
+            var runtime = lease.Runtime;
 
             if (
                 entry.LocalRadius > 0
@@ -134,7 +132,7 @@ public sealed partial class OpenCvInspectionBackend
                 && (long)r.Bounds.Y + r.Bounds.Height <= _request.ImageHeight
             )
             {
-                var crop = new RegionAnomalyDetector(detector) { Margin = entry.Margin }.CropFor(
+                var crop = new RegionAnomalyDetector() { Margin = entry.Margin }.CropFor(
                     _request.ImageWidth,
                     _request.ImageHeight,
                     r.Bounds
@@ -149,7 +147,7 @@ public sealed partial class OpenCvInspectionBackend
                 }
             }
 
-            _anomaly[r.Name] = (entry, model, detector);
+            _anomaly[r.Name] = (entry, runtime);
             return findings;
         }
 
@@ -191,7 +189,7 @@ public sealed partial class OpenCvInspectionBackend
             var unavailable = entries
                 .Select(e => e.FeatureSource)
                 .Distinct()
-                .Where(f => !_owner._anomalyDetectors.ContainsKey(f))
+                .Where(f => !_owner._anomalyImplementations.Contains(f))
                 .ToArray();
             if (unavailable.Length > 0)
             {
@@ -207,27 +205,28 @@ public sealed partial class OpenCvInspectionBackend
             var models = new Dictionary<string, CharacterAnomalyModel>(StringComparer.Ordinal);
             foreach (var e in entries)
             {
-                var model = _owner._anomalyCache.Model(e);
-                if (model.FeatureSource != e.FeatureSource)
+                var lease = _owner._anomalyCache.Acquire(e, _owner._anomalyImplementations);
+                _anomalyLeases.Add(lease);
+                if (r.Anomaly!.InkLoss && !(lease.Runtime is DP.Vision.OpenCv.PatchAnomalyRuntime))
                 {
-                    throw new System.IO.InvalidDataException(
-                        "Anomaly model metadata does not match its bytes."
-                    );
+                    fail("anomaly_capability_unavailable", "所选原生模型不支持旧手工ink_loss能力，请在配方明确关闭缺墨附加检查。");
+                    return findings;
                 }
-
-                models[e.Character!] = new CharacterAnomalyModel(
-                    e,
-                    model,
-                    _owner._anomalyDetectors[e.FeatureSource]
-                );
+                models[e.Character!] = new CharacterAnomalyModel(e, lease.Runtime);
             }
 
             if (r.Field.Expected != null)
             {
-                var missing = r
-                    .Field.Expected.Where(FieldSettings.IsAlphanumeric)
-                    .Select(c => c.ToString())
-                    .Distinct()
+                if (!A.CharacterIdentity.TryTokenizeLine(r.Field.Expected, out var required))
+                {
+                    fail(
+                        "anomaly_character_identity_invalid",
+                        "B逐字符检查的预期行包含无效单字身份（空白行、控制字符或组合序列）。"
+                    );
+                    return findings;
+                }
+                var missing = required
+                    .Distinct(StringComparer.Ordinal)
                     .Where(c => !models.ContainsKey(c))
                     .ToArray();
                 if (missing.Length > 0)
@@ -267,12 +266,7 @@ public sealed partial class OpenCvInspectionBackend
                 using var source = _request.VisionSource!.Retain();
                 using var measured = r.Field.EqualCells
                     ? _owner._segmenter.EqualCells(source, r.Bounds, r.Field.Expected!)
-                    : _owner._segmenter.Segment(
-                        source,
-                        r.Bounds,
-                        evidence.Recognition?.Text ?? "",
-                        token
-                    );
+                    : _owner._segmenter.Segment(source, r.Bounds, evidence.Recognition?.Text ?? "", token);
                 segmentation = Bridge.ToLabel(measured);
             }
 
@@ -414,22 +408,17 @@ public sealed partial class OpenCvInspectionBackend
                 throw new InvalidOperationException("Anomaly model was not validated for this ROI.");
             }
 
-            var (entry, model, detector) = bound;
+            var (entry, runtime) = bound;
             using var source = _request.VisionSource!.Retain();
-            var result = new RegionAnomalyDetector(detector) { Margin = entry.Margin }.Inspect(
-                source,
-                r,
-                model,
-                RegionAnomalyDetector.DetectionOptions(entry, model),
-                token
-            );
+            var result = new RegionAnomalyDetector() { Margin = entry.Margin }.Inspect(
+                source, r, runtime, new A.AnomalyDetectionOptions(entry.Threshold, entry.MinimumArea), token);
             var findings = result.Findings.ToList();
             int anomalies = findings.Count(f => f.Verdict == EInspectionVerdict.Ng && f.Bounds.HasValue);
             findings.Add(
                 new InspectionFinding(
                     "anomaly_summary",
                     $"B异常检测：模型[{entry.Key}]（{r.Anomaly.LibraryId} r{r.Anomaly.LibraryRevision}，"
-                        + (entry.FeatureSource == A.PatchAnomalyModel.Handcrafted ? "手工特征" : "CNN特征")
+                        + entry.FeatureSource
                         + (entry.LocalRadius > 0 ? $"，位置相关±{entry.LocalRadius}px" : "，与位置无关")
                         + $"，{entry.TrainingImages}张良品）；最大得分{result.MaximumScore:F3}，阈值{result.Threshold:F3}（{result.Ratio:F2}倍），异常区域{anomalies}处。",
                     EInspectionVerdict.Ok,

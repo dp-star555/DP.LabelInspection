@@ -24,9 +24,7 @@ public sealed class CharacterPatch
     )
     {
         if (
-            character == null
-            || character.Length != 1
-            || !FieldSettings.IsAlphanumeric(character[0])
+            !DP.Vision.Algorithms.CharacterIdentity.IsGlyph(character)
             || tokenIndex < 0
             || neighborInkRemoved < 0
         )

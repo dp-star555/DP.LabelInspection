@@ -16,18 +16,24 @@ public sealed partial class OpenCvInspectionBackend
     {
         private readonly OpenCvInspectionBackend _owner;
         private readonly InspectionRequest _request;
+
         // 各ROI只写入自己名称下的条目；多个ROI可并发执行（IConcurrentRoiSession）。
         private readonly ConcurrentDictionary<string, GlyphLibrarySnapshot> _libraries =
             new ConcurrentDictionary<string, GlyphLibrarySnapshot>(StringComparer.Ordinal);
         private readonly ConcurrentDictionary<
             string,
-            (AnomalyModelEntry Entry, A.PatchAnomalyModel Model, A.IPatchAnomalyDetector Detector)
+            (AnomalyModelEntry Entry, A.ILoadedAnomalyModel Runtime)
         > _anomaly = new ConcurrentDictionary<
             string,
-            (AnomalyModelEntry, A.PatchAnomalyModel, A.IPatchAnomalyDetector)
+            (AnomalyModelEntry, A.ILoadedAnomalyModel)
         >(StringComparer.Ordinal);
-        private readonly ConcurrentDictionary<string, Dictionary<string, CharacterAnomalyModel>> _characterModels =
-            new ConcurrentDictionary<string, Dictionary<string, CharacterAnomalyModel>>(StringComparer.Ordinal);
+        private readonly ConcurrentDictionary<
+            string,
+            Dictionary<string, CharacterAnomalyModel>
+        > _characterModels = new ConcurrentDictionary<string, Dictionary<string, CharacterAnomalyModel>>(
+            StringComparer.Ordinal
+        );
+        private readonly ConcurrentBag<IDisposable> _anomalyLeases = new ConcurrentBag<IDisposable>();
         private readonly object _locateGate = new object();
         private bool _located,
             _alignmentFailed,
@@ -49,10 +55,14 @@ public sealed partial class OpenCvInspectionBackend
             return r.Kind == ERegionKind.Text
                 ? !r.Field.EqualCells && (_owner._textQuality?.RequiresRecognition ?? true)
                 : r.Kind == ERegionKind.Barcode
-                    && (r.Field.BarcodeType == EBarcodeKind.Auto
-                        || (r.Field.BarcodeType == EBarcodeKind.QrCode
-                            ? _owner._qrQuality.RequiresDecodedStructure
-                            : _owner._linearQuality.RequiresDecodedStructure));
+                    && (
+                        r.Field.BarcodeType == EBarcodeKind.Auto
+                        || (
+                            r.Field.BarcodeType == EBarcodeKind.QrCode
+                                ? _owner._qrQuality.RequiresDecodedStructure
+                                : _owner._linearQuality.RequiresDecodedStructure
+                        )
+                    );
         }
 
         /// <summary>在昂贵算法前检查配置、能力及资源，返回明确前提证据。</summary>
@@ -152,11 +162,7 @@ public sealed partial class OpenCvInspectionBackend
                 }
             }
 
-            if (
-                readRequired
-                && r.Kind == ERegionKind.Barcode
-                && _owner._barcode == null
-            )
+            if (readRequired && r.Kind == ERegionKind.Barcode && _owner._barcode == null)
             {
                 Fail("barcode_unavailable", "需要读码数据/结构，但宿主未提供读码实现。");
             }
@@ -181,7 +187,11 @@ public sealed partial class OpenCvInspectionBackend
                     var libraries = _owner._libraries;
                     string id = r.Field.LibraryId;
                     int revision = r.Field.LibraryRevision!.Value;
-                    var library = _owner._glyphLibraries.Get(id, revision, () => libraries.Load(id, revision));
+                    var library = _owner._glyphLibraries.Get(
+                        id,
+                        revision,
+                        () => libraries.Load(id, revision)
+                    );
                     if (library.Id != r.Field.LibraryId || library.Revision != r.Field.LibraryRevision)
                     {
                         throw new InvalidOperationException(
@@ -190,11 +200,14 @@ public sealed partial class OpenCvInspectionBackend
                     }
 
                     _libraries[r.Name] = library;
-                    if (r.Field.Expected != null)
+                    if (
+                        r.Field.Expected != null
+                        && A.CharacterIdentity.TryTokenizeLine(r.Field.Expected, out var identities)
+                    )
                     {
-                        foreach (var c in r.Field.Expected.Where(FieldSettings.IsAlphanumeric).Distinct())
+                        foreach (var c in identities.Distinct(StringComparer.Ordinal))
                         {
-                            if (!library.Glyphs.ContainsKey(c.ToString()))
+                            if (!library.Glyphs.ContainsKey(c))
                             {
                                 Fail("missing_template", "已知必需字符缺少参考：" + c);
                             }
@@ -251,6 +264,7 @@ public sealed partial class OpenCvInspectionBackend
             _libraries.Clear();
             _anomaly.Clear();
             _characterModels.Clear();
+            while (_anomalyLeases.TryTake(out var lease)) lease.Dispose();
         }
     }
 }

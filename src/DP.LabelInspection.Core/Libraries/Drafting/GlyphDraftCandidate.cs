@@ -16,7 +16,8 @@ public sealed class GlyphDraftCandidate
         PixelRect bounds,
         PixelSnapshot image,
         string operation,
-        string provisionalCharacter = ""
+        string provisionalCharacter = "",
+        string? regionId = null
     )
     {
         Id = id;
@@ -25,6 +26,7 @@ public sealed class GlyphDraftCandidate
         Image = image;
         Operation = operation;
         ProvisionalCharacter = provisionalCharacter;
+        RegionId = regionId;
     }
 
     /// <summary>当前图像内稳定的候选标识。</summary>
@@ -44,4 +46,7 @@ public sealed class GlyphDraftCandidate
 
     /// <summary>原始待确认字符，与人工标签编辑分开保存；纯手动裁图为空。</summary>
     public string ProvisionalCharacter { get; }
+
+    /// <summary>所属制作ROI标识；独立手工裁图为null，不能靠相交几何猜测所属区域。</summary>
+    public string? RegionId { get; }
 }

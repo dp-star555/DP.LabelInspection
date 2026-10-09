@@ -70,7 +70,7 @@ public sealed partial class FullInspectionTests
         var frame = Frame(image);
         Assert.AreEqual(
             "unsupported",
-            new CharacterSegmenter().Segment(frame, new PixelRect(0, 0, 40, 30), "字").Status
+            new CharacterSegmenter().Segment(frame, new PixelRect(0, 0, 40, 30), "字\n").Status
         );
         Assert.AreEqual(
             "uncertain",

@@ -33,6 +33,9 @@ public sealed class LabelInspectionHostOptions
     /// </summary>
     public int MaximumParallelRois { get; set; } = Math.Max(1, Math.Min(4, Environment.ProcessorCount));
 
+    /// <summary>额外厂商异常实现；只登记工厂，原生资产首次使用时加载。配置冻结为宿主快照。</summary>
+    public IList<DP.Vision.Algorithms.IAnomalyImplementation> AnomalyImplementations { get; } = new List<DP.Vision.Algorithms.IAnomalyImplementation>();
+
     /// <summary>启动时安装的种子字库JSON文件（已有同一种子时不重置用户版本）。</summary>
     public IList<string> SeedLibraryFiles { get; } = new List<string>();
 }

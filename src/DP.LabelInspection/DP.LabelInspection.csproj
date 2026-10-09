@@ -8,5 +8,6 @@
         <ProjectReference Include="../DP.LabelInspection.Core/DP.LabelInspection.Core.csproj" />
         <ProjectReference Include="../DP.LabelInspection.Adapter.Vision/DP.LabelInspection.Adapter.Vision.csproj" />
         <ProjectReference Include="../../../DP.Vision/src/DP.Vision.Winform/DP.Vision.Winform.csproj" />
+        <ProjectReference Include="../../../DP.WorkFlow/src/Platform/Desktop/ModernUI.WinForms/ModernUI.WinForms.csproj" />
     </ItemGroup>
 </Project>

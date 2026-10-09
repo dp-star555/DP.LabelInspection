@@ -9,10 +9,11 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using DP.LabelInspection.Contracts;
 using DP.LabelInspection.Core;
+using ModernUI.WinForms;
 
 namespace DP.LabelInspection;
 
-/// <summary>增量多图参考工作台，支持显式手动分割和复核后暂存。</summary>
+/// <summary>增量多图、多ROI参考工作台，支持单行区域隔离、手动分割和复核后暂存。</summary>
 public sealed class GlyphQuickBuilderControl : UserControl
 {
     private readonly GlyphDraftSession _draft = new GlyphDraftSession();
@@ -23,30 +24,31 @@ public sealed class GlyphQuickBuilderControl : UserControl
     };
     private readonly DataGridView _grid = Table(false),
         _pending = Table(true);
-    private readonly ComboBox _libraries = new ComboBox
+    private readonly ModernSelect _libraries = new ModernSelect { Width = 230 };
+    private readonly ModernSelect _mode = new ModernSelect { Width = 190 };
+    private readonly ModernInput _text = new ModernInput { Width = 200, MaxLength = 256 };
+    private readonly ModernSelect _regionsBox = new ModernSelect { Width = 240 };
+    private readonly ModernSelect _binarization = new ModernSelect { Width = 130 };
+    private readonly FlowLayoutPanel _regionTools = Bar();
+    private readonly ModernButton _extractAll = new ModernButton
     {
-        Width = 230,
-        DropDownStyle = ComboBoxStyle.DropDownList,
+        Text = "提取全部ROI",
+        AutoSize = true,
+        Enabled = false,
     };
-    private readonly ComboBox _mode = new ComboBox
-    {
-        Width = 190,
-        DropDownStyle = ComboBoxStyle.DropDownList,
-    };
-    private readonly TextBox _text = new TextBox { Width = 200, MaxLength = 128 };
-    private readonly Button _recognize = new Button
+    private readonly ModernButton _recognize = new ModernButton
         {
-            Text = "识别并分割",
+            Text = "提取当前ROI（OCR）",
             AutoSize = true,
             Enabled = false,
         },
-        _segment = new Button
+        _segment = new ModernButton
         {
             Text = "按文字重分割",
             AutoSize = true,
             Enabled = false,
         },
-        _cancelButton = new Button
+        _cancelButton = new ModernButton
         {
             Text = "取消提取",
             AutoSize = true,
@@ -57,18 +59,15 @@ public sealed class GlyphQuickBuilderControl : UserControl
         Dock = DockStyle.Bottom,
         Height = 58,
         Padding = new Padding(8),
-        BackColor = Color.FromArgb(238, 244, 252),
+        BackColor = ModernTheme.Dark.Container,
         Text = "① 新建/选择字库 → ② 从任意多张图补字 → ③ 核对后暂存 → ④ 保存清单。不要求一张图包含所有字符。",
     };
-    private readonly TextBox _coverage = new TextBox
+    private readonly ModernTextArea _coverage = new ModernTextArea
     {
         Dock = DockStyle.Top,
         Height = 112,
         ReadOnly = true,
-        Multiline = true,
         ScrollBars = ScrollBars.Vertical,
-        BorderStyle = BorderStyle.None,
-        BackColor = SystemColors.Control,
     };
     private readonly Label _sourceName = new Label { AutoSize = true, Text = "尚未导入图片" };
     private readonly Label _pendingTitle = new Label
@@ -78,7 +77,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
         Text = "④ 待入库清单（0） · 换图保留",
         Padding = new Padding(4),
     };
-    private readonly ListBox _saved = new ListBox { Dock = DockStyle.Top, Height = 90 };
+    private readonly ModernListBox _saved = new ModernListBox { Dock = DockStyle.Top, Height = 90 };
     private readonly PictureBox _savedPreview = new PictureBox
     {
         Dock = DockStyle.Top,
@@ -86,8 +85,13 @@ public sealed class GlyphQuickBuilderControl : UserControl
         SizeMode = PictureBoxSizeMode.Zoom,
         BackColor = Color.White,
     };
-    private readonly CheckBox _reviewed = new CheckBox { Text = "已核对所选字符和完整字形", AutoSize = true };
-    private readonly CheckBox _replace = new CheckBox { Text = "本次允许替换库中已有字符", AutoSize = true };
+    private readonly Label _extractionHint = new Label { AutoSize = true };
+    private readonly ModernCheckbox _replace = new ModernCheckbox
+    {
+        Text = "本次允许替换库中已有字符",
+        Width = 280,
+        Height = 34,
+    };
     private readonly FlowLayoutPanel _tools = Bar(),
         _editTools = Bar(),
         _reviewTools = Bar();
@@ -98,7 +102,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
     private IGlyphCandidateService? _extractor;
     private GlyphLibrarySnapshot? _library;
     private PixelSnapshot? _image;
-    private PixelRect? _roi;
+    private string? _selectedRegionId;
     private GlyphCandidateExtraction? _result;
     private string _currentName = "图片";
     private CancellationTokenSource? _cancel;
@@ -135,20 +139,59 @@ public sealed class GlyphQuickBuilderControl : UserControl
         Button(_tools, "刷新字库", () => Reload());
         Button(_tools, "② 导入 / 下一张图", ImportImage);
         _tools.Controls.Add(_sourceName);
+        _binarization.Items.AddRange(new object[] { "otsu", "fixed", "midpoint" });
+        _binarization.SelectedIndex = 0;
+        _tools.Controls.Add(new Label { Text = "参考二值化", AutoSize = true });
+        _tools.Controls.Add(_binarization);
+        _regionTools.Controls.Add(new Label { Text = "本图文字ROI", AutoSize = true });
+        _regionTools.Controls.Add(_regionsBox);
+        Button(_regionTools, "框下一行", () => _mode.SelectedIndex = 0);
+        Button(_regionTools, "调整文字ROI", () => _mode.SelectedIndex = 4);
+        Button(_regionTools, "精确改ROI", EditRegionBounds);
+        Button(_regionTools, "删除当前ROI", () => RemoveCurrentRegion());
+        Button(
+            _regionTools,
+            "清空文字ROI",
+            () =>
+            {
+                if (
+                    ConfirmReplacing(
+                        _draft.Candidates.Any(c => c.RegionId != null),
+                        "清空本图全部文字ROI及其未暂存候选？独立手工裁图和右侧清单保留。"
+                    )
+                )
+                {
+                    _draft.ClearRegions();
+                    RefreshCandidates();
+                }
+            }
+        );
+        _regionsBox.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_syncing && _regionsBox.SelectedItem is GlyphDraftRegion region)
+                TryUi(() => SelectRegion(region.Id));
+        };
         var recognition = Bar();
         _recognize.Click += async (_, __) => await RunFromUiAsync(false);
         recognition.Controls.Add(_recognize);
-        recognition.Controls.Add(new Label { Text = "重分割用文字（不自动改表格）", AutoSize = true });
+        recognition.Controls.Add(new Label { Text = "行文字纠错（可选）", AutoSize = true });
         recognition.Controls.Add(_text);
         _segment.Click += async (_, __) => await RunFromUiAsync(true);
         recognition.Controls.Add(_segment);
+        _extractAll.Click += async (_, _) => await RunAllFromUiAsync();
+        recognition.Controls.Add(_extractAll);
         _cancelButton.Click += (_, __) => _cancel?.Cancel();
         recognition.Controls.Add(_cancelButton);
-        recognition.Controls.Add(
-            new Label { Text = "自动失败也可直接补画单字框；滚轮缩放 / 中键平移", AutoSize = true }
-        );
+        recognition.Controls.Add(_extractionHint);
         _mode.Items.AddRange(
-            new object[] { "框选文字行", "手工补画字块", "调整候选框", "手动切开（点切线）" }
+            new object[]
+            {
+                "框选文字行（可多ROI）",
+                "手工补画字块",
+                "调整候选框",
+                "手动切开（点切线）",
+                "调整文字行ROI",
+            }
         );
         _mode.SelectedIndex = 0;
         _editTools.Controls.Add(_mode);
@@ -207,7 +250,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
             {
                 Name = "Character",
                 HeaderText = "填写单字",
-                MaxInputLength = 1,
+                MaxInputLength = 2,
                 FillWeight = 50,
             }
         );
@@ -215,7 +258,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
             new DataGridViewTextBoxColumn
             {
                 Name = "Details",
-                HeaderText = "入库状态 / 分割方式 / 原图坐标",
+                HeaderText = "来源ROI / 入库状态 / 分割方式 / 原图坐标",
                 ReadOnly = true,
                 FillWeight = 210,
             }
@@ -233,7 +276,6 @@ public sealed class GlyphQuickBuilderControl : UserControl
                 }
             }
         );
-        _reviewTools.Controls.Add(_reviewed);
         Button(_reviewTools, "③ 加入待入库清单 →", () => StageSelected());
         _pending.Columns.Add(
             new DataGridViewImageColumn
@@ -256,7 +298,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
             new DataGridViewTextBoxColumn
             {
                 Name = "Source",
-                HeaderText = "来源图",
+                HeaderText = "来源图 / ROI",
                 FillWeight = 100,
             }
         );
@@ -301,6 +343,15 @@ public sealed class GlyphQuickBuilderControl : UserControl
         pendingTools.Controls.Add(_replace);
         Button(pendingTools, "④ 保存清单到字库", () => SavePending());
         var right = new Panel { Dock = DockStyle.Fill };
+        var savedTools = Bar();
+        Button(savedTools, "编辑选中单字", () =>
+        {
+            if (_saved.SelectedItem is not string character)
+                throw new InvalidOperationException("请在已收录列表选择单字。");
+            if (ConfirmReplacing(_draft.Candidates.Count > 0,
+                "载入该单字替换当前图候选？待入库清单仍保留。"))
+                EditStoredGlyph(character);
+        });
         var savedTitle = new Label
         {
             Dock = DockStyle.Top,
@@ -312,6 +363,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
         right.Controls.Add(pendingTools);
         right.Controls.Add(_pendingTitle);
         right.Controls.Add(_savedPreview);
+        right.Controls.Add(savedTools);
         right.Controls.Add(_saved);
         right.Controls.Add(_coverage);
         right.Controls.Add(savedTitle);
@@ -319,21 +371,26 @@ public sealed class GlyphQuickBuilderControl : UserControl
         imagePanel.Controls.Add(_viewer);
         imagePanel.Controls.Add(_editTools);
         imagePanel.Controls.Add(recognition);
+        imagePanel.Controls.Add(_regionTools);
         var candidatesPanel = new Panel { Dock = DockStyle.Fill };
         candidatesPanel.Controls.Add(_grid);
         candidatesPanel.Controls.Add(_reviewTools);
-        var vertical = new SplitContainer
+        var vertical = new ModernSplitter
         {
             Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.None,
+            InitialPanel2Size = 0,
             Orientation = Orientation.Horizontal,
             Size = new Size(850, 720),
             SplitterDistance = 405,
         };
         vertical.Panel1.Controls.Add(imagePanel);
         vertical.Panel2.Controls.Add(candidatesPanel);
-        var columns = new SplitContainer
+        var columns = new ModernSplitter
         {
             Dock = DockStyle.Fill,
+            FixedPanel = FixedPanel.None,
+            InitialPanel2Size = 0,
             Size = new Size(1220, 780),
             SplitterDistance = 850,
         };
@@ -342,6 +399,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
         Controls.Add(columns);
         Controls.Add(_status);
         Controls.Add(_tools);
+        InspectionUiStyle.Apply(this);
         _mode.SelectedIndexChanged += (_, __) =>
         {
             UpdateMode();
@@ -352,11 +410,11 @@ public sealed class GlyphQuickBuilderControl : UserControl
                     ? "在原图拖框补充一个字；也可先框一对粘连字，再切开。自动分割为0也能使用。"
                 : _mode.SelectedIndex == 2
                     ? "点击候选框后拖动边/角调整，或用“精确改框”。调整从原图重新裁取，须重新核对邻字墨迹。"
-                : "在图上拖框选一行，再识别/分割。重新框行不会清除右侧清单。"
+                : _mode.SelectedIndex == 4 ? "拖动文字行ROI的边界；只更新该ROI，其他ROI和清单保留。"
+                : "在图上连续框多行文字；每个ROI独立保留文字和候选。可逐条或提取全部ROI。"
             );
         };
         _libraries.SelectedIndexChanged += (_, __) => TryUi(LibraryChanged);
-        _replace.CheckedChanged += (_, __) => _reviewed.Checked = false;
         _saved.SelectedIndexChanged += (_, __) =>
         {
             var old = _savedPreview.Image;
@@ -366,7 +424,14 @@ public sealed class GlyphQuickBuilderControl : UserControl
                     : null;
             old?.Dispose();
         };
-        _text.TextChanged += (_, __) => _reviewed.Checked = false;
+        _text.TextChanged += (_, __) =>
+        {
+            if (!_syncing && !IsBusy && SelectedRegion is { } region)
+            {
+                _draft.SetRegionText(region.Id, _text.Text);
+                RefreshRegions(region.Id, updateText: false);
+            }
+        };
         _grid.CurrentCellDirtyStateChanged += (_, __) =>
         {
             if (_grid.IsCurrentCellDirty)
@@ -381,7 +446,6 @@ public sealed class GlyphQuickBuilderControl : UserControl
                 return;
             }
 
-            _reviewed.Checked = false;
             var row = _grid.Rows[e.RowIndex];
             if (_grid.Columns[e.ColumnIndex].Name == "Character" && row.Tag is GlyphDraftCandidate candidate)
             {
@@ -408,6 +472,8 @@ public sealed class GlyphQuickBuilderControl : UserControl
         {
             if (!_syncing && _grid.CurrentRow?.Tag is GlyphDraftCandidate candidate)
             {
+                if (candidate.RegionId != null && candidate.RegionId != _selectedRegionId)
+                    RefreshRegions(candidate.RegionId);
                 _viewer.FocusRegion(candidate.Bounds);
             }
         };
@@ -437,13 +503,46 @@ public sealed class GlyphQuickBuilderControl : UserControl
         _viewer.RegionEdited += (_, e) =>
             TryUi(() =>
             {
-                if (e.Index >= 0 && e.Index < _draft.Candidates.Count)
+                if (_mode.SelectedIndex == 4 && e.Index >= 0 && e.Index < _draft.Regions.Count)
+                {
+                    var region = _draft.Regions[e.Index];
+                    try
+                    {
+                        if (
+                            ConfirmReplacing(
+                                _draft.Candidates.Any(c => c.RegionId == region.Id),
+                                "调整该ROI将清除它的旧候选；其他ROI和已暂存清单保留。继续？"
+                            )
+                        )
+                            _draft.SetRegionBounds(region.Id, e.Bounds);
+                    }
+                    finally
+                    {
+                        RefreshCandidates();
+                    }
+                }
+                else if (_mode.SelectedIndex == 2 && e.Index >= 0 && e.Index < _draft.Candidates.Count)
                 {
                     string id = _draft.Candidates[e.Index].Id;
                     _draft.Resize(id, e.Bounds);
                     RefreshCandidates(id);
                 }
             });
+        _viewer.SelectedRegionChanged += (_, _) =>
+        {
+            if (
+                !_syncing
+                && !IsBusy
+                && _mode.SelectedIndex == 4
+                && _viewer.SelectedRegionIndex >= 0
+                && _viewer.SelectedRegionIndex < _draft.Regions.Count
+            )
+            {
+                var region = _draft.Regions[_viewer.SelectedRegionIndex];
+                if (region.Id != _selectedRegionId)
+                    TryUi(() => SelectRegion(region.Id));
+            }
+        };
         _viewer.MouseDown += (_, e) =>
         {
             if (
@@ -517,6 +616,31 @@ public sealed class GlyphQuickBuilderControl : UserControl
     /// <summary>最近的原始自动结果；手动编辑保存在候选表，不修改此证据快照。</summary>
     public GlyphCandidateExtraction? LastExtraction => _result;
 
+    /// <summary>当前图已登记的独立文字行ROI，不含已暂存的其他来源图区域。</summary>
+    public IReadOnlyList<GlyphDraftRegion> Regions => _draft.Regions;
+
+    /// <summary>当前选中的制作区域标识，无区域时为null。</summary>
+    public string? SelectedRegionId => _selectedRegionId;
+
+    private GlyphDraftRegion? SelectedRegion => _draft.Regions.FirstOrDefault(r => r.Id == _selectedRegionId);
+
+    /// <summary>当前制库目标的类别标识，无字库时为空。</summary>
+    public string? SelectedLibraryId => (_libraries.SelectedItem as GlyphLibraryInfo)?.Id;
+
+    /// <summary>刷新最新字库并选择目标，不清除当前图候选或待入库清单。</summary>
+    /// <param name="selectedLibrary">要选择的类别标识；null保留当前目标。</param>
+    public void RefreshLibraries(string? selectedLibrary = null)
+    {
+        Idle();
+        if (_draft.PendingLibraryId != null && selectedLibrary != null
+            && selectedLibrary != _draft.PendingLibraryId)
+            throw new InvalidOperationException("清单属于另一字库，请先保存或清空，再切换字库。");
+        string? previousLibrary = SelectedLibraryId;
+        bool replace = _replace.Checked;
+        Reload(selectedLibrary);
+        if (SelectedLibraryId == previousLibrary) _replace.Checked = replace;
+    }
+
     /// <summary>当前可编辑候选表；切换图像不清除独立暂存列表。</summary>
     public DataGridView Candidates => _grid;
 
@@ -551,7 +675,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
 
         _manager = manager ?? throw new ArgumentNullException(nameof(manager));
         _extractor = extractor;
-        _recognize.Enabled = _segment.Enabled = extractor != null;
+        SetBusy(false);
         Reload(selectedLibrary);
     }
 
@@ -560,6 +684,33 @@ public sealed class GlyphQuickBuilderControl : UserControl
     public void SetImage(PixelSnapshot image)
     {
         LoadImage(image, "图片");
+    }
+
+    /// <summary>把检测结果单字作为未确认的制库草稿；不自动暂存或发布。</summary>
+    /// <param name="image">独立候选图块。</param>
+    /// <param name="character">候选标签，仍需用户核对。</param>
+    public void SetCandidate(PixelSnapshot image, string character)
+    {
+        LoadImage(image, "检测单字候选");
+        AddManualCandidate(new PixelRect(0, 0, image.Width, image.Height));
+        _draft.SetLabel(Selected().Id, character);
+        RefreshCandidates(Selected().Id);
+        Say("已载入单字候选。请核对标签和外观、勾选后加入清单，再保存新版本。");
+    }
+
+    /// <summary>把当前字库已有单字载入制库草稿；保留二值化模式，通过显式暂存/保存发布替换修订。</summary>
+    /// <param name="character">当前目标字库中要编辑的单字身份。</param>
+    public void EditStoredGlyph(string character)
+    {
+        Idle();
+        var head = Head();
+        var library = Manager.Load(head.Id, head.Revision);
+        if (!library.Glyphs.TryGetValue(character, out var glyph))
+            throw new ArgumentException("当前字库中没有该单字。", nameof(character));
+        SetCandidate(glyph.Image, glyph.Character);
+        _binarization.SelectedItem = glyph.Binarization;
+        _replace.Checked = true;
+        Say("已载入库内单字供编辑，尚未修改字库。核对后加入清单并保存新修订。");
     }
 
     /// <summary>加载源图及简短显示名；来源记录保留名称但不保留目录路径。</summary>
@@ -576,10 +727,11 @@ public sealed class GlyphQuickBuilderControl : UserControl
         _draft.LoadImage(image, name);
         _image = image;
         _currentName = name;
-        _roi = null;
+        _selectedRegionId = null;
         _result = null;
         _text.Clear();
         _sourceName.Text = name;
+        _binarization.SelectedItem = "otsu";
         _viewer.SetImage(image);
         _mode.SelectedIndex = 0;
         RefreshCandidates();
@@ -588,7 +740,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
         );
     }
 
-    /// <summary>选择新的单行ROI，不丢弃暂存图块。</summary>
+    /// <summary>增加并选择单行ROI；同图其他ROI候选和跨图暂存均保留，相同范围选回已有ROI。</summary>
     /// <param name = "bounds">新单行区域的原图整数范围。</param>
     public void SetRegion(PixelRect bounds)
     {
@@ -598,11 +750,14 @@ public sealed class GlyphQuickBuilderControl : UserControl
             throw new ArgumentException("ROI超出原图。");
         }
 
-        _roi = bounds;
-        _result = null;
-        _draft.ClearCandidates();
-        RefreshCandidates();
-        Say("文字行已框选。可识别分割；失败可直接切换“手工补画字块”。");
+        var region = _draft.AddRegion(bounds);
+        RefreshRegions(region.Id);
+        Say(
+            region.Name
+                + "已框选，本图共"
+                + Regions.Count
+                + "个ROI。可继续框其他行、提取当前ROI或全部ROI，已有候选保留。"
+        );
     }
 
     /// <summary>无论OCR是否可用，都可添加用户绘制的裁剪；初始无标签且未勾选。</summary>
@@ -615,7 +770,16 @@ public sealed class GlyphQuickBuilderControl : UserControl
             _mode.SelectedIndex = 1;
         }
 
-        string id = _draft.AddManual(bounds);
+        var region = SelectedRegion;
+        string? owner =
+            region != null
+            && bounds.X >= region.Bounds.X
+            && bounds.Y >= region.Bounds.Y
+            && (long)bounds.X + bounds.Width <= (long)region.Bounds.X + region.Bounds.Width
+            && (long)bounds.Y + bounds.Height <= (long)region.Bounds.Y + region.Bounds.Height
+                ? region.Id
+                : null;
+        string id = _draft.AddManual(bounds, "", owner);
         RefreshCandidates(id);
         Say("已补画字块。请填写单字；若含两个粘连字，切换“手动切开”后点击分界。");
     }
@@ -631,69 +795,142 @@ public sealed class GlyphQuickBuilderControl : UserControl
         Say("已手动分为两块（不擦墨迹）。请分别填写字符并核对切线；可撤销重切。");
     }
 
-    /// <summary>提取单行；明确确认的文本不静默回写为OCR身份。</summary>
-    /// <param name = "confirmedText">可选人工确认文本，null采用OCR身份，不改写原始OCR证据。</param>
+    /// <summary>提取选中ROI，成功时仅替换该ROI候选，失败/取消不清掉已有候选。</summary>
+    /// <param name="confirmedText">明确人工文字；null使用OCR，不改写原始读数。</param>
     public Task ExtractAsync(string? confirmedText = null)
     {
         Idle();
-        if (_image == null || !_roi.HasValue)
-        {
-            throw new InvalidOperationException("先导入图片并框选一行文字；不使用OCR时可直接手工补画。");
-        }
+        var region = SelectedRegion ?? throw new InvalidOperationException("先导入图片并框选/选择一行文字。");
+        return StartExtraction(new[] { region }, false, confirmedText);
+    }
 
-        if (_extractor == null)
-        {
-            throw new InvalidOperationException(
-                "未连接自动提取服务；可直接用“手工补画字块”和“手动切开”制库。"
-            );
-        }
+    /// <summary>按本图ROI顺序串行提取；各ROI有人工文字时采用人工文字，否则OCR。失败继续下一ROI，取消保留已完成及原有结果。</summary>
+    public Task ExtractAllAsync()
+    {
+        Idle();
+        if (_draft.Regions.Count == 0)
+            throw new InvalidOperationException("请先在当前图框选文字行ROI。");
+        return StartExtraction(_draft.Regions.ToArray(), true, null);
+    }
 
-        _draft.ClearCandidates();
-        _result = null;
-        RefreshCandidates();
+    /// <summary>选回已存在的ROI，恢复该ROI人工文字及最近提取证据，不清候选。</summary>
+    /// <param name="id">当前图中的ROI标识。</param>
+    public void SelectRegion(string id)
+    {
+        Idle();
+        if (!_draft.Regions.Any(r => r.Id == id))
+            throw new ArgumentException("请选择当前图中的ROI。");
+        RefreshRegions(id);
+    }
+
+    private Task StartExtraction(IReadOnlyList<GlyphDraftRegion> jobs, bool all, string? text)
+    {
+        if (_image == null || _extractor == null)
+            throw new InvalidOperationException("请先载入图片并连接提取服务；无服务时仍可手工补画字块。");
+        _grid.EndEdit();
         _cancel = new CancellationTokenSource();
         SetBusy(true);
-        Say("正在识别/分割，可取消；待入库清单不变。");
-        _work = ExtractCoreAsync(_image, _roi.Value, confirmedText, _cancel.Token);
+        _work = ExtractCoreAsync(_image, jobs, all, text, _cancel.Token);
         return _work;
     }
 
     private async Task ExtractCoreAsync(
         PixelSnapshot image,
-        PixelRect roi,
-        string? text,
+        IReadOnlyList<GlyphDraftRegion> jobs,
+        bool all,
+        string? singleText,
         CancellationToken token
     )
     {
+        int completed = 0,
+            failed = 0;
         try
         {
             using var source = DP.LabelInspection.Adapter.Vision.AlgorithmContractAdapter.ToVision(image);
-            var result = await _extractor!.ExtractGlyphCandidatesAsync(source, roi, text, token);
-            token.ThrowIfCancellationRequested();
-            _draft.ApplyExtraction(result.Segmentation);
-            _result = result;
-            _text.Text = result.ConfirmedText ?? result.Recognition?.Text ?? "";
-            _mode.SelectedIndex = result.Segmentation.Characters.Count > 0 ? 2 : 1;
-            RefreshCandidates();
-            _viewer.FitToWindow();
-            Say(
-                (result.Recognition == null ? "人工文字（未执行OCR）" : "原始OCR：" + result.Recognition.Text)
-                    + "；"
-                    + result.Segmentation.Reason
-                    + "；"
-                    + _draft.Candidates.Count
-                    + "个候选。缺字可补框，粘连可手动切开。",
-                result.Segmentation.Characters.Count == 0
-            );
+            foreach (var region in jobs)
+            {
+                token.ThrowIfCancellationRequested();
+                Say(
+                    "正在提取 "
+                        + region.Name
+                        + "（"
+                        + (completed + failed + 1)
+                        + "/"
+                        + jobs.Count
+                        + "）；其他ROI候选与清单保留，可取消。"
+                );
+                try
+                {
+                    var result = await _extractor!.ExtractGlyphCandidatesAsync(
+                        source,
+                        region.Bounds,
+                        all ? region.ConfirmedText : singleText,
+                        token
+                    );
+                    token.ThrowIfCancellationRequested();
+                    _draft.ApplyRegionExtraction(region.Id, result);
+                    if (result.Segmentation.Characters.Count == 0)
+                        failed++;
+                    else
+                        completed++;
+                    if (_selectedRegionId == region.Id)
+                        _result = result;
+                    _mode.SelectedIndex = _draft.Candidates.Count > 0 ? 2 : 1;
+                    RefreshCandidates();
+                    if (!all)
+                        Say(
+                            region.Name
+                                + " · "
+                                + (
+                                    result.Recognition == null
+                                        ? "人工文字"
+                                        : "OCR：" + result.Recognition.Text
+                                )
+                                + "；"
+                                + result.Segmentation.Reason
+                                + "；当前图累计"
+                                + _draft.Candidates.Count
+                                + "个候选。其他ROI/清单保留。",
+                            result.Segmentation.Characters.Count == 0
+                        );
+                }
+                catch (OperationCanceledException)
+                {
+                    _draft.RecordRegionFailure(region.Id, "已取消；原候选保留。");
+                    if (!IsDisposed)
+                        RefreshRegions();
+                    throw;
+                }
+                catch (Exception error)
+                {
+                    _draft.RecordRegionFailure(region.Id, error.Message);
+                    failed++;
+                    if (!IsDisposed)
+                        RefreshRegions();
+                    if (!all)
+                        throw;
+                }
+            }
+            if (all)
+                Say(
+                    "本图"
+                        + jobs.Count
+                        + "个ROI提取结束：成功"
+                        + completed
+                        + "，失败/无候选"
+                        + failed
+                        + "。累计"
+                        + _draft.Candidates.Count
+                        + "个候选；失败区域的旧候选与清单保留。",
+                    failed > 0
+                );
         }
         finally
         {
             _cancel?.Dispose();
             _cancel = null;
             if (!IsDisposed)
-            {
                 SetBusy(false);
-            }
         }
     }
 
@@ -702,10 +939,10 @@ public sealed class GlyphQuickBuilderControl : UserControl
         try
         {
             if (
-                _draft.Candidates.Count > 0
+                _draft.Candidates.Any(c => c.RegionId == _selectedRegionId)
                 && MessageBox.Show(
                     this,
-                    "重新分割会替换当前图的手工调整，右侧清单不变。继续？",
+                    "重新提取只替换当前ROI的候选和手工调整，其他ROI及右侧清单不变。继续？",
                     "重新分割",
                     MessageBoxButtons.YesNo
                 ) != DialogResult.Yes
@@ -718,7 +955,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
         }
         catch (OperationCanceledException)
         {
-            Say("已取消；清单未改变。");
+            Say("已取消；已完成ROI、原候选和清单保留。");
         }
         catch (Exception error)
         {
@@ -726,18 +963,11 @@ public sealed class GlyphQuickBuilderControl : UserControl
         }
     }
 
-    /// <summary>暂存勾选且明确复核的行；报告并跳过已有或待保存的重复字符，除非明确允许替换已有参考。</summary>
+    /// <summary>暂存勾选行的当前标签与像素；识别后可直接编辑再加入，不要求额外字符确认。默认跳过已有或待保存的重复字符。</summary>
     public void StageSelected()
     {
         Idle();
         _grid.EndEdit();
-        if (!_reviewed.Checked)
-        {
-            throw new InvalidOperationException(
-                "请核对图块与字符，并勾选“已核对所选字符和完整字形”，再加入清单。"
-            );
-        }
-
         var head = Head();
         if (_library == null)
         {
@@ -750,12 +980,18 @@ public sealed class GlyphQuickBuilderControl : UserControl
             .Select(r => ((GlyphDraftCandidate)r.Tag!).Id)
             .ToArray();
         int before = PendingCount;
-        var skipped = _draft.Stage(head.Id, selected, _library!.Glyphs.Keys, _replace.Checked);
+        var skipped = _draft.Stage(head.Id, selected, _library!.Glyphs.Keys,
+            (string)_binarization.SelectedItem!, _replace.Checked);
         foreach (var item in _draft.Pending)
         {
             if (!_pendingNames.ContainsKey(item.Character))
             {
-                _pendingNames[item.Character] = _currentName;
+                var candidate = _draft.Candidates.FirstOrDefault(c =>
+                    c.Label == item.Character && selected.Contains(c.Id)
+                );
+                var region = _draft.Regions.FirstOrDefault(r => r.Id == candidate?.RegionId);
+                _pendingNames[item.Character] =
+                    _currentName + (region == null ? " · 手工裁图" : " · " + region.Name);
             }
         }
 
@@ -764,7 +1000,6 @@ public sealed class GlyphQuickBuilderControl : UserControl
             row.Cells["Use"].Value = false;
         }
 
-        _reviewed.Checked = false;
         RefreshPending();
         UpdateRowDetails();
         Say(
@@ -892,6 +1127,101 @@ public sealed class GlyphQuickBuilderControl : UserControl
         LoadImage(DrawingImageConverter.FromImage(image), Path.GetFileName(dialog.FileName));
     }
 
+    private void RefreshRegions(string? selectedId = null, bool updateText = true)
+    {
+        selectedId = selectedId ?? _selectedRegionId;
+        var selected =
+            _draft.Regions.FirstOrDefault(r => r.Id == selectedId) ?? _draft.Regions.FirstOrDefault();
+        bool syncing = _syncing;
+        _syncing = true;
+        try
+        {
+            _regionsBox.Items.Clear();
+            foreach (var region in _draft.Regions)
+                _regionsBox.Items.Add(region);
+            _regionsBox.SelectedItem = selected;
+            _selectedRegionId = selected?.Id;
+            _result = selected?.Extraction;
+            if (updateText)
+                _text.Text = selected?.DisplayText ?? "";
+        }
+        finally
+        {
+            _syncing = syncing;
+        }
+        UpdateViewer();
+    }
+
+    private bool ConfirmReplacing(bool hasCandidates, string message) =>
+        !hasCandidates
+        || MessageBox.Show(this, message, "制作ROI调整", MessageBoxButtons.YesNo, MessageBoxIcon.Warning)
+            == DialogResult.Yes;
+
+    private void RemoveCurrentRegion()
+    {
+        var region = SelectedRegion ?? throw new InvalidOperationException("请选择本图文字ROI。");
+        if (
+            !ConfirmReplacing(
+                _draft.Candidates.Any(c => c.RegionId == region.Id),
+                "删除" + region.Name + "及其未暂存候选？其他ROI和右侧清单保留。"
+            )
+        )
+            return;
+        _draft.RemoveRegion(region.Id);
+        RefreshCandidates();
+    }
+
+    private void EditRegionBounds()
+    {
+        var region = SelectedRegion ?? throw new InvalidOperationException("请选择本图文字ROI。");
+        var b = region.Bounds;
+        string? value = EditorDialogs.Ask(
+            region.Name + "原图坐标：X,Y,宽,高",
+            $"{b.X},{b.Y},{b.Width},{b.Height}"
+        );
+        if (value == null)
+            return;
+        var parts = value
+            .Split(',', '，')
+            .Select(s => int.Parse(s.Trim(), CultureInfo.InvariantCulture))
+            .ToArray();
+        if (parts.Length != 4)
+            throw new ArgumentException("请输入4个整数。");
+        if (
+            !ConfirmReplacing(
+                _draft.Candidates.Any(c => c.RegionId == region.Id),
+                "调整该ROI将清除它的旧候选；其他ROI和已暂存清单保留。继续？"
+            )
+        )
+            return;
+        _draft.SetRegionBounds(region.Id, new PixelRect(parts[0], parts[1], parts[2], parts[3]));
+        RefreshCandidates();
+    }
+
+    private async Task RunAllFromUiAsync()
+    {
+        try
+        {
+            Idle();
+            if (
+                !ConfirmReplacing(
+                    _draft.Candidates.Any(c => c.RegionId != null),
+                    "批量重提取将逐ROI替换成功区域的旧候选/手工调整；失败区域、独立裁图及清单保留。继续？"
+                )
+            )
+                return;
+            await ExtractAllAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            Say("已取消；已完成ROI、原候选和清单保留。");
+        }
+        catch (Exception error)
+        {
+            Say(error.Message, true);
+        }
+    }
+
     private GlyphDraftCandidate Selected()
     {
         return _grid.CurrentRow?.Tag as GlyphDraftCandidate
@@ -932,7 +1262,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
         {
             var c = (GlyphDraftCandidate)row.Tag!;
             row.Cells["Use"].Value =
-                c.Label.Length == 1
+                DP.Vision.Algorithms.CharacterIdentity.IsGlyph(c.Label)
                 && c.Image.Width >= 4
                 && c.Image.Height >= 4
                 && chosen.Add(c.Label)
@@ -943,6 +1273,14 @@ public sealed class GlyphQuickBuilderControl : UserControl
 
     private void RefreshCandidates(string? selectId = null)
     {
+        var chosen = new HashSet<string>(
+            _grid
+                .Rows.Cast<DataGridViewRow>()
+                .Where(r => r.Cells["Use"].Value is bool used && used && r.Tag is GlyphDraftCandidate)
+                .Select(r => ((GlyphDraftCandidate)r.Tag!).Id),
+            StringComparer.Ordinal
+        );
+        selectId = selectId ?? (_grid.CurrentRow?.Tag as GlyphDraftCandidate)?.Id;
         _syncing = true;
         try
         {
@@ -951,7 +1289,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
             foreach (var candidate in _draft.Candidates)
             {
                 int i = _grid.Rows.Add(
-                    false,
+                    chosen.Contains(candidate.Id),
                     DrawingImageConverter.ToBitmap(candidate.Image),
                     candidate.Label,
                     ""
@@ -976,7 +1314,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
             _syncing = false;
         }
 
-        _reviewed.Checked = false;
+        RefreshRegions();
         UpdateRowDetails();
         UpdateViewer();
     }
@@ -991,8 +1329,15 @@ public sealed class GlyphQuickBuilderControl : UserControl
                 : _draft.Pending.Any(p => p.Character == c.Label) ? "已暂存（调整不改清单）"
                 : _library?.Glyphs.ContainsKey(c.Label) == true ? "库中已有（默认跳过）"
                 : "库中缺字";
+            var region = _draft.Regions.FirstOrDefault(r => r.Id == c.RegionId);
             row.Cells["Details"].Value =
-                state
+                (
+                    region == null
+                        ? "独立手工裁图"
+                        : region.Name + (region.Error == null ? "" : "（提取失败，保留旧候选）")
+                )
+                + " · "
+                + state
                 + " · "
                 + (
                     c.Operation.StartsWith("manual_", StringComparison.Ordinal) ? "人工调整需复核"
@@ -1002,36 +1347,52 @@ public sealed class GlyphQuickBuilderControl : UserControl
                 + " · "
                 + c.Bounds;
         }
+
+        UpdateCoverageText();
     }
 
     private void UpdateViewer()
     {
-        _viewer.SetCharacters(Array.Empty<CharacterPatch>());
-        var boxes = _draft
-            .Candidates.Select(
-                (c, i) =>
-                    new InspectionRegion(
-                        (i + 1) + " · " + (c.Label.Length == 0 ? "未标字" : c.Label),
-                        ERegionKind.Text,
-                        c.Bounds
+        bool syncing = _syncing;
+        _syncing = true;
+        try
+        {
+            _viewer.SetCharacters(Array.Empty<CharacterPatch>());
+            bool lines = _mode.SelectedIndex == 0 || _mode.SelectedIndex == 4;
+            var boxes = lines
+                ? _draft
+                    .Regions.Select(r => new InspectionRegion(r.Name, ERegionKind.Text, r.Bounds))
+                    .ToArray()
+                : _draft
+                    .Candidates.Select(
+                        (c, i) =>
+                            new InspectionRegion(
+                                (i + 1) + " · " + (c.Label.Length == 0 ? "未标字" : c.Label),
+                                ERegionKind.Text,
+                                c.Bounds
+                            )
                     )
-            )
-            .ToArray();
-        _viewer.SetOverlays(
-            boxes.Length > 0 ? boxes
-                : _roi.HasValue ? new[] { new InspectionRegion("文字行", ERegionKind.Ignore, _roi.Value) }
-                : Array.Empty<InspectionRegion>(),
-            Array.Empty<InspectionFinding>()
-        );
+                    .ToArray();
+            _viewer.SetOverlays(boxes, Array.Empty<InspectionFinding>());
+            if (lines)
+                _viewer.SelectedRegionIndex = _draft
+                    .Regions.ToList()
+                    .FindIndex(r => r.Id == _selectedRegionId);
+        }
+        finally
+        {
+            _syncing = syncing;
+        }
     }
 
     private void UpdateMode()
     {
         _cutGuide = null;
-        _viewer.EditRegions = _mode.SelectedIndex == 2;
+        _viewer.EditRegions = _mode.SelectedIndex == 2 || _mode.SelectedIndex == 4;
         _viewer.AllowRegionDrawing = _mode.SelectedIndex != 3;
         _viewer.Cursor =
             _mode.SelectedIndex == 1 || _mode.SelectedIndex == 3 ? Cursors.Cross : Cursors.Default;
+        UpdateViewer();
         _viewer.Invalidate();
     }
 
@@ -1083,7 +1444,6 @@ public sealed class GlyphQuickBuilderControl : UserControl
             return;
         }
 
-        _reviewed.Checked = false;
         _replace.Checked = false;
         _library = null;
         _library = head == null ? null : Manager.Load(head.Id, head.Revision);
@@ -1091,24 +1451,33 @@ public sealed class GlyphQuickBuilderControl : UserControl
         UpdateRowDetails();
     }
 
-    private void UpdateCoverage()
+    private void UpdateCoverageText()
     {
-        const string all = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
         var keys =
-            _library == null
-                ? Array.Empty<string>()
-                : _library.Glyphs.Keys.OrderBy(s => s, StringComparer.Ordinal).ToArray();
+            _library?.Glyphs.Keys.OrderBy(s => s, StringComparer.Ordinal).ToArray() ?? Array.Empty<string>();
+        var current = _draft
+            .Candidates.Select(c => c.Label)
+            .Where(DP.Vision.Algorithms.CharacterIdentity.IsGlyph)
+            .Distinct(StringComparer.Ordinal);
         _coverage.Text =
             _library == null
-                ? "尚无字库：点击左上角“＋ 新建字库”。"
+                ? "尚无字库：点击左上角“＋ 新建字库”。支持中文、字母、数字、标点和符号。"
                 : "当前 r"
                     + _library.Revision
                     + " · 已收录 "
                     + keys.Length
-                    + "/62（无需补齐全部）\r\n已有："
-                    + string.Concat(keys)
-                    + "\r\n缺字："
-                    + string.Concat(all.Where(c => !keys.Contains(c.ToString())));
+                    + " 个单字（支持中文/标点，无需收齐）\r\n已有："
+                    + string.Join(" ", keys)
+                    + "\r\n当前图候选缺字："
+                    + string.Join(" ", current.Where(c => !_library.Glyphs.ContainsKey(c)))
+                    + "\r\n容量上限4096字/1600万参考像素，不是必需补齐的字表。";
+    }
+
+    private void UpdateCoverage()
+    {
+        UpdateCoverageText();
+        var keys =
+            _library?.Glyphs.Keys.OrderBy(s => s, StringComparer.Ordinal).ToArray() ?? Array.Empty<string>();
         _saved.Items.Clear();
         foreach (var key in keys)
         {
@@ -1158,14 +1527,20 @@ public sealed class GlyphQuickBuilderControl : UserControl
     private void SetBusy(bool busy)
     {
         _tools.Enabled =
+            _regionTools.Enabled =
             _editTools.Enabled =
             _reviewTools.Enabled =
             _viewer.Enabled =
             _grid.Enabled =
             _pending.Enabled =
             _text.Enabled =
+            _binarization.Enabled =
                 !busy;
-        _recognize.Enabled = _segment.Enabled = !busy && _extractor != null;
+        _recognize.Enabled = _segment.Enabled = _extractAll.Enabled = !busy && _extractor != null;
+        _extractionHint.Text =
+            _extractor == null
+                ? "自动提取服务未连接：请在配置页重载资源；仍可手工补画单字。"
+                : "识别后直接在表格修改单字并加入清单；行文字纠错可选。";
         _cancelButton.Enabled = busy;
     }
 
@@ -1189,7 +1564,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
 
     private void Say(string message, bool error = false)
     {
-        _status.ForeColor = error ? Color.Firebrick : Color.FromArgb(25, 55, 95);
+        _status.ForeColor = error ? ModernTheme.Dark.Error : ModernTheme.Dark.TextSecondary;
         _status.Text = message;
     }
 
@@ -1208,12 +1583,8 @@ public sealed class GlyphQuickBuilderControl : UserControl
 
     private void Button(FlowLayoutPanel parent, string text, Action action)
     {
-        var button = new Button
-        {
-            Text = text,
-            AutoSize = true,
-            Margin = new Padding(3),
-        };
+        var button = InspectionUiStyle.CreateButton(text);
+        button.Margin = new Padding(3);
         button.Click += (_, __) => TryUi(action);
         parent.Controls.Add(button);
     }
@@ -1231,7 +1602,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
 
     private static DataGridView Table(bool readOnly)
     {
-        return new DataGridView
+        return new ModernDataGridView
         {
             Dock = DockStyle.Fill,
             AllowUserToAddRows = false,
@@ -1273,12 +1644,13 @@ public sealed class GlyphQuickBuilderControl : UserControl
         IGlyphLibraryManager manager,
         IGlyphCandidateService? service,
         PixelSnapshot? image = null,
-        string? selectedLibrary = null
+        string? selectedLibrary = null,
+        string? candidateCharacter = null
     )
     {
         using var form = new Form
         {
-            Text = "字符库 · 多图补录 / 人工分割 / 清单保存",
+            Text = "字符库 · 同图多ROI / 多图补录 / 人工分割 / 清单保存",
             Width = 1380,
             Height = 960,
             MinimumSize = new Size(1120, 780),
@@ -1288,11 +1660,13 @@ public sealed class GlyphQuickBuilderControl : UserControl
         page.AttachServices(manager, service, selectedLibrary);
         if (image != null)
         {
-            page.SetImage(image);
+            if (candidateCharacter != null) page.SetCandidate(image, candidateCharacter);
+            else page.SetImage(image);
         }
 
         form.Controls.Add(page);
         GuardClose(form, page);
+        InspectionUiStyle.Apply(form);
         form.ShowDialog(owner);
     }
 

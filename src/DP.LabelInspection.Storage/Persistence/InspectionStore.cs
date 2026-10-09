@@ -232,16 +232,16 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
             throw new ArgumentNullException(nameof(items));
         }
 
-        var copy = items.Take(63).ToArray();
+        var copy = items.Take(GlyphLibraryLimits.MaximumReferences + 1).ToArray();
         if (
             copy.Length == 0
-            || copy.Length > 62
+            || copy.Length > GlyphLibraryLimits.MaximumReferences
             || copy.Any(i => i == null)
             || copy.Select(i => i.Character).Distinct(StringComparer.Ordinal).Count() != copy.Length
         )
         {
             throw new ArgumentException(
-                "Select 1–62 uniquely labeled references; choose one sample per character."
+                "Select 1–4096 uniquely labeled Unicode glyph references; choose one sample per character."
             );
         }
 
@@ -270,7 +270,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
                 { "sha256", Hash(png) },
                 { "width", item.Image.Width },
                 { "height", item.Image.Height },
-                { "source", "user_reviewed_batch" },
+                { "source", "user_supplied_batch" },
                 { "binarization", item.Binarization },
                 {
                     "provenance",
@@ -298,13 +298,16 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     {
         if (
             sheet == null
-            || string.IsNullOrEmpty(alphabet)
-            || alphabet.Length > 62
-            || alphabet.Distinct().Count() != alphabet.Length
-            || alphabet.Any(c => !FieldSettings.IsAlphanumeric(c))
+            || !DP.Vision.Algorithms.CharacterIdentity.TryTokenizeLine(
+                alphabet,
+                out var labels,
+                GlyphLibraryLimits.MaximumReferences
+            )
+            || string.Concat(labels) != alphabet
+            || labels.Distinct(StringComparer.Ordinal).Count() != labels.Length
             || rows < 1
             || columns < 1
-            || (long)rows * columns != alphabet.Length
+            || (long)rows * columns != labels.Length
             || padding < 0
             || padding > 32
         )
@@ -314,7 +317,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
 
         var doc = ReadLibrary(id, expectedRevision);
         string sheetHash = Hash(_codec.EncodePng(sheet));
-        for (int i = 0; i < alphabet.Length; i++)
+        for (int i = 0; i < labels.Length; i++)
         {
             int row = i / columns,
                 col = i % columns,
@@ -328,7 +331,7 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
             );
             var image = sheet.Crop(box);
             var png = _codec.EncodePng(image);
-            var glyph = new GlyphReference(alphabet[i].ToString(), image, Hash(png), binarization);
+            var glyph = new GlyphReference(labels[i], image, Hash(png), binarization);
             ((JObject)doc["glyphs"]!)[glyph.Character] = new JObject
             {
                 { "png_base64", Convert.ToBase64String(png) },
@@ -410,7 +413,11 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     /// <param name = "request">本次不可变请求，提供配方、业务身份及显式快照。</param>
     /// <param name = "report">对应的完整检测报告。</param>
     /// <param name = "annotated">可选标注图快照，不替代原图保存。</param>
-    public string SaveReport(InspectionRequest request, InspectionReport report, PixelSnapshot? annotated = null)
+    public string SaveReport(
+        InspectionRequest request,
+        InspectionReport report,
+        PixelSnapshot? annotated = null
+    )
     {
         string id = Guid.NewGuid().ToString("N"),
             jobs = Path.Combine(_root, "jobs"),
@@ -433,7 +440,10 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
                 JsonConvert.SerializeObject(report, _json),
                 Encoding.UTF8
             );
-            File.WriteAllBytes(Path.Combine(temp, "actual.png"), _codec.EncodePng(request.CreateActualSnapshot()));
+            File.WriteAllBytes(
+                Path.Combine(temp, "actual.png"),
+                _codec.EncodePng(request.CreateActualSnapshot())
+            );
             var referenceSnapshot = request.CreateReferenceSnapshot();
             if (referenceSnapshot != null)
             {
@@ -843,9 +853,34 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
     private GlyphLibrarySnapshot Snapshot(JObject doc)
     {
         var entries = doc["glyphs"] as JObject ?? throw new InvalidDataException("Missing glyph dictionary.");
-        if (entries.Count > 62)
+        if (entries.Count > GlyphLibraryLimits.MaximumReferences)
         {
-            throw new InvalidDataException("At most 62 independent alphanumeric labels.");
+            throw new InvalidDataException("At most 4096 independent Unicode glyph references.");
+        }
+
+        // 在解码任何PNG前校验全部身份、尺寸和总像素预算，避免Unicode扩容变成无界资源装配。
+        long pixels = 0;
+        foreach (var p in entries.Properties())
+        {
+            if (
+                !DP.Vision.Algorithms.CharacterIdentity.IsGlyph(p.Name)
+                || p.Value is not JObject value
+                || (int?)value["width"] is not int width
+                || width < 4
+                || width > 512
+                || (int?)value["height"] is not int height
+                || height < 4
+                || height > 512
+            )
+            {
+                throw new InvalidDataException("Invalid Unicode glyph identity or reference dimensions.");
+            }
+
+            pixels += (long)width * height;
+            if (pixels > GlyphLibraryLimits.MaximumPixels)
+            {
+                throw new InvalidDataException("Glyph library exceeds 16000000 reference pixels.");
+            }
         }
 
         var glyphs = new List<GlyphReference>();
@@ -912,11 +947,19 @@ public sealed partial class InspectionStore : IGlyphLibraryManager, IGlyphBatchL
             doc["created_at"] = doc["updated_at"]!.DeepClone();
         }
 
+        string serialized = doc.ToString();
+        if (serialized.Length > 64 * 1024 * 1024)
+        {
+            throw new InvalidDataException(
+                "Glyph library JSON exceeds 64MB character budget; no revision was published."
+            );
+        }
+
         string dir = Path.Combine(LibraryPath(id), "revisions");
         Directory.CreateDirectory(dir);
         try
         {
-            WriteNew(Path.Combine(dir, (expected + 1) + ".json"), doc.ToString());
+            WriteNew(Path.Combine(dir, (expected + 1) + ".json"), serialized);
         }
         catch (IOException error) when (Latest(id) > expected)
         {

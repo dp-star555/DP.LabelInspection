@@ -598,7 +598,7 @@ public sealed partial class AnomalyLibraryControl : UserControl
                     new[]
                     {
                         m.Key,
-                        (m.FeatureSource.StartsWith("cnn", StringComparison.Ordinal) ? "CNN" : "手工")
+                        m.ImplementationDisplay
                             + (m.LocalRadius > 0 ? $" / 位置相关±{m.LocalRadius}" : " / 与位置无关"),
                         m.Width + "×" + m.Height,
                         m.TrainingImages.ToString(CultureInfo.InvariantCulture),

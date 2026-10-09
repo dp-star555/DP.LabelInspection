@@ -37,7 +37,7 @@ public interface IAnomalyModelTrainer
 
     /// <summary>
     /// 训练逐字符模型：按字符身份汇总所有行中的样本，每个字符一个模型（位置相关，按行高归一化），
-    /// 返回<see cref = "EAnomalyModelScope.Character"/>条目。只含非字母数字的字符不训练。
+    /// 返回<see cref = "EAnomalyModelScope.Character"/>条目。支持可见Unicode单字；不支持空白或组合字形序列。
     /// </summary>
     /// <param name = "lines">良品行样本，字符身份须已确认。</param>
     /// <param name = "token">协作式取消标记。</param>
