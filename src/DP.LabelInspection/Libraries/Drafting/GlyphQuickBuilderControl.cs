@@ -115,7 +115,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
             if (!string.IsNullOrWhiteSpace(name))
                 Reload(Manager.CreateLibrary(name!));
         });
-        Tool(_libraryBar, "刷新字库", () => Reload());
+        Icon(_libraryBar, ModernIconKind.Refresh, "刷新字库", () => Reload());
         _libraryBar.Items.Add(new ToolStripSeparator());
         Tool(_libraryBar, "导入图片…", ImportImage);
         _libraryBar.Items.Add(_sourceName);
@@ -144,34 +144,17 @@ public sealed class GlyphQuickBuilderControl : UserControl
         _cancelButton.Click += (_, __) => _cancel?.Cancel();
         _editBar.Items.Add(_cancelButton);
         _editBar.Items.Add(new ToolStripSeparator());
-        Tool(_editBar, "精确改框", () =>
-        {
-            if (_mode.SelectedIndex == LinesMode)
-                EditRegionBounds();
-            else
-                EditBounds();
-        });
-        Tool(_editBar, "清空文字行", () =>
-        {
-            if (ConfirmReplacing(_draft.Candidates.Any(c => c.RegionId != null),
-                "清空本图全部文字行ROI及其候选？独立手工字块保留。"))
-            {
-                _draft.ClearRegions();
-                RefreshCandidates();
-            }
-        });
-        _editBar.Items.Add(new ToolStripSeparator());
-        Tool(_editBar, "撤销", () =>
+        Icon(_editBar, ModernIconKind.Undo, "撤销", () =>
         {
             _draft.Undo();
             RefreshCandidates();
         });
-        Tool(_editBar, "重做", () =>
+        Icon(_editBar, ModernIconKind.Redo, "重做", () =>
         {
             _draft.Redo();
             RefreshCandidates();
         });
-        Tool(_editBar, "适应窗口", () => _viewer.FitToWindow());
+        Icon(_editBar, ModernIconKind.FitWindow, "适应窗口（Home）", () => _viewer.FitToWindow());
         _regionsBox.SelectedIndexChanged += (_, _) =>
         {
             if (!_syncing && _regionsBox.SelectedItem is GlyphDraftRegion region)
@@ -262,13 +245,14 @@ public sealed class GlyphQuickBuilderControl : UserControl
             Size = new Size(1220, 760),
             SplitterDistance = 700,
         };
-        columns.Panel1.Controls.Add(_viewer);
-        columns.Panel2.Controls.Add(right);
+        // 工具栏只在左侧图像上方；右侧收录矩阵与候选表从窗口顶部开始，不被工具栏遮挡。
         // 停靠按Z序倒序处理：后加入的工具栏在最上方。
+        columns.Panel1.Controls.Add(_viewer);
+        columns.Panel1.Controls.Add(_editBar);
+        columns.Panel1.Controls.Add(_libraryBar);
+        columns.Panel2.Controls.Add(right);
         Controls.Add(columns);
         Controls.Add(_status);
-        Controls.Add(_editBar);
-        Controls.Add(_libraryBar);
         InspectionUiStyle.Apply(this);
 
         _mode.SelectedIndexChanged += (_, __) =>
@@ -976,32 +960,6 @@ public sealed class GlyphQuickBuilderControl : UserControl
         RefreshCandidates();
     }
 
-    private void EditRegionBounds()
-    {
-        var region = SelectedRegion ?? throw new InvalidOperationException("请选择本图文字ROI。");
-        var b = region.Bounds;
-        string? value = EditorDialogs.Ask(
-            region.Name + "原图坐标：X,Y,宽,高",
-            $"{b.X},{b.Y},{b.Width},{b.Height}"
-        );
-        if (value == null)
-            return;
-        var parts = value
-            .Split(',', '，')
-            .Select(s => int.Parse(s.Trim(), CultureInfo.InvariantCulture))
-            .ToArray();
-        if (parts.Length != 4)
-            throw new ArgumentException("请输入4个整数。");
-        if (
-            !ConfirmReplacing(
-                _draft.Candidates.Any(c => c.RegionId == region.Id),
-                "调整该ROI将清除它的旧候选；其他ROI保留。继续？"
-            )
-        )
-            return;
-        _draft.SetRegionBounds(region.Id, new PixelRect(parts[0], parts[1], parts[2], parts[3]));
-        RefreshCandidates();
-    }
 
     private async Task RunAllFromUiAsync()
     {
@@ -1041,31 +999,6 @@ public sealed class GlyphQuickBuilderControl : UserControl
         Say("已删除字块" + (candidate.Label.Length == 0 ? "" : "“" + candidate.Label + "”") + "；可撤销。");
     }
 
-    private void EditBounds()
-    {
-        var c = Selected();
-        var b = c.Bounds;
-        string? value = EditorDialogs.Ask(
-            "原图坐标：X,Y,宽,高（调整后须重新核对）",
-            $"{b.X},{b.Y},{b.Width},{b.Height}"
-        );
-        if (value == null)
-        {
-            return;
-        }
-
-        var parts = value
-            .Split(',', '，')
-            .Select(s => int.Parse(s.Trim(), CultureInfo.InvariantCulture))
-            .ToArray();
-        if (parts.Length != 4)
-        {
-            throw new ArgumentException("请输入4个整数，以逗号分隔。");
-        }
-
-        _draft.Resize(c.Id, new PixelRect(parts[0], parts[1], parts[2], parts[3]));
-        RefreshCandidates(c.Id);
-    }
 
     private void SelectCandidates(bool missing)
     {
@@ -1107,7 +1040,6 @@ public sealed class GlyphQuickBuilderControl : UserControl
                     ""
                 );
                 _grid.Rows[i].Tag = candidate;
-                _grid.Rows[i].DefaultCellStyle.BackColor = Color.LemonChiffon;
             }
 
             if (selectId != null)
@@ -1398,6 +1330,18 @@ public sealed class GlyphQuickBuilderControl : UserControl
     private void Tool(ToolStrip strip, string text, Action action)
     {
         var button = new ToolStripButton(text);
+        button.Click += (_, __) => TryUi(action);
+        strip.Items.Add(button);
+    }
+
+    private void Icon(ToolStrip strip, ModernIconKind icon, string tip, Action action)
+    {
+        var button = new ToolStripButton(tip, ModernIcons.CreateBitmap(icon, ModernTheme.Dark.Text, 20))
+        {
+            DisplayStyle = ToolStripItemDisplayStyle.Image,
+            ToolTipText = tip,
+            AutoToolTip = false,
+        };
         button.Click += (_, __) => TryUi(action);
         strip.Items.Add(button);
     }
