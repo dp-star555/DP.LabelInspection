@@ -74,13 +74,8 @@ public sealed class LabelInspectionControl : UserControl
         WrapContents = true,
         Padding = new Padding(4),
     };
-    private readonly Label _glyphFilterInfo = new Label
-    {
-        Name = "GlyphFilterInfo",
-        AutoSize = true,
-        Visible = false,
-        Margin = new Padding(8, 7, 0, 0),
-    };
+    // 所选证据的ROI图像、结论与子项明细：位于单字卡片滚动区之外，画布滚轮用于缩放而不是滚动页面。
+    private readonly Panel _comparisonHost = new Panel { Name = "EvidenceComparisonHost", Dock = DockStyle.Top, Visible = false };
     private IGlyphLibraryManager? _libraryManager;
     private IAnomalyLibraryManager? _anomalyManager;
     private IAnomalyModelTrainer? _anomalyTrainer;
@@ -164,30 +159,10 @@ public sealed class LabelInspectionControl : UserControl
         var evidenceTab = new TabPage("检查证据");
         glyphTab = new TabPage("缺陷标记 / 单字");
         evidenceTab.Controls.Add(_evidence);
-        var glyphBar = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Top,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            Padding = new Padding(2),
-        };
-        AddAction(
-            glyphBar,
-            "显示全部单字",
-            () =>
-            {
-                foreach (ListViewItem item in _evidence.SelectedItems.Cast<ListViewItem>().ToArray())
-                {
-                    item.Selected = false;
-                }
-
-                FilterGlyphs(null);
-            }
-        );
-        glyphBar.Controls.Add(_glyphFilterInfo);
         glyphTab.Controls.Add(new ModernScrollView { Dock = DockStyle.Fill, Content = _glyphGallery });
-        _glyphGallery.SizeChanged += (_, _) => FitComparisons();
-        glyphTab.Controls.Add(glyphBar);
+        glyphTab.Controls.Add(_comparisonHost);
+        _comparisonHost.Resize += (_, _) => FitComparisons();
+        glyphTab.Resize += (_, _) => FitComparisons();
         details.TabPages.Add(evidenceTab);
         details.TabPages.Add(glyphTab);
         _evidence.Columns.Add(UiText.Get("Verdict"), 85);
@@ -196,6 +171,8 @@ public sealed class LabelInspectionControl : UserControl
         _evidence.Columns.Add(UiText.Get("Description"), 550);
         _evidence.MultiSelect = false;
         _evidence.HideSelection = false;
+        // 说明较长时悬停查看全文。
+        _evidence.ShowItemToolTips = true;
         _evidence.Resize += (_, _) => FitDescriptionColumn();
         return details;
     }
@@ -311,6 +288,11 @@ public sealed class LabelInspectionControl : UserControl
             {
                 FilterGlyphs(selection);
                 details.SelectedTab = glyphTab;
+            }
+            else if (_evidence.SelectedItems.Count == 0)
+            {
+                // 取消选择即显示全部单字。
+                FilterGlyphs(null);
             }
         };
         _viewer.FindingSelected += (_, e) =>
@@ -1444,10 +1426,7 @@ public sealed class LabelInspectionControl : UserControl
                 : LastReport?.EvidenceGroups.FirstOrDefault(g =>
                     g.Children.Count > 0 && ReferenceEquals(g.Summary, selection.Item2)
                 );
-        var existing = _glyphGallery
-            .Controls.Cast<Control>()
-            .Where(c => c.Name == "BarcodeComparison" || c.Name == "RoiComparison")
-            .ToArray();
+        var existing = _comparisonHost.Controls.OfType<BarcodeComparisonControl>().ToArray();
         if (barcode != null && existing.Any(c => ReferenceEquals(c.Tag, barcode)))
         {
             return;
@@ -1455,9 +1434,11 @@ public sealed class LabelInspectionControl : UserControl
 
         foreach (var old in existing)
         {
-            _glyphGallery.Controls.Remove(old);
+            _comparisonHost.Controls.Remove(old);
             old.Dispose();
         }
+
+        _comparisonHost.Visible = false;
 
         var empty = _glyphGallery.Controls.Find("GlyphEmptyReason", false).FirstOrDefault();
         if (empty != null)
@@ -1478,24 +1459,17 @@ public sealed class LabelInspectionControl : UserControl
                 return tag.Item1 == selection.Item1
                     && tag.Item2.Character.Bounds.Equals(selection.Item2.Bounds.Value);
             });
-        int count = 0;
         foreach (var card in cards)
         {
             var tag = (Tuple<string, GlyphInspection>)card.Tag!;
-            bool visible =
+            card.Visible =
                 selection == null
                 || (
                     tag.Item1 == selection.Item1
                     && (!single || tag.Item2.Character.Bounds.Equals(selection.Item2.Bounds!.Value))
                 );
-            card.Visible = visible;
-            if (visible)
-            {
-                count++;
-            }
         }
 
-        var info = _glyphFilterInfo;
         if (barcode != null && LastRequest != null)
         {
             if (barcode.IsBarcode)
@@ -1506,55 +1480,59 @@ public sealed class LabelInspectionControl : UserControl
                 }
             }
 
-            info.Visible = false;
             var comparison = new BarcodeComparisonControl(LastRequest.CreateActualSnapshot(), barcode)
             {
                 Tag = barcode,
+                Dock = DockStyle.Fill,
             };
-            _glyphGallery.Controls.Add(comparison);
-            _glyphGallery.Controls.SetChildIndex(comparison, 0);
-            _glyphGallery.SetFlowBreak(comparison, true);
+            _comparisonHost.Controls.Add(comparison);
+            _comparisonHost.Visible = true;
             FitComparisons();
-            info.Visible = !barcode.IsBarcode && count > 0;
-            info.Text = barcode.RegionName + "：" + count + " 个相关单字";
+        }
+    }
+
+    // 证据区占满宽度，高度按ROI宽高比与明细行数计算，不随窗口放大成巨大画布。
+    private void FitComparisons()
+    {
+        if (_comparisonHost.Controls.OfType<BarcodeComparisonControl>().FirstOrDefault() is not { } comparison)
+        {
             return;
         }
 
-        info.Visible = selection != null;
-        info.Text = selection == null ? "" : selection.Item1 + "：" + count + " 个相关单字";
-    }
-
-    // 证据的ROI图像与结论占满结果区宽度，高度随宽度在合理范围内变化。
-    private void FitComparisons()
-    {
-        int width = Math.Max(320, _glyphGallery.ClientSize.Width - _glyphGallery.Padding.Horizontal - 8);
-        foreach (var comparison in _glyphGallery.Controls.OfType<BarcodeComparisonControl>())
+        // 证据区最多占分页高度的约三分之二，其余留给单字卡片。
+        int available = (_comparisonHost.Parent?.ClientSize.Height ?? 600) * 2 / 3;
+        int height = comparison.PreferredHeight(_comparisonHost.ClientSize.Width, available);
+        if (_comparisonHost.Height != height)
         {
-            comparison.Size = new Size(width, Math.Max(LogicalToDeviceUnits(320), Math.Min(LogicalToDeviceUnits(520), width / 2)));
+            _comparisonHost.Height = height;
         }
     }
 
     private void AddEvidence(string region, InspectionFinding finding, int index)
     {
-        _evidence.Items.Add(
-            new ListViewItem(
-                new[]
-                {
-                    finding.Verdict.ToString().ToUpperInvariant(),
-                    "F" + index + " · " + region + " / " + finding.Code,
-                    finding.Bounds?.ToString() ?? "",
-                    finding.Message,
-                }
-            )
+        var item = new ListViewItem(
+            new[]
             {
-                Tag = Tuple.Create(region, finding),
-                ForeColor =
-                    finding.Verdict == EInspectionVerdict.Ng ? Color.FromArgb(198, 40, 40)
-                    : finding.Verdict == EInspectionVerdict.Review ? Color.FromArgb(230, 100, 0)
-                    : SystemColors.WindowText,
+                finding.Verdict.ToString().ToUpperInvariant(),
+                "F" + index + " · " + region + " / " + finding.Code,
+                finding.Bounds?.ToString() ?? "",
+                finding.Message,
             }
-        );
+        )
+        {
+            Tag = Tuple.Create(region, finding),
+            ToolTipText = finding.Message,
+            UseItemStyleForSubItems = false,
+        };
+        // 只给结论列着色（深色主题下的绿/橙/红），其余列使用主题文字色。
+        item.SubItems[0].ForeColor = VerdictColor(finding.Verdict);
+        _evidence.Items.Add(item);
     }
+
+    internal static Color VerdictColor(EInspectionVerdict verdict) =>
+        verdict == EInspectionVerdict.Ng ? ModernTheme.Dark.Error
+        : verdict == EInspectionVerdict.Review ? ModernTheme.Dark.Warning
+        : ModernTheme.Dark.Success;
 
     private void OpenLibrary(CharacterPatch? candidate)
     {
@@ -1812,8 +1790,12 @@ public sealed class LabelInspectionControl : UserControl
         }
 
         _glyphGallery.Controls.Clear();
-        _glyphFilterInfo.Visible = false;
-        _glyphFilterInfo.Text = "";
+        foreach (Control old in _comparisonHost.Controls.Cast<Control>().ToArray())
+        {
+            old.Dispose();
+        }
+
+        _comparisonHost.Visible = false;
     }
 
     /// <inheritdoc/>

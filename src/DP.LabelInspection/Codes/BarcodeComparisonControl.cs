@@ -3,34 +3,46 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using DP.LabelInspection.Contracts;
+using ModernUI.WinForms;
 
 namespace DP.LabelInspection;
 
-/// <summary>所选证据的ROI图像与结论（上）及完整子项明细（下）；只读，不重复展示原图面板。</summary>
+/// <summary>
+/// 所选证据的结论行、ROI图像（按ROI宽高比限高，滚轮缩放、中/右键平移）及子项明细表；只读，不重复展示原图面板。
+/// 宿主按<see cref="PreferredHeight"/>给出高度。
+/// </summary>
 internal sealed class BarcodeComparisonControl : UserControl
 {
-    internal BarcodeComparisonControl(
-        PixelSnapshot actual,
-        InspectionEvidenceGroup group,
-        bool allowExpand = true
-    )
+    private const int MaximumImageHeight = 180, MinimumImageHeight = 70, MaximumVisibleRows = 6;
+    private readonly PixelRect? _bounds;
+    private readonly ModernListView? _details;
+    private readonly Label? _conclusion;
+
+    internal BarcodeComparisonControl(PixelSnapshot actual, InspectionEvidenceGroup group)
     {
         Name = group.IsBarcode ? "BarcodeComparison" : "RoiComparison";
-        Height = 400;
-        Width = 1000;
+        Size = new Size(1000, 400);
+        BackColor = ModernTheme.Dark.Background;
         if (!group.Summary.Bounds.HasValue || !group.Summary.Bounds.Value.Fits(actual))
         {
-            Controls.Add(new Label { Text = "ROI范围不可用，完整明细仍保留在报告中。", AutoSize = true });
+            Controls.Add(new Label
+            {
+                Text = "ROI范围不可用，完整明细仍保留在报告中。",
+                AutoSize = true,
+                ForeColor = ModernTheme.Dark.TextSecondary,
+            });
             return;
         }
 
         var bounds = group.Summary.Bounds.Value;
+        _bounds = bounds;
         var crop = actual.Crop(bounds);
         var marked = new ImageViewerControl
         {
             Dock = DockStyle.Fill,
             Name = group.IsBarcode ? "BarcodeMarked" : "RoiMarked",
             ShowFindingLabels = false,
+            AllowRegionDrawing = false,
         };
         marked.SetImage(crop);
         var defects = group
@@ -56,118 +68,70 @@ internal sealed class BarcodeComparisonControl : UserControl
             ))
             .ToArray();
         marked.SetOverlays(Array.Empty<InspectionRegion>(), mapped);
-        var layout = new TableLayoutPanel
+
+        // 结论行：ROI、判定与汇总说明；过长时省略，悬停查看全文。
+        string conclusion = group.RegionName + " · " + group.Status + " · " + group.Summary.Message;
+        _conclusion = new Label
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 1,
-            RowCount = 3,
+            Name = "EvidenceConclusion",
+            Text = conclusion,
+            Dock = DockStyle.Top,
+            AutoEllipsis = true,
+            TextAlign = ContentAlignment.MiddleLeft,
+            Padding = new Padding(4, 0, 4, 0),
+            Font = new Font(Font, FontStyle.Bold),
+            ForeColor = LabelInspectionControl.VerdictColor(group.Summary.Verdict),
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 135));
-        // 结论行：ROI、判定与汇总说明；右侧为视图按钮。操作提示放在工具提示中，不占版面。
-        var header = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            ColumnCount = 2,
-            Margin = Padding.Empty,
-        };
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        var verdict = group.Summary.Verdict;
-        header.Controls.Add(
-            new Label
-            {
-                Name = "EvidenceConclusion",
-                Text = group.RegionName + " · " + group.Status + " · " + group.Summary.Message,
-                Dock = DockStyle.Fill,
-                AutoEllipsis = true,
-                TextAlign = ContentAlignment.MiddleLeft,
-                Font = new Font(Font, FontStyle.Bold),
-                ForeColor =
-                    verdict == EInspectionVerdict.Ng ? ModernUI.WinForms.ModernTheme.Dark.Error
-                    : verdict == EInspectionVerdict.Review ? ModernUI.WinForms.ModernTheme.Dark.Warning
-                    : ModernUI.WinForms.ModernTheme.Dark.Success,
-            },
-            0,
-            0
-        );
-        var toolbar = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
-        header.Controls.Add(toolbar, 1, 0);
         var tips = new ToolTip();
         Disposed += (_, _) => tips.Dispose();
-        tips.SetToolTip(marked, "滚轮缩放，中/右键平移；双击下方明细放大到该处");
-        var fit = InspectionUiStyle.CreateButton("适应");
-        fit.Click += (_, _) => marked.FitToWindow();
-        toolbar.Controls.Add(fit);
-        var pixel = InspectionUiStyle.CreateButton("1:1");
-        pixel.Click += (_, _) => marked.ActualSize();
-        toolbar.Controls.Add(pixel);
-        if (allowExpand)
-        {
-            var expand = InspectionUiStyle.CreateButton("独立放大");
-            expand.Click += (_, _) =>
-            {
-                using var window = new Form
-                {
-                    Text = group.Id + " 缺陷标记 / 子项明细",
-                    Width = 1280,
-                    Height = 780,
-                    StartPosition = FormStartPosition.CenterParent,
-                };
-                window.Controls.Add(
-                    new BarcodeComparisonControl(actual, group, false) { Dock = DockStyle.Fill }
-                );
-                window.ShowDialog(FindForm());
-            };
-            toolbar.Controls.Add(expand);
-        }
+        tips.SetToolTip(_conclusion, conclusion);
 
-        layout.Controls.Add(header, 0, 0);
-        layout.Controls.Add(marked, 0, 1);
-        var details = new ModernUI.WinForms.ModernListView
+        _details = new ModernListView
         {
             Name = group.IsBarcode ? "BarcodeDefectDetails" : "RoiEvidenceDetails",
-            Dock = DockStyle.Fill,
+            Dock = DockStyle.Bottom,
             View = View.Details,
             FullRowSelect = true,
             MultiSelect = false,
             HideSelection = false,
+            ShowItemToolTips = true,
+            Theme = ModernTheme.Dark,
         };
-        details.Columns.Add("子项", 70);
-        details.Columns.Add("结论", 65);
-        details.Columns.Add("检查", 165);
-        details.Columns.Add("原图坐标", 150);
-        details.Columns.Add("面积px²", 75);
-        details.Columns.Add("说明", 650);
+        int S(int logical) => LogicalToDeviceUnits(logical);
+        _details.Columns.Add("子项", S(80));
+        _details.Columns.Add("结论", S(70));
+        _details.Columns.Add("检查", S(190));
+        _details.Columns.Add("面积px²", S(80));
+        _details.Columns.Add("说明", S(600));
         foreach (var child in group.Children)
         {
             var f = child.Finding;
-            details.Items.Add(
-                new ListViewItem(
-                    new[]
-                    {
-                        child.Id,
-                        child.Status,
-                        f.Code,
-                        f.Bounds?.ToString() ?? "",
-                        f.AreaPixels?.ToString() ?? "",
-                        f.Message,
-                    }
-                )
-                {
-                    Tag = child,
-                }
-            );
+            var item = new ListViewItem(new[] { child.Id, child.Status, f.Code, f.AreaPixels?.ToString() ?? "", f.Message })
+            {
+                Tag = child,
+                ToolTipText = f.Code + "：" + f.Message,
+                UseItemStyleForSubItems = false,
+            };
+            item.SubItems[1].ForeColor = LabelInspectionControl.VerdictColor(f.Verdict);
+            _details.Items.Add(item);
         }
 
-        details.DoubleClick += (_, _) =>
+        // 说明列占满剩余宽度，尽量完整显示。
+        _details.Resize += (_, _) =>
+        {
+            int used = 0;
+            for (int i = 0; i < _details.Columns.Count - 1; i++)
+            {
+                used += _details.Columns[i].Width;
+            }
+
+            _details.Columns[_details.Columns.Count - 1].Width = Math.Max(S(200), _details.ClientSize.Width - used - S(4));
+        };
+        _details.DoubleClick += (_, _) =>
         {
             if (
-                details.SelectedItems.Count == 1
-                && details.SelectedItems[0].Tag is InspectionEvidenceDetail child
+                _details.SelectedItems.Count == 1
+                && _details.SelectedItems[0].Tag is InspectionEvidenceDetail child
                 && child.Finding.Bounds.HasValue
             )
             {
@@ -179,7 +143,7 @@ internal sealed class BarcodeComparisonControl : UserControl
         {
             if (e.Index < defects.Length)
             {
-                foreach (ListViewItem item in details.Items)
+                foreach (ListViewItem item in _details.Items)
                 {
                     if (ReferenceEquals(item.Tag, defects[e.Index]))
                     {
@@ -190,7 +154,56 @@ internal sealed class BarcodeComparisonControl : UserControl
                 }
             }
         };
-        layout.Controls.Add(details, 0, 2);
-        Controls.Add(layout);
+
+        // 停靠按Z序倒序处理：结论在上，明细在下，图像占中间。
+        Controls.Add(marked);
+        Controls.Add(_details);
+        Controls.Add(_conclusion);
+        Layout += (_, _) => ArrangeRows();
+    }
+
+    /// <summary>
+    /// 给定宽度下的高度：结论行＋按ROI宽高比限高的图像＋最多若干行明细；超过<paramref name="available"/>时先压缩图像，
+    /// 为下方单字卡片留出空间。
+    /// </summary>
+    internal int PreferredHeight(int width, int available)
+    {
+        if (_bounds == null)
+        {
+            return LogicalToDeviceUnits(40);
+        }
+
+        int fixedRows = ConclusionHeight + DetailsHeight;
+        int image = Math.Min(ImageHeight(width), Math.Max(LogicalToDeviceUnits(MinimumImageHeight), available - fixedRows));
+        return fixedRows + image;
+    }
+
+    private int ConclusionHeight => LogicalToDeviceUnits(30);
+
+    private int DetailsHeight =>
+        _details == null
+            ? 0
+            : LogicalToDeviceUnits(34)
+                + LogicalToDeviceUnits(_details.RowHeight) * Math.Max(1, Math.Min(MaximumVisibleRows, _details.Items.Count))
+                + LogicalToDeviceUnits(4);
+
+    private int ImageHeight(int width)
+    {
+        var bounds = _bounds!.Value;
+        int natural = (int)Math.Round((double)Math.Max(1, width) * bounds.Height / Math.Max(1, bounds.Width));
+        return Math.Max(LogicalToDeviceUnits(MinimumImageHeight), Math.Min(LogicalToDeviceUnits(MaximumImageHeight), natural));
+    }
+
+    private void ArrangeRows()
+    {
+        if (_conclusion != null && _conclusion.Height != ConclusionHeight)
+        {
+            _conclusion.Height = ConclusionHeight;
+        }
+
+        if (_details != null && _details.Height != DetailsHeight)
+        {
+            _details.Height = DetailsHeight;
+        }
     }
 }
