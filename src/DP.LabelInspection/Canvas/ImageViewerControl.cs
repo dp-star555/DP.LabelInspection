@@ -77,6 +77,7 @@ public sealed class ImageViewerControl : Control
     private float _zoom = 1;
     private PointF _pan;
     private Point? _panStart;
+    private Point? _pressAt;
     private PointF _panOrigin;
 
     /// <summary>缩放或平移变化时触发，供宿主显示当前像素比例。</summary>
@@ -541,7 +542,7 @@ public sealed class ImageViewerControl : Control
                 _drawing && _editor.Tool == DP.Vision.UI.ERoiTool.Select && _editor.Preview != null
                     ? ToRect(_editor.Preview)
                     : _regions[_selected].Bounds;
-            DrawBox(e.Graphics, view, box, Color.DarkViolet, "编辑：拖动框内/八个控制点");
+            DrawBox(e.Graphics, view, box, Color.DarkViolet, "选中：拖动调整 · Delete删除");
             foreach (var handle in Handles(box))
             {
                 e.Graphics.FillRectangle(Brushes.DarkViolet, handle.X - 4, handle.Y - 4, 8, 8);
@@ -635,6 +636,7 @@ public sealed class ImageViewerControl : Control
         // 7个屏幕像素的命中容差（原图单位）。
         double tolerance = 7.0 * _bitmap.Width / Viewport().Width;
         bool forceNew = (ModifierKeys & Keys.Shift) != 0;
+        _pressAt = EditRegions ? e.Location : null;
         if (EditRegions && !forceNew)
         {
             _editor.Tool = DP.Vision.UI.ERoiTool.Select;
@@ -662,14 +664,7 @@ public sealed class ImageViewerControl : Control
         }
         else if (!forceNew)
         {
-            int hit = Enumerable
-                .Range(0, _findings.Count)
-                .Where(i =>
-                    _findings[i].Bounds.HasValue && FindingHit(_findings[i].Bounds!.Value, point, e.Location)
-                )
-                .OrderBy(i => (long)_findings[i].Bounds!.Value.Width * _findings[i].Bounds!.Value.Height)
-                .DefaultIfEmpty(-1)
-                .First();
+            int hit = FindingAt(point, e.Location);
             if (hit >= 0)
             {
                 FindingSelected?.Invoke(this, new FindingSelectedEventArgs(hit));
@@ -724,6 +719,8 @@ public sealed class ImageViewerControl : Control
             return;
         }
 
+        var pressAt = _pressAt;
+        _pressAt = null;
         if (e.Button != MouseButtons.Left || !_drawing)
         {
             return;
@@ -735,7 +732,17 @@ public sealed class ImageViewerControl : Control
         var after = _editor.Document;
         _drawing = false;
         Capture = false;
-        if (!ReferenceEquals(before, after))
+        if (ReferenceEquals(before, after) && pressAt is Point press
+            && Math.Abs(press.X - e.X) <= 3 && Math.Abs(press.Y - e.Y) <= 3)
+        {
+            // 编辑模式下单击（未拖动）且落在检测证据上时仍选中证据，与非编辑模式一致。
+            int hit = FindingAt(point, e.Location);
+            if (hit >= 0)
+            {
+                FindingSelected?.Invoke(this, new FindingSelectedEventArgs(hit));
+            }
+        }
+        else if (!ReferenceEquals(before, after))
         {
             // 新建：文档中多出的ROI；编辑：同一标识的几何改变。均先复原为宿主的配方区域，再由宿主通过事件提交修改。
             var created = after.Rois.FirstOrDefault(r => !before.Rois.Any(b => b.Id == r.Id));
@@ -774,7 +781,16 @@ public sealed class ImageViewerControl : Control
         }
     }
 
-    private bool FindingHit(PixelRect box, Point image, Point screen)
+    // 命中的最小检测证据序号；无命中为-1。
+    private int FindingAt(Point image, Point screen) =>
+        Enumerable
+            .Range(0, _findings.Count)
+            .Where(i => _findings[i].Bounds.HasValue && FindingHit(_findings[i].Bounds!.Value, image, screen))
+            .OrderBy(i => (long)_findings[i].Bounds!.Value.Width * _findings[i].Bounds!.Value.Height)
+            .DefaultIfEmpty(-1)
+            .First();
+
+        private bool FindingHit(PixelRect box, Point image, Point screen)
     {
         var v = Viewport();
         float s = v.Width / _bitmap!.Width;

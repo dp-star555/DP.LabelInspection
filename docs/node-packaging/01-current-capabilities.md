@@ -68,7 +68,9 @@
 |---|---|
 | `SidebarVisible` / `CanvasToolbarVisible` | 隐藏左侧操作栏、画布缩放条；画布和下方证据/单字结果保留 |
 | `DrawKinds` / `DrawKind` / `DrawKindChanged` | 左键拖动新建ROI的类型（含一维条码/二维码），放进宿主下拉框 |
-| `EditRegionsMode` / `EditRegionsModeChanged` | “选中/调整ROI”模式 |
+| `EditRegionsMode` / `EditRegionsModeChanged` | 直接编辑ROI（默认开启）：单击选中，拖动框内移动、拖动控制点缩放，框外拖动新建，Delete删除 |
+| `DisplayMode` / `DisplayModeChanged` | 画布显示：`InputImage`（仅输入图像）/ `Regions`（叠加ROI）/ `Result`（ROI+检测证据+单字框），放进宿主“显示”下拉框 |
+| `RemoveSelectedRegion()` / `SelectRegion(name)` | 删除选中ROI及引用它的字段绑定（画布Delete键同效）；按名称在画布上选中ROI |
 | `FitToWindow` / `ActualSize` / `Zoom` | 画布视图 |
 | `EditRegionRules` / `EditFieldBindings` / `EditTaskData` / `EditThresholds` | 原侧栏的编辑窗口 |
 | `OpenGlyphLibrary` / `OpenGlyphQuickBuilder` / `OpenAnomalyLibraryManager` / `OpenAnomalyBatchTraining` | 字库与异常模型库窗口 |
@@ -78,7 +80,7 @@
 | `Options` / `Bindings` / `LibraryManager` / `AnomalyLibraryManager` | 当前状态 |
 | `ShowReport(report)` | 在当前待检图上显示宿主已有的报告（如生产运行），显示方式与试检测一致；报告坐标须为当前ROI坐标 |
 
-`RegionRulesControl(workbench)` 是可嵌入宿主页面的ROI规则编辑（ROI列表＋所选ROI的类型、检测项目与规则、绑定字库/异常模型库、字段绑定、清空），与“编辑ROI/规则”窗口内容相同，但修改即时写回工作台；画布上新建/调整ROI后自动刷新，画布选中ROI同步选中。无效组合（名称重复、库缺版本等）不写回并在说明区提示。
+`RegionRulesControl(workbench)` 是可嵌入宿主页面的ROI规则编辑：每个ROI一张卡片（标题为名称、类型、尺寸及是否绑定库，右侧可删除），单击展开为现代属性表，类型、检测项目与规则按分组显示，“字库”“异常模型库”是下拉参数（库名 · 修订）；页顶为字段绑定、采用探索文字ROI、清空。与“编辑ROI/规则”窗口内容相同，但修改即时写回工作台；画布上新建/调整ROI后自动刷新，画布选中ROI自动展开对应卡片，展开卡片也通过 `SelectRegion(name)` 在画布上选中。无效组合（名称重复、库缺版本等）不写回并在说明区提示。
 
 **需要注意的实际行为：**
 

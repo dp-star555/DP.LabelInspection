@@ -81,9 +81,9 @@ public sealed class GlyphQuickBuilderControl : UserControl
     private readonly Label _previewCaption = new Label { AutoSize = true, Margin = new Padding(6, 9, 6, 0) };
     private readonly ModernCheckbox _replace = new ModernCheckbox
     {
-        Text = "允许替换库中已有字符",
-        Width = 220,
-        Height = 34,
+        Text = "允许替换",
+        Width = 100,
+        Margin = new Padding(6, 3, 3, 3),
     };
     private readonly FlowLayoutPanel _reviewTools = Bar();
     private IGlyphLibraryManager? _manager;
@@ -185,13 +185,8 @@ public sealed class GlyphQuickBuilderControl : UserControl
             ReadOnly = true,
             FillWeight = 160,
         });
-        Button(_reviewTools, "只选库中缺字", () => SelectCandidates(true));
-        Button(_reviewTools, "选择有标签项", () => SelectCandidates(false));
-        Button(_reviewTools, "取消选择", () =>
-        {
-            foreach (DataGridViewRow row in _grid.Rows)
-                row.Cells["Use"].Value = false;
-        });
+        Button(_reviewTools, "只选库中缺字", () => SelectMissingCandidates());
+        InspectionUiStyle.MatchButtonHeight(_replace);
         _reviewTools.Controls.Add(_replace);
         Button(_reviewTools, "保存选中到字库", () => SaveSelected());
 
@@ -250,6 +245,8 @@ public sealed class GlyphQuickBuilderControl : UserControl
         columns.Panel1.Controls.Add(_viewer);
         columns.Panel1.Controls.Add(_editBar);
         columns.Panel1.Controls.Add(_libraryBar);
+        InspectionUiStyle.FitToolStrip(_libraryBar);
+        InspectionUiStyle.FitToolStrip(_editBar);
         columns.Panel2.Controls.Add(right);
         Controls.Add(columns);
         Controls.Add(_status);
@@ -806,7 +803,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
 
     /// <summary>
     /// 把勾选且已填写单字的候选直接保存到当前字库，发布为一个新修订。默认跳过库中已有字符；
-    /// 勾选“允许替换库中已有字符”时替换。失败时字库不变，候选和勾选保留以便修改后重试。
+    /// 勾选“允许替换”时替换。失败时字库不变，候选和勾选保留以便修改后重试。
     /// </summary>
     /// <returns>保存后的字库修订；没有可保存的新字符时为当前修订。</returns>
     public int SaveSelected()
@@ -831,7 +828,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
                 (string)_binarization.SelectedItem!, _replace.Checked);
             if (_draft.Pending.Count == 0)
             {
-                Say("没有可保存的新字符：" + string.Join("、", skipped) + " 已在字库中。需要替换请勾选“允许替换库中已有字符”。", true);
+                Say("没有可保存的新字符：" + string.Join("、", skipped) + " 已在字库中。需要替换请勾选“允许替换”。", true);
                 return head.Revision;
             }
 
@@ -1000,7 +997,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
     }
 
 
-    private void SelectCandidates(bool missing)
+    private void SelectMissingCandidates()
     {
         _grid.EndEdit();
         var chosen = new HashSet<string>(StringComparer.Ordinal);
@@ -1012,7 +1009,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
                 && c.Image.Width >= 4
                 && c.Image.Height >= 4
                 && chosen.Add(c.Label)
-                && (!missing || !(_library?.Glyphs.ContainsKey(c.Label) ?? false));
+                && !(_library?.Glyphs.ContainsKey(c.Label) ?? false);
         }
     }
 
@@ -1349,8 +1346,7 @@ public sealed class GlyphQuickBuilderControl : UserControl
     private static ToolStripControlHost Host(Control control, string tip) => new ToolStripControlHost(control)
     {
         AutoSize = false,
-        Size = new Size(control.Width, 30),
-        Margin = new Padding(2, 1, 2, 1),
+        Size = control.Size,
         ToolTipText = tip,
     };
 

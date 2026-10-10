@@ -5,14 +5,15 @@ using System.Windows.Forms;
 namespace DP.LabelInspection;
 
 /// <summary>
-/// 可嵌入宿主页面的ROI规则编辑：ROI列表＋所选ROI的类型、检测项目与规则，修改即时写回所连接的工作台。
-/// 与工作台的“编辑ROI/规则”窗口内容一致；画布上绘制、调整或删除ROI后自动刷新，画布选中的ROI同步选中。
+/// 可嵌入宿主页面的ROI规则编辑：每个ROI一张卡片，单击标题展开该ROI的类型、检测项目与规则（字库、异常模型库为下拉参数），
+/// 修改即时写回所连接的工作台。与工作台的“编辑ROI/规则”窗口内容一致；画布上绘制、调整或删除ROI后自动刷新，
+/// 画布选中的ROI自动展开，展开的卡片也在画布上选中。
 /// </summary>
 public sealed class RegionRulesControl : UserControl
 {
     private readonly LabelInspectionControl _workbench;
     private readonly RegionRulesView _view = new RegionRulesView(
-        "选中ROI及参数查看用途、单位、取值范围和调整影响；修改立即生效。在画布上左键拖动新建ROI。"
+        "单击ROI卡片展开参数，选中参数可查看用途、单位、取值范围和调整影响；修改立即生效。"
     )
     {
         Dock = DockStyle.Fill,
@@ -39,6 +40,7 @@ public sealed class RegionRulesControl : UserControl
         Controls.Add(_view);
         Controls.Add(_actions);
         _view.Edited += (_, _) => WriteBack();
+        _view.RegionActivated += (_, name) => _workbench.SelectRegion(name);
         workbench.RegionsChanged += OnRegionsChanged;
         workbench.BusyChanged += OnBusyChanged;
         workbench.SelectedRegionChanged += OnSelectedRegionChanged;
@@ -51,7 +53,7 @@ public sealed class RegionRulesControl : UserControl
         _view.SetRegions(_workbench.Regions, _workbench.LibraryManager, _workbench.AnomalyLibraryManager);
         if (_view.Count == 0)
         {
-            _view.ShowMessage("还没有ROI：在画布上左键拖动新建，或使用“采用探索文字ROI”。");
+            _view.ShowMessage("还没有ROI：在画布上按所选类型左键拖动新建，或使用“采用探索文字ROI”。");
         }
     }
 

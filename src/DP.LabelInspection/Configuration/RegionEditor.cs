@@ -24,12 +24,17 @@ internal static partial class RegionEditor
         };
         form.MinimumSize = new Size(850, 680);
         var view = new RegionRulesView(
-            "选中参数，可在此查看用途、适用范围、单位、取值范围和调整影响。修改后点击“保存配置”才应用；关闭窗口不应用修改。"
+            "单击ROI卡片展开参数，选中参数可查看用途、适用范围、单位、取值范围和调整影响。修改后点击“保存配置”才应用；关闭窗口不应用修改。"
         )
         {
             Dock = DockStyle.Fill,
         };
-        view.SetRegions(regions, manager, anomalyManager);
+        var list = regions.ToArray();
+        view.SetRegions(list, manager, anomalyManager);
+        if (list.Length > 0)
+        {
+            view.SelectRegion(list[0].Name);
+        }
         var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, AutoSize = true };
         InspectionRegion[]? result = null;
         var save = new Button { Text = "保存配置", AutoSize = true };
@@ -55,6 +60,7 @@ internal static partial class RegionEditor
         buttons.Controls.AddRange(new Control[] { save, cancel });
         form.Controls.Add(view);
         form.Controls.Add(buttons);
+        InspectionUiStyle.Apply(form);
         return form.ShowDialog() == DialogResult.OK ? result : null;
     }
 }

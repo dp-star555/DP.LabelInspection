@@ -66,10 +66,13 @@ public sealed class LabelInspectionControl : UserControl
         View = View.Details,
         FullRowSelect = true,
     };
+    // 上方为所选证据的ROI图像与结论（占满宽度），下方单字卡片按宽度自动换行；由滚动视图约束宽度并测量高度。
     private readonly FlowLayoutPanel _glyphGallery = new FlowLayoutPanel
     {
-        AutoSize = true,
-        AutoSizeMode = AutoSizeMode.GrowAndShrink,
+        AutoSize = false,
+        FlowDirection = FlowDirection.LeftToRight,
+        WrapContents = true,
+        Padding = new Padding(4),
     };
     private readonly Label _glyphFilterInfo = new Label
     {
@@ -94,7 +97,10 @@ public sealed class LabelInspectionControl : UserControl
     private DP.Vision.ImageFrame? _visionActual;
     private DP.Vision.ImageFrame? _visionReference;
     private readonly Label _referenceMode = new Label { AutoSize = true };
-    private readonly CheckBox _editRois = new CheckBox { Text = "选中/调整ROI", AutoSize = true };
+    private bool _editRegionsMode = true;
+    private WorkbenchDisplayMode _displayMode = WorkbenchDisplayMode.Result;
+    private IReadOnlyList<InspectionRegion> _shownRegions = Array.Empty<InspectionRegion>();
+    private IReadOnlyList<CharacterPatch> _shownCharacters = Array.Empty<CharacterPatch>();
     private readonly Label _sidebarLine = new Label
     {
         Dock = DockStyle.Left,
@@ -141,6 +147,7 @@ public sealed class LabelInspectionControl : UserControl
         _status.Message = UiText.Get("Unattached");
         UpdateReferenceMode();
         WireCanvas(details, glyphTab);
+        ApplyDisplay();
         DrawKinds = _kind.Items.Cast<object>().Select(item => new RegionDrawKind(item, FormatKind(item))).ToArray();
         _kind.SelectedIndexChanged += (_, _) => DrawKindChanged?.Invoke(this, EventArgs.Empty);
         InspectionUiStyle.Apply(this);
@@ -179,6 +186,7 @@ public sealed class LabelInspectionControl : UserControl
         );
         glyphBar.Controls.Add(_glyphFilterInfo);
         glyphTab.Controls.Add(new ModernScrollView { Dock = DockStyle.Fill, Content = _glyphGallery });
+        _glyphGallery.SizeChanged += (_, _) => FitComparisons();
         glyphTab.Controls.Add(glyphBar);
         details.TabPages.Add(evidenceTab);
         details.TabPages.Add(glyphTab);
@@ -220,14 +228,6 @@ public sealed class LabelInspectionControl : UserControl
         var roi = _sidebar.AddGroup("ROI");
         roi.Add(new Label { Text = UiText.Get("Drag"), AutoSize = true });
         roi.Add(_kind);
-        var editRois = roi.Add(_editRois);
-        _tips.SetToolTip(editRois, "开启后左键选中并移动/缩放ROI；按住Shift仍可新建");
-        editRois.CheckedChanged += (_, _) =>
-        {
-            _viewer.EditRegions = editRois.Checked;
-            _viewer.Invalidate();
-            EditRegionsModeChanged?.Invoke(this, EventArgs.Empty);
-        };
         var edit = roi.AddButton("编辑ROI/规则", EditRegionRules);
         _tips.SetToolTip(edit, "在表格中编辑ROI名称、类型、检查项目及规则");
         var explore = roi.AddButton("采用探索文字ROI", AdoptExploredTextRegions);
@@ -332,6 +332,14 @@ public sealed class LabelInspectionControl : UserControl
                         break;
                     }
                 }
+            }
+        };
+        _viewer.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Delete && e.Modifiers == Keys.None && _active == null && _viewer.SelectedRegionIndex >= 0)
+            {
+                RemoveSelectedRegion();
+                e.Handled = true;
             }
         };
         _viewer.RegionEdited += (_, e) =>
@@ -532,16 +540,80 @@ public sealed class LabelInspectionControl : UserControl
     /// <summary><see cref="DrawKind"/>改变后触发。</summary>
     public event EventHandler? DrawKindChanged;
 
-    /// <summary>是否为“选中/调整ROI”模式：左键选中并移动/缩放ROI，按住Shift仍可新建。</summary>
-    [DefaultValue(false)]
+    /// <summary>
+    /// 是否可直接编辑ROI（默认开启）：单击选中、拖动框内移动、拖动控制点缩放，在框外拖动新建，Delete删除选中ROI。
+    /// 关闭后左键只新建ROI或点选检测证据。
+    /// </summary>
+    [DefaultValue(true)]
     public bool EditRegionsMode
     {
-        get => _editRois.Checked;
-        set => _editRois.Checked = value;
+        get => _editRegionsMode;
+        set
+        {
+            if (_editRegionsMode == value)
+            {
+                return;
+            }
+
+            _editRegionsMode = value;
+            ApplyDisplay();
+            EditRegionsModeChanged?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary><see cref="EditRegionsMode"/>改变后触发。</summary>
     public event EventHandler? EditRegionsModeChanged;
+
+    /// <summary>画布显示内容：输入图像、ROI或检测结果；只影响显示，不清除结果。</summary>
+    [DefaultValue(WorkbenchDisplayMode.Result)]
+    public WorkbenchDisplayMode DisplayMode
+    {
+        get => _displayMode;
+        set
+        {
+            if (_displayMode == value)
+            {
+                return;
+            }
+
+            _displayMode = value;
+            ApplyDisplay();
+            DisplayModeChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary><see cref="DisplayMode"/>改变后触发。</summary>
+    public event EventHandler? DisplayModeChanged;
+
+    /// <summary>在画布上选中指定名称的ROI（显示控制点，可直接调整）；null、找不到或画布不显示ROI时取消选中。</summary>
+    /// <param name = "name">ROI名称。</param>
+    public void SelectRegion(string? name)
+    {
+        int index = name == null || _displayMode == WorkbenchDisplayMode.InputImage
+            ? -1
+            : _regions.FindIndex(r => r.Name == name);
+        _viewer.SelectedRegionIndex = index < _shownRegions.Count ? index : -1;
+    }
+
+    /// <summary>删除画布上选中的ROI及引用它的字段绑定；未选中时返回false。</summary>
+    public bool RemoveSelectedRegion()
+    {
+        EnsureIdle();
+        int index = _viewer.SelectedRegionIndex;
+        if (index < 0 || index >= _regions.Count)
+        {
+            return false;
+        }
+
+        string name = _regions[index].Name;
+        _regions.RemoveAt(index);
+        _bindings = _bindings
+            .Where(b => b.Target != name && !(b.Source == EBindingSource.Region && b.Key == name))
+            .ToArray();
+        RefreshRegions();
+        _status.Message = "已删除ROI“" + name + "”。";
+        return true;
+    }
 
     /// <summary>ROI或字段绑定改变（画布绘制/调整、编辑、清空、载入配方等）后触发。</summary>
     public event EventHandler? RegionsChanged;
@@ -1208,10 +1280,9 @@ public sealed class LabelInspectionControl : UserControl
         LastRequest = null;
         LastReport = null;
         ClearGallery();
-        _viewer.SetCharacters(Array.Empty<CharacterPatch>());
         _lastFindings = Array.Empty<InspectionFinding>();
         _status.ShowIdle();
-        _viewer.SetOverlays(Regions, _lastFindings);
+        Show(Regions, Array.Empty<CharacterPatch>());
         _evidence.Items.Clear();
         foreach (var region in _regions)
         {
@@ -1223,6 +1294,28 @@ public sealed class LabelInspectionControl : UserControl
         }
 
         RegionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Show(IReadOnlyList<InspectionRegion> regions, IReadOnlyList<CharacterPatch> characters)
+    {
+        _shownRegions = regions;
+        _shownCharacters = characters;
+        ApplyDisplay();
+    }
+
+    // 按显示模式过滤叠加内容；ROI序号与_regions一致，选中/编辑/删除仍按序号对应。
+    private void ApplyDisplay()
+    {
+        bool regions = _displayMode != WorkbenchDisplayMode.InputImage;
+        bool result = _displayMode == WorkbenchDisplayMode.Result;
+        _viewer.AllowRegionDrawing = regions;
+        _viewer.EditRegions = regions && _editRegionsMode;
+        _viewer.DrawOutsideRegions = true;
+        _viewer.SetCharacters(result ? _shownCharacters : Array.Empty<CharacterPatch>());
+        _viewer.SetOverlays(
+            regions ? _shownRegions : Array.Empty<InspectionRegion>(),
+            result ? _lastFindings : Array.Empty<InspectionFinding>()
+        );
     }
 
     private void Display(InspectionReport report)
@@ -1270,11 +1363,9 @@ public sealed class LabelInspectionControl : UserControl
                 ).WithTasks(r.Tasks)
             )
             .ToArray();
-        _viewer.SetOverlays(mapped, _lastFindings);
-        _viewer.SetCharacters(
-            report.Analysis.Regions.SelectMany(r =>
-                r.Segmentation?.Characters ?? Array.Empty<CharacterPatch>()
-            )
+        Show(
+            mapped,
+            report.Analysis.Regions.SelectMany(r => r.Segmentation?.Characters ?? Array.Empty<CharacterPatch>()).ToArray()
         );
         ClearGallery();
         if (!report.Analysis.Regions.Any(r => r.Glyphs.Count > 0))
@@ -1288,59 +1379,31 @@ public sealed class LabelInspectionControl : UserControl
                 : !appearanceRequested
                     ? "本次未启用单字外观检查，仅显示OCR/内容规则/绑定校验结果。如需检查缺墨、断笔等，请为文字ROI绑定字形库及版本。"
                 : "没有可展示的单字结果。已请求外观检查，请查看分割状态、字库版本或缺字原因。";
-            string details = string.Join(
-                Environment.NewLine,
-                report
-                    .EvidenceGroups.Where(g => !g.IsBarcode)
-                    .Select(g => g.RegionName + " / " + g.Summary.Code + ": " + g.Summary.Message)
-            );
-            if (report.EvidenceGroups.Any(g => g.IsBarcode))
+            // 各ROI的明细已在“检查证据”中，这里只给出没有单字结果的原因。
+            var empty = new Label
             {
-                reason = "点击条码汇总F项，可查看缺陷标记及完整子项明细。" + Environment.NewLine + reason;
-            }
-
-            _glyphGallery.Controls.Add(
-                new Label
-                {
-                    Name = "GlyphEmptyReason",
-                    AutoSize = true,
-                    MaximumSize = new Size(1000, 0),
-                    Padding = new Padding(10),
-                    ForeColor = noOcr || appearanceRequested ? Color.DarkRed : Color.DimGray,
-                    Text = reason + Environment.NewLine + details,
-                }
-            );
+                Name = "GlyphEmptyReason",
+                AutoSize = true,
+                MaximumSize = new Size(1000, 0),
+                Padding = new Padding(6),
+                ForeColor = noOcr || appearanceRequested ? ModernTheme.Dark.Warning : ModernTheme.Dark.TextSecondary,
+                Text = reason,
+            };
+            _glyphGallery.Controls.Add(empty);
+            _glyphGallery.SetFlowBreak(empty, true);
         }
 
         foreach (var region in report.Analysis.Regions)
         {
             foreach (var glyph in region.Glyphs)
             {
-                var card = new FlowLayoutPanel
-                {
-                    Width = 330,
-                    Height = 190,
-                    FlowDirection = FlowDirection.LeftToRight,
-                    Tag = Tuple.Create(region.RegionName, glyph),
-                };
-                card.Controls.Add(
-                    new Label
-                    {
-                        Text = region.RegionName + " / " + glyph.Character.Character + " · " + glyph.Status,
-                        Width = 320,
-                        Height = 22,
-                    }
+                var card = new GlyphResultCard(
+                    region.RegionName,
+                    glyph,
+                    _regions.FirstOrDefault(r => r.Name == region.RegionName)?.Field?.MaximumDifference
                 );
-                AddPreview(card, glyph.Character.Patch, "原始单字");
-                if (glyph.Comparison != null)
-                {
-                    AddPreview(card, glyph.Comparison.Reference, "参考");
-                    AddPreview(card, glyph.Comparison.Actual, "归一实际");
-                    AddPreview(card, glyph.Comparison.Delta, "差异");
-                }
-
                 AddAction(
-                    card,
+                    card.Actions,
                     "下载单字",
                     () =>
                     {
@@ -1360,7 +1423,7 @@ public sealed class LabelInspectionControl : UserControl
                     }
                 );
                 AddAction(
-                    card,
+                    card.Actions,
                     "确认补库",
                     () =>
                     {
@@ -1447,23 +1510,28 @@ public sealed class LabelInspectionControl : UserControl
             var comparison = new BarcodeComparisonControl(LastRequest.CreateActualSnapshot(), barcode)
             {
                 Tag = barcode,
-                Width = Math.Max(600, _glyphGallery.ClientSize.Width - 30),
             };
             _glyphGallery.Controls.Add(comparison);
             _glyphGallery.Controls.SetChildIndex(comparison, 0);
+            _glyphGallery.SetFlowBreak(comparison, true);
+            FitComparisons();
+            info.Visible = !barcode.IsBarcode && count > 0;
+            info.Text = barcode.RegionName + "：" + count + " 个相关单字";
             return;
         }
 
         info.Visible = selection != null;
-        info.Text =
-            selection == null
-                ? ""
-                : selection.Item1
-                    + " / "
-                    + selection.Item2.Code
-                    + "：关联单字 "
-                    + count
-                    + " 个。可用“显示全部单字”恢复。";
+        info.Text = selection == null ? "" : selection.Item1 + "：" + count + " 个相关单字";
+    }
+
+    // 证据的ROI图像与结论占满结果区宽度，高度随宽度在合理范围内变化。
+    private void FitComparisons()
+    {
+        int width = Math.Max(320, _glyphGallery.ClientSize.Width - _glyphGallery.Padding.Horizontal - 8);
+        foreach (var comparison in _glyphGallery.Controls.OfType<BarcodeComparisonControl>())
+        {
+            comparison.Size = new Size(width, Math.Max(LogicalToDeviceUnits(320), Math.Min(LogicalToDeviceUnits(520), width / 2)));
+        }
     }
 
     private void AddEvidence(string region, InspectionFinding finding, int index)

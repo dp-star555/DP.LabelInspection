@@ -84,20 +84,25 @@ internal static partial class RegionEditor
 
         [
             Category("07 异常检测（方法B）"),
-            DisplayName("异常模型库ID"),
+            DisplayName("异常模型库"),
             Description(
-                "异常模型库标识，不是显示名称。建议通过下方模型库下拉框和“绑定所选异常模型库/版本”设置。ID与版本必须同时指定；清除绑定时两者都清空。"
+                "选择异常模型库及其固定修订；选择后按库中内容自动设置整ROI/逐字符模式。重新训练或替换模型会发布新修订，不会自动升级此ROI，需重新选择。选“（不绑定）”清除绑定。"
             )
         ]
+        public LibraryChoice AnomalyLibrary
+        {
+            get => (Sources ?? LibrarySources.Empty).Anomaly(AnomalyLibraryId, AnomalyLibraryRevision);
+            set
+            {
+                AnomalyLibraryId = value?.Id;
+                AnomalyLibraryRevision = value?.Revision;
+            }
+        }
+
+        [Browsable(false)]
         public string? AnomalyLibraryId { get; set; }
 
-        [
-            Category("07 异常检测（方法B）"),
-            DisplayName("异常模型库版本（修订号）"),
-            Description(
-                "大于等于1的整数，固定使用该修订。重新训练或替换模型会发布新修订，不会自动升级此ROI；需重新绑定。"
-            )
-        ]
+        [Browsable(false)]
         public int? AnomalyLibraryRevision { get; set; }
 
         [
@@ -196,21 +201,37 @@ internal static partial class RegionEditor
 
         [
             Category("03 单字外观（仅文字）"),
-            DisplayName("字库类别ID"),
+            DisplayName("字库"),
             Description(
-                "要比较的单字参考库标识，不是字库显示名称。建议通过下方字库下拉框和“绑定所选类别/版本”设置，避免手填错误。类别ID与版本必须同时指定；未绑定的普通OCR不执行字库比较。"
+                "要比较的单字参考库及其固定修订。字库补字后发布新修订，不会自动升级此ROI，需重新选择“（最新）”项。选“（不绑定）”时普通OCR不执行字库比较；缺参考字或版本不可用导致必检比对未完成时判NG。"
             )
         ]
+        public LibraryChoice GlyphLibrary
+        {
+            get => (Sources ?? LibrarySources.Empty).Glyph(LibraryId, LibraryRevision);
+            set
+            {
+                LibraryId = value?.Id;
+                LibraryRevision = value?.Revision;
+            }
+        }
+
+        [Browsable(false)]
         public string? LibraryId { get; set; }
 
-        [
-            Category("03 单字外观（仅文字）"),
-            DisplayName("字库版本（修订号）"),
-            Description(
-                "大于等于1的整数，固定使用该修订。字库补字后不会自动升级此ROI；需在下方重新绑定新修订。清除绑定时类别ID和版本均须清空。缺参考字或版本不可用导致必检比对未完成时判NG。"
-            )
-        ]
+        [Browsable(false)]
         public int? LibraryRevision { get; set; }
+
+        /// <summary>库下拉的可选项来源；由规则视图设置，不属于ROI配置。</summary>
+        internal LibrarySources? Sources { get; set; }
+
+        internal IReadOnlyList<LibraryChoice> Choices(string property)
+        {
+            var sources = Sources ?? LibrarySources.Empty;
+            return property == nameof(AnomalyLibrary)
+                ? sources.AnomalyChoices(AnomalyLibrary)
+                : sources.GlyphChoices(GlyphLibrary);
+        }
 
         [
             Category("04 内容约束（文字/条码）"),

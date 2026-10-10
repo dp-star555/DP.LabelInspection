@@ -6,7 +6,7 @@ using DP.LabelInspection.Contracts;
 
 namespace DP.LabelInspection;
 
-/// <summary>带完整子证据的只读条码缺陷视图，不重复展示原图面板。</summary>
+/// <summary>所选证据的ROI图像与结论（上）及完整子项明细（下）；只读，不重复展示原图面板。</summary>
 internal sealed class BarcodeComparisonControl : UserControl
 {
     internal BarcodeComparisonControl(
@@ -60,37 +60,54 @@ internal sealed class BarcodeComparisonControl : UserControl
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 3,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 135));
-        var toolbar = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
-        toolbar.Controls.Add(
+        // 结论行：ROI、判定与汇总说明；右侧为视图按钮。操作提示放在工具提示中，不占版面。
+        var header = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 2,
+            Margin = Padding.Empty,
+        };
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        header.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var verdict = group.Summary.Verdict;
+        header.Controls.Add(
             new Label
             {
-                Text =
-                    group.Id
-                    + " · "
-                    + group.Status
-                    + " · "
-                    + group.RegionName
-                    + "；滚轮缩放，中/右键平移；双击明细放大",
-                AutoSize = true,
-                Padding = new Padding(0, 7, 0, 0),
-            }
+                Name = "EvidenceConclusion",
+                Text = group.RegionName + " · " + group.Status + " · " + group.Summary.Message,
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft,
+                Font = new Font(Font, FontStyle.Bold),
+                ForeColor =
+                    verdict == EInspectionVerdict.Ng ? ModernUI.WinForms.ModernTheme.Dark.Error
+                    : verdict == EInspectionVerdict.Review ? ModernUI.WinForms.ModernTheme.Dark.Warning
+                    : ModernUI.WinForms.ModernTheme.Dark.Success,
+            },
+            0,
+            0
         );
-        var fit = new Button { Text = "适应", AutoSize = true };
+        var toolbar = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        header.Controls.Add(toolbar, 1, 0);
+        var tips = new ToolTip();
+        Disposed += (_, _) => tips.Dispose();
+        tips.SetToolTip(marked, "滚轮缩放，中/右键平移；双击下方明细放大到该处");
+        var fit = InspectionUiStyle.CreateButton("适应");
         fit.Click += (_, _) => marked.FitToWindow();
         toolbar.Controls.Add(fit);
-        var pixel = new Button { Text = "1:1", AutoSize = true };
+        var pixel = InspectionUiStyle.CreateButton("1:1");
         pixel.Click += (_, _) => marked.ActualSize();
         toolbar.Controls.Add(pixel);
         if (allowExpand)
         {
-            var expand = new Button { Text = "独立放大查看", AutoSize = true };
+            var expand = InspectionUiStyle.CreateButton("独立放大");
             expand.Click += (_, _) =>
             {
                 using var window = new Form
@@ -108,22 +125,9 @@ internal sealed class BarcodeComparisonControl : UserControl
             toolbar.Controls.Add(expand);
         }
 
-        layout.Controls.Add(toolbar, 0, 0);
-        string notice =
-            !group.IsBarcode
-                ? "ROI内部："
-                    + group.LocalizedCandidateCount
-                    + "个定位候选框 / "
-                    + group.BlockingItemCount
-                    + "条比对阻断记录。缺字、分割失败不伪造局部缺陷点；完整明细如下。"
-            : defects.Any(d => d.Finding.AreaPixels.HasValue)
-                ? "缺陷标记：仅显示检测到的候选框，完整记录见下方。"
-            : defects.Any(d => d.Finding.Code == "barcode_not_decoded")
-                ? "读码失败NG：标记整个码区；未取得可靠结构，不能伪造内部小缺陷位置。"
-            : "没有局部墨迹框；请查看下方内容/质量明细。";
-        layout.Controls.Add(new Label { Text = notice, AutoSize = true }, 0, 1);
-        layout.Controls.Add(marked, 0, 2);
-        var details = new ListView
+        layout.Controls.Add(header, 0, 0);
+        layout.Controls.Add(marked, 0, 1);
+        var details = new ModernUI.WinForms.ModernListView
         {
             Name = group.IsBarcode ? "BarcodeDefectDetails" : "RoiEvidenceDetails",
             Dock = DockStyle.Fill,
@@ -186,7 +190,7 @@ internal sealed class BarcodeComparisonControl : UserControl
                 }
             }
         };
-        layout.Controls.Add(details, 0, 3);
+        layout.Controls.Add(details, 0, 2);
         Controls.Add(layout);
     }
 }

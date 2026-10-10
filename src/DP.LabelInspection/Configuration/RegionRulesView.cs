@@ -1,130 +1,126 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 using DP.LabelInspection.Contracts;
+using ModernUI.WinForms;
 
 namespace DP.LabelInspection;
 
 /// <summary>
-/// ROI列表＋所选ROI的检测项目与规则属性。对话框（保存后生效）与可嵌入的<see cref="RegionRulesControl"/>（即时生效）共用。
+/// ROI规则卡片列表：每张卡片的标题为ROI名称，单击展开后以分组属性表显示该ROI的检测项目与规则（字库、异常模型库为下拉参数）。
+/// 对话框（保存后生效）与可嵌入的<see cref="RegionRulesControl"/>（即时生效）共用。
 /// </summary>
 internal sealed class RegionRulesView : UserControl
 {
-    private readonly ListBox _list = new ListBox { Dock = DockStyle.Top, Height = 150, IntegralHeight = false };
-    private readonly PropertyGrid _grid = new PropertyGrid
-    {
-        Dock = DockStyle.Fill,
-        HelpVisible = false,
-        ToolbarVisible = false,
-        PropertySort = PropertySort.CategorizedAlphabetical,
-    };
-    private readonly TextBox _help = new TextBox
+    private static readonly ModernTheme Theme = ModernTheme.Dark;
+    private readonly ModernScrollView _scroll = new ModernScrollView { Dock = DockStyle.Fill };
+    private readonly CardStack _stack;
+    private readonly Label _help = new Label
     {
         Name = "RoiParameterHelp",
         Dock = DockStyle.Bottom,
-        Height = 96,
-        Multiline = true,
-        ReadOnly = true,
-        ScrollBars = ScrollBars.Vertical,
+        AutoSize = false,
+        Height = 54,
+        Padding = new Padding(8, 6, 8, 6),
+        AutoEllipsis = true,
     };
-    private readonly ComboBox _libraries = new ComboBox { Width = 220, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly ComboBox _anomalyLibraries = new ComboBox { Width = 220, DropDownStyle = ComboBoxStyle.DropDownList };
-    private readonly List<RegionEditor.EditableRegion> _values = new List<RegionEditor.EditableRegion>();
+    private readonly List<RegionCard> _cards = new List<RegionCard>();
     private readonly string _idleHelp;
+    private LibrarySources _sources = LibrarySources.Empty;
     private IAnomalyLibraryManager? _anomalyManager;
+    private bool _anomalyWarning;
 
-    /// <summary>内容被用户修改（属性、绑定库、删除）后触发；即时模式的宿主据此写回。</summary>
+    /// <summary>内容被用户修改（属性、库绑定、删除）后触发；即时模式的宿主据此写回。</summary>
     internal event EventHandler? Edited;
 
-    /// <param name = "idleHelp">未选中参数时的说明。</param>
+    /// <summary>用户展开某张ROI卡片后触发（参数为ROI名称），宿主可在画布上选中同一ROI。</summary>
+    internal event EventHandler<string>? RegionActivated;
+
+    /// <param name = "idleHelp">没有提示时显示的说明。</param>
     internal RegionRulesView(string idleHelp)
     {
         _idleHelp = idleHelp;
-        _help.Text = idleHelp;
-        var bindings = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom,
-            AutoSize = true,
-            AutoSizeMode = AutoSizeMode.GrowAndShrink,
-            WrapContents = true,
-            Padding = new Padding(0, 2, 0, 2),
-        };
-        var bind = ActionGroup.CreateButton("绑定所选字库/版本", BindLibrary);
-        var bindAnomaly = ActionGroup.CreateButton("绑定所选异常模型库/版本", BindAnomalyLibrary);
-        var remove = ActionGroup.CreateButton("删除选中ROI", RemoveSelected);
-        bindings.Controls.AddRange(new Control[] { _libraries, bind, _anomalyLibraries, bindAnomaly, remove });
-
-        _grid.SelectedGridItemChanged += (_, _) => Describe();
-        _grid.PropertyValueChanged += (_, _) =>
-        {
-            Describe();
-            RefreshListText();
-            Edited?.Invoke(this, EventArgs.Empty);
-        };
-        _list.SelectedIndexChanged += (_, _) => _grid.SelectedObject = _list.SelectedItem;
-        // 停靠按Z序倒序处理：列表在上，说明与绑定在下，属性占余下空间。
-        Controls.Add(_grid);
-        Controls.Add(_list);
+        _stack = new CardStack(this);
+        _scroll.Content = _stack;
+        _scroll.ApplyTheme(Theme);
+        _scroll.SizeChanged += (_, _) => _stack.PerformLayout();
+        BackColor = _stack.BackColor = Theme.Background;
+        _help.BackColor = Theme.Background;
+        ShowMessage(idleHelp);
+        Controls.Add(_scroll);
         Controls.Add(_help);
-        Controls.Add(bindings);
     }
 
-    /// <summary>当前是否有ROI。</summary>
-    internal int Count => _values.Count;
+    /// <summary>当前ROI数量。</summary>
+    internal int Count => _cards.Count;
 
     /// <summary>显示说明或错误（错误以醒目颜色显示）。</summary>
     internal void ShowMessage(string text, bool error = false)
     {
         _help.Text = text;
-        _help.ForeColor = error ? Color.Firebrick : ForeColor;
+        _help.ForeColor = error ? Theme.Error : Theme.TextSecondary;
     }
 
-    /// <summary>重新载入ROI与可绑定的库列表，尽量保持原选中ROI。</summary>
+    /// <summary>重新载入ROI与可绑定的库列表，保持原展开的ROI及滚动位置。</summary>
     internal void SetRegions(
         IEnumerable<InspectionRegion> regions,
         IGlyphLibraryManager? manager,
         IAnomalyLibraryManager? anomalyManager
     )
     {
-        string? selected = (_list.SelectedItem as RegionEditor.EditableRegion)?.Name;
+        string? expanded = Expanded?.Value.Name;
+        int offset = _scroll.ScrollOffset;
         _anomalyManager = anomalyManager;
-        _values.Clear();
-        _values.AddRange(regions.Select(r => new RegionEditor.EditableRegion(r)));
-        _list.BeginUpdate();
-        _list.Items.Clear();
-        foreach (var value in _values)
+        _sources = new LibrarySources(manager, anomalyManager);
+        _stack.SuspendLayout();
+        try
         {
-            _list.Items.Add(value);
+            foreach (var card in _cards)
+            {
+                card.Dispose();
+            }
+
+            _cards.Clear();
+            foreach (var region in regions)
+            {
+                var card = new RegionCard(this, new RegionEditor.EditableRegion(region) { Sources = _sources });
+                _cards.Add(card);
+                _stack.Controls.Add(card);
+            }
+
+            Expand(_cards.FirstOrDefault(c => c.Value.Name == expanded), false);
+        }
+        finally
+        {
+            _stack.ResumeLayout(true);
         }
 
-        _list.EndUpdate();
-        int index = _values.FindIndex(v => v.Name == selected);
-        _list.SelectedIndex = index >= 0 ? index : _values.Count > 0 ? 0 : -1;
-        if (_list.SelectedIndex < 0)
-        {
-            _grid.SelectedObject = null;
-        }
-
-        Fill(_libraries, manager?.ListLibraries().Cast<object>());
-        Fill(_anomalyLibraries, anomalyManager?.ListAnomalyLibraries().Cast<object>());
+        _scroll.ScrollOffset = offset;
     }
 
-    /// <summary>按名称选中ROI（例如画布上选中后同步）。</summary>
+    /// <summary>按名称展开ROI卡片（例如画布上选中后同步），并滚动到该卡片。</summary>
     internal void SelectRegion(string name)
     {
-        int index = _values.FindIndex(v => v.Name == name);
-        if (index >= 0)
+        var card = _cards.FirstOrDefault(c => c.Value.Name == name);
+        if (card != null && card != Expanded)
         {
-            _list.SelectedIndex = index;
+            Expand(card, false);
+            _scroll.ScrollOffset = card.Top;
         }
     }
 
     /// <summary>生成不可变ROI配置；名称必须唯一。</summary>
     internal InspectionRegion[] Build()
     {
-        var result = _values.Select(v => v.Build()).ToArray();
+        foreach (var card in _cards)
+        {
+            card.CommitPendingEdit();
+        }
+
+        var result = _cards.Select(c => c.Value.Build()).ToArray();
         if (result.Select(v => v.Name).Distinct(StringComparer.Ordinal).Count() != result.Length)
         {
             throw new ArgumentException("ROI名称必须唯一。");
@@ -133,74 +129,78 @@ internal sealed class RegionRulesView : UserControl
         return result;
     }
 
-    private static void Fill(ComboBox box, IEnumerable<object>? items)
+    private RegionCard? Expanded => _cards.FirstOrDefault(c => c.IsExpanded);
+
+    private void Expand(RegionCard? card, bool user)
     {
-        object? old = box.SelectedItem;
-        box.Items.Clear();
-        foreach (var item in items ?? Enumerable.Empty<object>())
+        foreach (var other in _cards)
         {
-            box.Items.Add(item);
+            other.IsExpanded = other == card;
         }
 
-        if (old != null && box.Items.Contains(old))
+        _stack.PerformLayout();
+        if (user && card != null)
         {
-            box.SelectedItem = old;
-        }
-    }
-
-    private void Describe()
-    {
-        var property = _grid.SelectedGridItem?.PropertyDescriptor;
-        ShowMessage(property == null ? _idleHelp : property.DisplayName + "\r\n" + property.Description);
-    }
-
-    private void RefreshListText()
-    {
-        // ListBox只在项目替换时重绘文字；名称/类型改变后刷新所选项显示。
-        int index = _list.SelectedIndex;
-        if (index >= 0)
-        {
-            _list.Items[index] = _list.Items[index];
+            RegionActivated?.Invoke(this, card.Value.Name);
         }
     }
 
-    private void BindLibrary()
+    private void Toggle(RegionCard card) => Expand(card.IsExpanded ? null : card, true);
+
+    private void Remove(RegionCard card)
     {
-        if (_list.SelectedItem is RegionEditor.EditableRegion r && _libraries.SelectedItem is GlyphLibraryInfo l)
-        {
-            r.LibraryId = l.Id;
-            r.LibraryRevision = l.Revision;
-            _grid.Refresh();
-            Edited?.Invoke(this, EventArgs.Empty);
-        }
+        _cards.Remove(card);
+        card.Dispose();
+        _stack.PerformLayout();
+        ShowMessage("已删除ROI“" + card.Value.Name + "”。");
+        Edited?.Invoke(this, EventArgs.Empty);
     }
 
-    private void RemoveSelected()
+    private void OnPropertyChanged(RegionCard card, string property)
     {
-        if (_list.SelectedItem is RegionEditor.EditableRegion r)
+        var value = card.Value;
+        if (property == nameof(RegionEditor.EditableRegion.AnomalyLibrary))
         {
-            _values.Remove(r);
-            _list.Items.Remove(r);
-            _grid.SelectedObject = _list.SelectedItem;
-            Edited?.Invoke(this, EventArgs.Empty);
+            string note = DescribeAnomalyBinding(value);
+            ShowMessage(note, _anomalyWarning);
+            card.RefreshProperties(
+                nameof(RegionEditor.EditableRegion.AnomalyPerCharacter),
+                nameof(RegionEditor.EditableRegion.AnomalyModelKey)
+            );
         }
+        else if (property == nameof(RegionEditor.EditableRegion.GlyphLibrary))
+        {
+            ShowMessage(
+                value.LibraryId == null
+                    ? value.Name + "：已取消字库绑定，不执行单字外观比较。"
+                    : value.Name + "：已绑定字库 " + value.GlyphLibrary + "。"
+            );
+        }
+        else
+        {
+            ShowMessage(_idleHelp);
+        }
+
+        card.Invalidate(true);
+        Edited?.Invoke(this, EventArgs.Empty);
     }
 
-    private void BindAnomalyLibrary()
+    // 选择异常模型库后按库中实际内容选择模式：有本ROI的整ROI模型用整ROI；文字ROI且库中是字符模型则选逐字符；都没有时给出提示。
+    private string DescribeAnomalyBinding(RegionEditor.EditableRegion r)
     {
-        if (
-            !(_list.SelectedItem is RegionEditor.EditableRegion r)
-            || !(_anomalyLibraries.SelectedItem is AnomalyLibraryInfo l)
-            || _anomalyManager == null
-        )
+        _anomalyWarning = false;
+        if (r.AnomalyLibraryId == null || r.AnomalyLibraryRevision == null)
         {
-            return;
+            return r.Name + "：已取消异常模型库绑定。";
         }
 
-        r.AnomalyLibraryId = l.Id;
-        r.AnomalyLibraryRevision = l.Revision;
-        // 按库中实际内容选择模式：有本ROI的整ROI模型用整ROI；文字ROI且库中是字符模型则选逐字符；都没有时立即提示。
-        var models = _anomalyManager.LoadAnomalyLibrary(l.Id, l.Revision).Models;
+        var choice = r.AnomalyLibrary;
+        if (_anomalyManager == null)
+        {
+            return r.Name + "：已绑定 " + choice + "。";
+        }
+
+        var models = _anomalyManager.LoadAnomalyLibrary(r.AnomalyLibraryId, r.AnomalyLibraryRevision.Value).Models;
         string key = string.IsNullOrWhiteSpace(r.AnomalyModelKey) ? r.Name : r.AnomalyModelKey!;
         bool whole = models.TryGetValue(key, out var own) && own.Scope == EAnomalyModelScope.Region;
         // 字符模型按字符组（null为不分组）归类；优先与模型键/ROI同名的组，其次不分组，再次唯一的组。
@@ -217,47 +217,267 @@ internal sealed class RegionRulesView : UserControl
             : groups.Count == 1 ? groups.Keys.Single()
             : null;
         string Describe(string g) => (g.Length == 0 ? "不分组" : "组[" + g + "]") + "：" + groups[g];
-        string note;
         if (whole)
         {
             r.AnomalyPerCharacter = false;
-            note = $"已绑定 {l.Name} r{l.Revision}：整ROI模型[{key}]。";
+            return $"{r.Name}：已绑定 {choice}，整ROI模型[{key}]。";
         }
-        else if (r.Kind == ERegionKind.Text && group != null)
+
+        if (r.Kind == ERegionKind.Text && group != null)
         {
             r.AnomalyPerCharacter = true;
             r.AnomalyModelKey = group.Length == 0 ? null : group;
-            note =
-                $"已绑定 {l.Name} r{l.Revision}：字符模型（{Describe(group)}），已自动选择“逐字符检查”（需要OCR）。"
+            return $"{r.Name}：已绑定 {choice}，字符模型（{Describe(group)}），已自动选择“逐字符检查”（需要OCR）。"
                 + (groups.Count > 1 ? "库中还有其他字符组，可在“模型键”中改填。" : "");
         }
-        else
+
+        _anomalyWarning = true;
+        var regions = models.Values.Where(m => m.Scope == EAnomalyModelScope.Region).Select(m => m.Key).ToArray();
+        return $"注意：{choice} 中没有模型[{key}]，检测时{r.Name}的B会判NG。"
+            + (regions.Length == 0 ? "库中没有整ROI模型。" : "库中现有整ROI模型：" + string.Join("、", regions) + "（可在“模型键”中填写）。")
+            + (
+                groups.Count == 0 ? ""
+                : r.Kind == ERegionKind.Text
+                    ? "库中有多个字符组（"
+                        + string.Join("；", groups.Keys.OrderBy(g => g, StringComparer.Ordinal).Select(Describe))
+                        + "），请选“逐字符检查”并在“模型键”中填写字符组。"
+                : "字符模型只能用于文字ROI的逐字符检查。"
+            )
+            + "请先在异常模型窗口中为本ROI训练并发布。";
+    }
+
+    /// <summary>纵向排列卡片；展开的卡片占满剩余高度（至少可显示若干行参数），超出时由外层滚动。</summary>
+    private sealed class CardStack : Panel
+    {
+        private readonly RegionRulesView _owner;
+
+        internal CardStack(RegionRulesView owner)
         {
-            var regions = models
-                .Values.Where(m => m.Scope == EAnomalyModelScope.Region)
-                .Select(m => m.Key)
-                .ToArray();
-            note =
-                $"注意：{l.Name} r{l.Revision} 中没有模型[{key}]，检测时本ROI的B会判NG。"
-                + (
-                    regions.Length == 0
-                        ? "库中没有整ROI模型。"
-                        : "库中现有整ROI模型：" + string.Join("、", regions) + "（可在“模型键”中填写）。"
-                )
-                + (
-                    groups.Count == 0 ? ""
-                    : r.Kind == ERegionKind.Text
-                        ? "库中有多个字符组（"
-                            + string.Join("；", groups.Keys.OrderBy(g => g, StringComparer.Ordinal).Select(Describe))
-                            + "），请选“逐字符检查”并在“模型键”中填写字符组。"
-                    : "字符模型只能用于文字ROI的逐字符检查。"
-                )
-                + "请先在“批量训练(B)”中为本ROI训练并发布。";
-            MessageBox.Show(FindForm(), note, "异常模型库中没有此ROI的模型");
+            _owner = owner;
+            DoubleBuffered = true;
         }
 
-        ShowMessage(note);
-        _grid.Refresh();
-        Edited?.Invoke(this, EventArgs.Empty);
+        private int Gap => LogicalToDeviceUnits(6);
+
+        private int ExpandedBody(int viewport)
+        {
+            int headers = _owner._cards.Count * (RegionCard.HeaderHeight(this) + Gap);
+            return Math.Max(LogicalToDeviceUnits(380), viewport - headers - Gap);
+        }
+
+        public override Size GetPreferredSize(Size proposedSize)
+        {
+            int viewport = _owner._scroll.ClientSize.Height;
+            int height = Gap;
+            foreach (var card in _owner._cards)
+            {
+                height += RegionCard.HeaderHeight(this) + Gap + (card.IsExpanded ? ExpandedBody(viewport) : 0);
+            }
+
+            return new Size(proposedSize.Width, height);
+        }
+
+        protected override void OnLayout(LayoutEventArgs levent)
+        {
+            base.OnLayout(levent);
+            int gap = Gap,
+                y = gap,
+                width = Math.Max(0, ClientSize.Width - 2 * gap),
+                body = ExpandedBody(_owner._scroll.ClientSize.Height);
+            foreach (var card in _owner._cards)
+            {
+                int height = RegionCard.HeaderHeight(this) + (card.IsExpanded ? body : 0);
+                card.SetBounds(gap, y, width, height);
+                y += height + gap;
+            }
+        }
+    }
+
+    /// <summary>一张ROI卡片：可点击的标题（名称、类型、尺寸、删除）＋展开后的属性表。</summary>
+    private sealed class RegionCard : Panel
+    {
+        private readonly RegionRulesView _owner;
+        private readonly CardHeader _header;
+        private ModernPropertyGrid.WinForms.ModernPropertyGrid? _grid;
+        private bool _expanded;
+
+        internal RegionCard(RegionRulesView owner, RegionEditor.EditableRegion value)
+        {
+            _owner = owner;
+            Value = value;
+            BackColor = Theme.Container;
+            Padding = new Padding(1);
+            _header = new CardHeader(this) { Dock = DockStyle.Top };
+            Controls.Add(_header);
+        }
+
+        internal RegionEditor.EditableRegion Value { get; }
+
+        internal static int HeaderHeight(Control control) => control.LogicalToDeviceUnits(40);
+
+        internal bool IsExpanded
+        {
+            get => _expanded;
+            set
+            {
+                if (_expanded == value)
+                {
+                    return;
+                }
+
+                _expanded = value;
+                if (value && _grid == null)
+                {
+                    // 属性表只在首次展开时创建，ROI较多时不为折叠卡片构建编辑器。
+                    _grid = new ModernPropertyGrid.WinForms.ModernPropertyGrid
+                    {
+                        Dock = DockStyle.Fill,
+                        Theme = Theme,
+                        ShowSearchBar = false,
+                        AnimateCategoryExpansion = false,
+                    };
+                    _grid.RegisterEditor(LibraryChoiceEditorProvider.Instance);
+                    _grid.SelectedObject = Value;
+                    _grid.PropertyValueChanged += (_, e) => _owner.OnPropertyChanged(this, e.Property.Name);
+                    Controls.Add(_grid);
+                    _grid.BringToFront();
+                }
+
+                if (_grid != null)
+                {
+                    _grid.Visible = value;
+                }
+
+                _header.Invalidate();
+                Invalidate();
+            }
+        }
+
+        internal void CommitPendingEdit() => _grid?.CommitPendingEdit();
+
+        internal void RefreshProperties(params string[] names)
+        {
+            foreach (var name in names)
+            {
+                _grid?.RefreshProperty(name);
+            }
+        }
+
+        internal void Toggle() => _owner.Toggle(this);
+
+        internal void Remove() => _owner.Remove(this);
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+            using var pen = new Pen(_expanded ? Theme.Primary : Theme.Border);
+            e.Graphics.DrawRectangle(pen, 0, 0, Width - 1, Height - 1);
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            Invalidate();
+        }
+    }
+
+    /// <summary>卡片标题：展开箭头、ROI名称、类型与尺寸，右侧删除按钮。</summary>
+    private sealed class CardHeader : Control
+    {
+        private readonly RegionCard _card;
+        private readonly ModernButton _remove = new ModernButton
+        {
+            ButtonType = ModernButtonType.Text,
+            Icon = ModernIconKind.Close,
+            Theme = Theme,
+            Dock = DockStyle.Right,
+            AccessibleName = "删除此ROI",
+        };
+        private bool _hover;
+
+        internal CardHeader(RegionCard card)
+        {
+            _card = card;
+            SetStyle(
+                ControlStyles.AllPaintingInWmPaint
+                    | ControlStyles.OptimizedDoubleBuffer
+                    | ControlStyles.UserPaint
+                    | ControlStyles.ResizeRedraw,
+                true
+            );
+            Cursor = Cursors.Hand;
+            Height = RegionCard.HeaderHeight(this);
+            _remove.Width = LogicalToDeviceUnits(36);
+            _remove.Click += (_, _) => _card.Remove();
+            Controls.Add(_remove);
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            base.OnClick(e);
+            _card.Toggle();
+        }
+
+        protected override void OnMouseEnter(EventArgs e)
+        {
+            base.OnMouseEnter(e);
+            _hover = true;
+            Invalidate();
+        }
+
+        protected override void OnMouseLeave(EventArgs e)
+        {
+            base.OnMouseLeave(e);
+            _hover = false;
+            Invalidate();
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.Clear(_card.IsExpanded ? Theme.Elevated : _hover ? Theme.ControlHover : Theme.Container);
+            int S(int logical) => LogicalToDeviceUnits(logical);
+            var value = _card.Value;
+            using (
+                var chevron = ModernIcons.CreateBitmap(
+                    _card.IsExpanded ? ModernIconKind.ChevronDown : ModernIconKind.ChevronRight,
+                    Theme.TextSecondary,
+                    S(14)
+                )
+            )
+            {
+                g.DrawImage(chevron, S(10), (Height - chevron.Height) / 2);
+            }
+            int right = Width - _remove.Width - S(8);
+            string kind = new ChineseRegionKindConverter().ConvertToString(value.Kind) ?? value.Kind.ToString();
+            string summary = kind + " · " + value.Width + "×" + value.Height
+                + (value.LibraryId != null ? " · 字库" : "")
+                + (value.AnomalyLibraryId != null ? " · 异常模型" : "");
+            const TextFormatFlags Line = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
+                | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
+            var summarySize = TextRenderer.MeasureText(g, summary, Font, Size.Empty, TextFormatFlags.SingleLine);
+            int summaryLeft = Math.Max(S(140), right - summarySize.Width);
+            using (var bold = new Font(Font, FontStyle.Bold))
+            {
+                TextRenderer.DrawText(
+                    g,
+                    value.Name,
+                    bold,
+                    new Rectangle(S(32), 0, Math.Max(0, summaryLeft - S(40)), Height),
+                    Theme.Text,
+                    Line
+                );
+            }
+
+            TextRenderer.DrawText(
+                g,
+                summary,
+                Font,
+                new Rectangle(summaryLeft, 0, Math.Max(0, right - summaryLeft), Height),
+                Theme.TextSecondary,
+                Line | TextFormatFlags.Right
+            );
+        }
     }
 }
