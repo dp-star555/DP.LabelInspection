@@ -50,9 +50,9 @@ public sealed class GlyphLibraryControl : UserControl
         Dock = DockStyle.Fill;
         Font = new Font("Microsoft YaHei UI", 9);
         _toolbar.Items.Add(new ToolStripLabel("字库"));
-        _toolbar.Items.Add(new ToolStripControlHost(_libraries) { AutoSize = false, Size = _libraries.Size });
+        _toolbar.Items.Add(new ToolStripControlHost(_libraries) { AutoSize = false, Size = _libraries.Size, ToolTipText = "字库" });
         _toolbar.Items.Add(new ToolStripSeparator());
-        Command("刷新", ModernIconKind.Redo, () => RefreshLibraries());
+        Command("刷新", ModernIconKind.Refresh, () => RefreshLibraries());
         Command("导入JSON", ModernIconKind.FolderOpen, ImportLibrary);
         _export = Command("导出JSON", ModernIconKind.SaveAs, ExportLibrary);
         _toolbar.Items.Add(new ToolStripSeparator());
@@ -87,6 +87,7 @@ public sealed class GlyphLibraryControl : UserControl
             if (!_syncing) ShowLibrary();
         };
         InspectionUiStyle.Apply(this);
+        InspectionUiStyle.FitToolStrip(_toolbar);
         UpdateCommands();
     }
 

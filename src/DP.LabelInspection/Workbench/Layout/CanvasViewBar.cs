@@ -28,7 +28,7 @@ internal sealed class CanvasViewBar : FlowLayoutPanel
                 AutoSize = true,
                 ForeColor = SystemColors.GrayText,
                 Margin = new Padding(0, 7, 0, 0),
-                Text = "滚轮缩放 · 中键/右键拖动平移 · Home复位 · 左键拖动绘制ROI",
+                Text = "滚轮缩放 · 中键/右键平移 · Home复位 · 框外拖动新建ROI · 单击选中后拖动调整 · Delete删除",
             }
         );
         _viewer.ViewChanged += OnViewChanged;

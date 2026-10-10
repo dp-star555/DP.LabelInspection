@@ -1273,8 +1273,9 @@ internal static class UiInteractionProbe
             timer.Stop();
             try
             {
-                var grid = Descendants(dialog).OfType<PropertyGrid>().Single();
-                var properties = System.ComponentModel.TypeDescriptor.GetProperties(grid.SelectedObject);
+                // 卡片式ROI规则：对话框默认展开第一张卡片，参数显示在现代属性表中。
+                var grid = Descendants(dialog).OfType<ModernPropertyGrid.WinForms.ModernPropertyGrid>().Single();
+                var properties = System.ComponentModel.TypeDescriptor.GetProperties(grid.SelectedObject!);
                 if (properties["BarcodePrintEnabled"] != null)
                 {
                     throw new InvalidOperationException(
@@ -1320,40 +1321,23 @@ internal static class UiInteractionProbe
                     );
                 }
 
-                GridItem root = grid.SelectedGridItem;
-                while (root.Parent != null)
+                if (
+                    properties["GlyphLibrary"] == null
+                    || properties["AnomalyLibrary"] == null
+                    || properties["LibraryId"]!.IsBrowsable
+                    || properties["AnomalyLibraryRevision"]!.IsBrowsable
+                )
                 {
-                    root = root.Parent;
+                    throw new InvalidOperationException("Library bindings are not dropdown parameters.");
                 }
 
-                GridItem? Find(GridItem item)
-                {
-                    if (item.PropertyDescriptor?.Name == "GlyphTolerance")
-                    {
-                        return item;
-                    }
-
-                    foreach (GridItem child in item.GridItems)
-                    {
-                        var found = Find(child);
-                        if (found != null)
-                        {
-                            return found;
-                        }
-                    }
-
-                    return null;
-                }
-
-                grid.SelectedGridItem =
-                    Find(root) ?? throw new InvalidOperationException("Glyph tolerance property is missing.");
-                var help = Descendants(dialog).OfType<TextBox>().Single(c => c.Name == "RoiParameterHelp");
+                var description = properties["GlyphTolerance"]!.Description;
+                var help = Descendants(dialog).Single(c => c.Name == "RoiParameterHelp");
                 if (
                     !help.Visible
-                    || help.Height < 100
-                    || !help.Text.Contains("边缘带")
-                    || !help.Text.Contains("完整面积")
-                    || !help.Text.Contains("不是原图像素")
+                    || !description.Contains("边缘带")
+                    || !description.Contains("完整面积")
+                    || !description.Contains("不是原图像素")
                 )
                 {
                     throw new InvalidOperationException("Selected parameter lacks visible actionable help.");
