@@ -42,7 +42,7 @@ internal sealed class GlyphResultCard : FlowLayoutPanel
         {
             Name = "GlyphDifference",
             AutoSize = true,
-            MaximumSize = new Size(4 * (TileWidth + 4), 0),
+            MaximumSize = new Size(4 * (LogicalToDeviceUnits(TileWidth) + 4), 0),
             ForeColor = exceeded ? Theme.Error : Theme.TextSecondary,
             Margin = new Padding(0, 0, 0, 4),
             Text = DifferenceText(glyph, limit),
@@ -125,8 +125,9 @@ internal sealed class GlyphResultCard : FlowLayoutPanel
         };
         tile.Controls.Add(new PictureBox
         {
-            Width = TileWidth,
-            Height = TileHeight,
+            // 小图与标题按DPI换算，避免标题被截断。
+            Width = LogicalToDeviceUnits(TileWidth),
+            Height = LogicalToDeviceUnits(TileHeight),
             Image = DrawingImageConverter.ToBitmap(frame),
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Theme.Background,
@@ -137,8 +138,8 @@ internal sealed class GlyphResultCard : FlowLayoutPanel
         {
             Text = caption,
             AutoSize = false,
-            Width = TileWidth,
-            Height = 20,
+            Width = LogicalToDeviceUnits(TileWidth),
+            Height = LogicalToDeviceUnits(22),
             TextAlign = ContentAlignment.MiddleCenter,
             ForeColor = Theme.TextSecondary,
             Margin = Padding.Empty,

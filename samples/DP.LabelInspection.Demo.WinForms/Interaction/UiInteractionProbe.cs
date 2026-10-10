@@ -1448,7 +1448,8 @@ internal static class UiInteractionProbe
             throw new InvalidOperationException("Unrelated region leaked into F selection.");
         }
 
-        Descendants(control).OfType<Button>().Single(b => b.Text == "显示全部单字").PerformClick();
+        // 取消证据选择即显示全部单字。
+        evidence.SelectedItems.Clear();
         if (cards.Count(c => c.Visible) != report.Analysis.Regions.Sum(r => r.Glyphs.Count))
         {
             throw new InvalidOperationException("Show-all did not restore gallery.");
@@ -1480,7 +1481,8 @@ internal static class UiInteractionProbe
             throw new InvalidOperationException("Image F overlay did not select corresponding glyphs.");
         }
 
-        Descendants(control).OfType<Button>().Single(b => b.Text == "显示全部单字").PerformClick();
+        // 取消证据选择即显示全部单字。
+        evidence.SelectedItems.Clear();
     }
 
     internal static void VerifyMissingOcrMessage(LabelInspectionControl control)

@@ -60,8 +60,10 @@ internal sealed class RegionRulesView : UserControl
     /// <summary>显示说明或错误（错误以醒目颜色显示）。</summary>
     internal void ShowMessage(string text, bool error = false)
     {
+        // 没有提示时不占版面。
         _help.Text = text;
         _help.ForeColor = error ? Theme.Error : Theme.TextSecondary;
+        _help.Visible = text.Length > 0;
     }
 
     /// <summary>重新载入ROI与可绑定的库列表，保持原展开的ROI及滚动位置。</summary>
@@ -146,15 +148,6 @@ internal sealed class RegionRulesView : UserControl
     }
 
     private void Toggle(RegionCard card) => Expand(card.IsExpanded ? null : card, true);
-
-    private void Remove(RegionCard card)
-    {
-        _cards.Remove(card);
-        card.Dispose();
-        _stack.PerformLayout();
-        ShowMessage("已删除ROI“" + card.Value.Name + "”。");
-        Edited?.Invoke(this, EventArgs.Empty);
-    }
 
     private void OnPropertyChanged(RegionCard card, string property)
     {
@@ -246,7 +239,10 @@ internal sealed class RegionRulesView : UserControl
             + "请先在异常模型窗口中为本ROI训练并发布。";
     }
 
-    /// <summary>纵向排列卡片；展开的卡片占满剩余高度（至少可显示若干行参数），超出时由外层滚动。</summary>
+    /// <summary>
+    /// 纵向排列卡片；展开的卡片占满剩余高度且至少占视口的四分之三，超出时由外层滚动。
+    /// 内容放得下时不保留滚动条槽位，卡片占满宽度。
+    /// </summary>
     private sealed class CardStack : Panel
     {
         private readonly RegionRulesView _owner;
@@ -262,7 +258,7 @@ internal sealed class RegionRulesView : UserControl
         private int ExpandedBody(int viewport)
         {
             int headers = _owner._cards.Count * (RegionCard.HeaderHeight(this) + Gap);
-            return Math.Max(LogicalToDeviceUnits(380), viewport - headers - Gap);
+            return Math.Max(Math.Max(LogicalToDeviceUnits(380), viewport * 3 / 4), viewport - headers - Gap);
         }
 
         public override Size GetPreferredSize(Size proposedSize)
@@ -272,6 +268,17 @@ internal sealed class RegionRulesView : UserControl
             foreach (var card in _owner._cards)
             {
                 height += RegionCard.HeaderHeight(this) + Gap + (card.IsExpanded ? ExpandedBody(viewport) : 0);
+            }
+
+            int gutter = height > viewport ? 14 : 0;
+            if (_owner._scroll.ScrollBarGutter != gutter)
+            {
+                // 槽位改变内容宽度；高度与宽度无关，下一轮布局即稳定。
+                _owner._scroll.ScrollBarGutter = gutter;
+                if (IsHandleCreated)
+                {
+                    BeginInvoke(new Action(() => _owner._scroll.PerformLayout()));
+                }
             }
 
             return new Size(proposedSize.Width, height);
@@ -293,7 +300,7 @@ internal sealed class RegionRulesView : UserControl
         }
     }
 
-    /// <summary>一张ROI卡片：可点击的标题（名称、类型、尺寸、删除）＋展开后的属性表。</summary>
+    /// <summary>一张ROI卡片：可点击的标题（ROI名称）＋展开后的属性表。</summary>
     private sealed class RegionCard : Panel
     {
         private readonly RegionRulesView _owner;
@@ -365,8 +372,6 @@ internal sealed class RegionRulesView : UserControl
 
         internal void Toggle() => _owner.Toggle(this);
 
-        internal void Remove() => _owner.Remove(this);
-
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
@@ -381,18 +386,10 @@ internal sealed class RegionRulesView : UserControl
         }
     }
 
-    /// <summary>卡片标题：展开箭头、ROI名称、类型与尺寸，右侧删除按钮。</summary>
+    /// <summary>卡片标题：展开箭头与ROI名称；删除ROI在画布上选中后按Delete。</summary>
     private sealed class CardHeader : Control
     {
         private readonly RegionCard _card;
-        private readonly ModernButton _remove = new ModernButton
-        {
-            ButtonType = ModernButtonType.Text,
-            Icon = ModernIconKind.Close,
-            Theme = Theme,
-            Dock = DockStyle.Right,
-            AccessibleName = "删除此ROI",
-        };
         private bool _hover;
 
         internal CardHeader(RegionCard card)
@@ -407,9 +404,6 @@ internal sealed class RegionRulesView : UserControl
             );
             Cursor = Cursors.Hand;
             Height = RegionCard.HeaderHeight(this);
-            _remove.Width = LogicalToDeviceUnits(36);
-            _remove.Click += (_, _) => _card.Remove();
-            Controls.Add(_remove);
         }
 
         protected override void OnClick(EventArgs e)
@@ -438,7 +432,6 @@ internal sealed class RegionRulesView : UserControl
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.Clear(_card.IsExpanded ? Theme.Elevated : _hover ? Theme.ControlHover : Theme.Container);
             int S(int logical) => LogicalToDeviceUnits(logical);
-            var value = _card.Value;
             using (
                 var chevron = ModernIcons.CreateBitmap(
                     _card.IsExpanded ? ModernIconKind.ChevronDown : ModernIconKind.ChevronRight,
@@ -449,34 +442,15 @@ internal sealed class RegionRulesView : UserControl
             {
                 g.DrawImage(chevron, S(10), (Height - chevron.Height) / 2);
             }
-            int right = Width - _remove.Width - S(8);
-            string kind = new ChineseRegionKindConverter().ConvertToString(value.Kind) ?? value.Kind.ToString();
-            string summary = kind + " · " + value.Width + "×" + value.Height
-                + (value.LibraryId != null ? " · 字库" : "")
-                + (value.AnomalyLibraryId != null ? " · 异常模型" : "");
-            const TextFormatFlags Line = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine
-                | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix;
-            var summarySize = TextRenderer.MeasureText(g, summary, Font, Size.Empty, TextFormatFlags.SingleLine);
-            int summaryLeft = Math.Max(S(140), right - summarySize.Width);
-            using (var bold = new Font(Font, FontStyle.Bold))
-            {
-                TextRenderer.DrawText(
-                    g,
-                    value.Name,
-                    bold,
-                    new Rectangle(S(32), 0, Math.Max(0, summaryLeft - S(40)), Height),
-                    Theme.Text,
-                    Line
-                );
-            }
 
+            using var bold = new Font(Font, FontStyle.Bold);
             TextRenderer.DrawText(
                 g,
-                summary,
-                Font,
-                new Rectangle(summaryLeft, 0, Math.Max(0, right - summaryLeft), Height),
-                Theme.TextSecondary,
-                Line | TextFormatFlags.Right
+                _card.Value.Name,
+                bold,
+                new Rectangle(S(32), 0, Math.Max(0, Width - S(40)), Height),
+                Theme.Text,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix
             );
         }
     }
