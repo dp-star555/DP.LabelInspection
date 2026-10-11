@@ -542,7 +542,7 @@ public sealed class ImageViewerControl : Control
                 _drawing && _editor.Tool == DP.Vision.UI.ERoiTool.Select && _editor.Preview != null
                     ? ToRect(_editor.Preview)
                     : _regions[_selected].Bounds;
-            DrawSelection(e.Graphics, view, box);
+            // 选中只画八个控制点，不另加外框和说明文字，同位置的结果框（NG红/OK橙）及F序号保持可见。
             foreach (var handle in Handles(box))
             {
                 e.Graphics.FillRectangle(Brushes.DarkViolet, handle.X - 4, handle.Y - 4, 8, 8);
@@ -574,39 +574,6 @@ public sealed class ImageViewerControl : Control
 
         using var brush = new SolidBrush(color);
         graphics.DrawString(caption, Font, brush, x, Math.Max(0, y - Font.Height));
-    }
-
-    /// <summary>
-    /// 选中框画在ROI框外侧、说明写在框下方：同位置的结果框（NG红/OK橙）及其F序号保持可见，结果视图中选中ROI也能看出判定。
-    /// </summary>
-    private void DrawSelection(Graphics graphics, RectangleF viewport, PixelRect box)
-    {
-        float scale = viewport.Width / _bitmap!.Width;
-        var rectangle = new RectangleF(
-            viewport.X + box.X * scale - 3,
-            viewport.Y + box.Y * scale - 3,
-            box.Width * scale + 6,
-            box.Height * scale + 6
-        );
-        if (
-            rectangle.Right < 0
-            || rectangle.Bottom < 0
-            || rectangle.Left > ClientSize.Width
-            || rectangle.Top > ClientSize.Height
-        )
-        {
-            return;
-        }
-
-        using var pen = new Pen(Color.DarkViolet, 2) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash };
-        graphics.DrawRectangle(pen, rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
-        graphics.DrawString(
-            "选中：拖动调整 · Delete删除 · Ctrl+C复制",
-            Font,
-            Brushes.DarkViolet,
-            rectangle.X,
-            Math.Min(rectangle.Bottom + 1, ClientSize.Height - Font.Height)
-        );
     }
 
     private void DrawBox(Graphics graphics, RectangleF viewport, PixelRect box, Color color, string caption)

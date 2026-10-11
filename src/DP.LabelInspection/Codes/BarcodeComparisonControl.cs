@@ -94,7 +94,6 @@ internal sealed class BarcodeComparisonControl : UserControl
             FullRowSelect = true,
             MultiSelect = false,
             HideSelection = false,
-            ShowItemToolTips = true,
             Theme = ModernTheme.Dark,
         };
         int S(int logical) => LogicalToDeviceUnits(logical);
@@ -109,7 +108,6 @@ internal sealed class BarcodeComparisonControl : UserControl
             var item = new ListViewItem(new[] { child.Id, child.Status, f.Code, f.AreaPixels?.ToString() ?? "", f.Message })
             {
                 Tag = child,
-                ToolTipText = f.Code + "：" + f.Message,
                 UseItemStyleForSubItems = false,
             };
             item.SubItems[1].ForeColor = LabelInspectionControl.VerdictColor(f.Verdict);

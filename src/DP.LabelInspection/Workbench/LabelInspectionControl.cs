@@ -174,7 +174,6 @@ public sealed class LabelInspectionControl : UserControl
         _evidence.MultiSelect = false;
         _evidence.HideSelection = false;
         // 说明较长时悬停查看全文。
-        _evidence.ShowItemToolTips = true;
         _evidence.Resize += (_, _) => FitDescriptionColumn();
         return details;
     }
@@ -618,12 +617,12 @@ public sealed class LabelInspectionControl : UserControl
 
         _copiedRegion = _regions[index];
         _copiedBindings = _bindings.Where(b => b.Target == _copiedRegion.Name).ToArray();
-        _status.Message = "已复制ROI“" + _copiedRegion.Name + "”；按Ctrl+V粘贴。";
         return true;
     }
 
     /// <summary>
-    /// 粘贴最近复制的ROI：名称加“-副本”保持唯一，放在原ROI下方（向下、再向上依次找不与其他ROI相交且在图内的位置），并选中新ROI；画布上按Ctrl+V。
+    /// 粘贴最近复制的ROI：名称加“-副本”保持唯一；鼠标在画布图像内时左上角对准鼠标（超出图像时向内收），
+    /// 否则放在原ROI下方（向下、再向上依次找不与其他ROI相交且在图内的位置）；并选中新ROI。画布上按Ctrl+V。
     /// 没有复制内容或未载入待检图时返回false。
     /// </summary>
     public bool PasteRegion()
@@ -649,7 +648,7 @@ public sealed class LabelInspectionControl : UserControl
             name = stem + "-副本" + n;
         }
 
-        var bounds = PastePosition(size);
+        var bounds = PasteAtMouse(size) ?? PastePosition(size);
         _regions.Add(
             new InspectionRegion(
                 name,
@@ -665,8 +664,21 @@ public sealed class LabelInspectionControl : UserControl
             .ToArray();
         RefreshRegions();
         SelectRegion(name);
-        _status.Message = "已粘贴ROI“" + name + "”；拖动可调整位置。";
         return true;
+    }
+
+    // 鼠标位于画布显示的图像内时，以鼠标所在原图像素为左上角；整框放不下时向图内收，保持尺寸不变。
+    private PixelRect? PasteAtMouse(PixelRect source)
+    {
+        var client = _viewer.PointToClient(Control.MousePosition);
+        if (!_viewer.ClientRectangle.Contains(client) || _viewer.ClientToImage(client) is not Point point)
+        {
+            return null;
+        }
+
+        int x = Math.Max(0, Math.Min(point.X, _actual!.Width - source.Width)),
+            y = Math.Max(0, Math.Min(point.Y, _actual.Height - source.Height));
+        return new PixelRect(x, y, source.Width, source.Height);
     }
 
     private PixelRect PastePosition(PixelRect source)
@@ -1621,7 +1633,6 @@ public sealed class LabelInspectionControl : UserControl
         )
         {
             Tag = Tuple.Create(region, finding),
-            ToolTipText = finding.Message,
             UseItemStyleForSubItems = false,
         };
         // 只给结论列着色（深色主题下的绿/橙/红），其余列使用主题文字色。
