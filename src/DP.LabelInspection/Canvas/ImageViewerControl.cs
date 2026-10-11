@@ -55,7 +55,8 @@ public sealed class ImageViewerControl : Control
                 : DP.LabelInspection.Adapter.Vision.VisionAdapter.GeometryLayers(_geometry)
         ).Concat(
             DP.LabelInspection.Adapter.Vision.VisionAdapter.LabelLayers(
-                _regions,
+                // 拖动中的ROI由OnPaint按拖动位置画实线框，场景里先隐去原位置，避免新旧两个框同时出现。
+                _regions.Where((_, i) => i != _draggingRegion),
                 _findings,
                 _characters,
                 false
@@ -201,6 +202,7 @@ public sealed class ImageViewerControl : Control
         _panStart = null;
         _drawing = false;
         _editor.Cancel();
+        EndRegionDrag();
         Capture = false;
         Cursor = Cursors.Default;
     }
@@ -208,6 +210,19 @@ public sealed class ImageViewerControl : Control
     // ROI的绘制、选择、移动与八控制点缩放由DP.Vision的RoiEditor按整像素规则处理；本控件只转发指针并把结果转为宿主事件。
     private readonly DP.Vision.UI.RoiEditor _editor = new DP.Vision.UI.RoiEditor();
     private bool _drawing;
+    // 正在拖动（移动/缩放）的ROI序号；-1表示没有。
+    private int _draggingRegion = -1;
+
+    private void EndRegionDrag()
+    {
+        if (_draggingRegion < 0)
+        {
+            return;
+        }
+
+        _draggingRegion = -1;
+        PresentScene();
+    }
     private int _selected = -1;
 
     /// <summary>按当前配方区域和图像尺寸重建编辑文档（区域序号即ROI标识），保留当前选择。</summary>
@@ -487,7 +502,7 @@ public sealed class ImageViewerControl : Control
         viewport.Zoom((view.Width / _bitmap.Width) / viewport.Scale, new DP.Vision.PointD(0, 0));
         viewport.Pan(view.X - viewport.Origin.X, view.Y - viewport.Origin.Y);
         _renderer.RenderTo(e.Graphics);
-        foreach (var region in _regions)
+        foreach (var region in _regions.Where((_, i) => i != _draggingRegion))
         {
             DrawLabel(
                 e.Graphics,
@@ -542,7 +557,13 @@ public sealed class ImageViewerControl : Control
                 _drawing && _editor.Tool == DP.Vision.UI.ERoiTool.Select && _editor.Preview != null
                     ? ToRect(_editor.Preview)
                     : _regions[_selected].Bounds;
-            // 选中只画八个控制点，不另加外框和说明文字，同位置的结果框（NG红/OK橙）及F序号保持可见。
+            // 选中只画八个控制点，不另加虚线外框和说明文字；拖动时ROI实线框及名称跟随拖动位置。
+            if (_draggingRegion == _selected && _drawing && _editor.Preview != null)
+            {
+                var region = _regions[_selected];
+                DrawBox(e.Graphics, view, box, region.Kind == ERegionKind.Ignore ? Color.Gray : Color.RoyalBlue, region.Name);
+            }
+
             foreach (var handle in Handles(box))
             {
                 e.Graphics.FillRectangle(Brushes.DarkViolet, handle.X - 4, handle.Y - 4, 8, 8);
@@ -695,6 +716,12 @@ public sealed class ImageViewerControl : Control
         {
             var point = ImagePoint(e.Location);
             _editor.PointerMove(new DP.Vision.PointD(point.X, point.Y));
+            if (_draggingRegion < 0 && _selected >= 0 && _editor.Tool == DP.Vision.UI.ERoiTool.Select && _editor.Preview != null)
+            {
+                _draggingRegion = _selected;
+                PresentScene();
+            }
+
             Invalidate();
         }
     }
@@ -731,6 +758,7 @@ public sealed class ImageViewerControl : Control
         _editor.PointerUp(new DP.Vision.PointD(point.X, point.Y));
         var after = _editor.Document;
         _drawing = false;
+        EndRegionDrag();
         Capture = false;
         if (ReferenceEquals(before, after) && pressAt is Point press
             && Math.Abs(press.X - e.X) <= 3 && Math.Abs(press.Y - e.Y) <= 3)
@@ -776,6 +804,8 @@ public sealed class ImageViewerControl : Control
                 _drawing = false;
                 _editor.Cancel();
             }
+
+            EndRegionDrag();
 
             Invalidate();
         }
