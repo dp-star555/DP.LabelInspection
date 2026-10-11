@@ -108,6 +108,8 @@ public sealed class LabelInspectionControl : UserControl
     private CancellationTokenSource? _cancel;
     private Task<InspectionReport>? _active;
     private int _regionNumber;
+    private InspectionRegion? _copiedRegion;
+    private FieldBinding[] _copiedBindings = Array.Empty<FieldBinding>();
     private IReadOnlyList<InspectionFinding> _lastFindings = Array.Empty<InspectionFinding>();
 
     /// <summary>创建无参数、可安全用于设计器的控件。</summary>
@@ -321,6 +323,14 @@ public sealed class LabelInspectionControl : UserControl
             if (e.KeyCode == Keys.Delete && e.Modifiers == Keys.None && _active == null && _viewer.SelectedRegionIndex >= 0)
             {
                 RemoveSelectedRegion();
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.C && e.Modifiers == Keys.Control && CopySelectedRegion())
+            {
+                e.Handled = true;
+            }
+            else if (e.KeyCode == Keys.V && e.Modifiers == Keys.Control && _active == null && PasteRegion())
+            {
                 e.Handled = true;
             }
         };
@@ -595,6 +605,96 @@ public sealed class LabelInspectionControl : UserControl
         RefreshRegions();
         _status.Message = "已删除ROI“" + name + "”。";
         return true;
+    }
+
+    /// <summary>复制画布上选中的ROI（类型、规则、检测项目、异常模型绑定及以它为目标的字段绑定），供<see cref="PasteRegion"/>粘贴；画布上按Ctrl+C。未选中时返回false。</summary>
+    public bool CopySelectedRegion()
+    {
+        int index = _viewer.SelectedRegionIndex;
+        if (index < 0 || index >= _regions.Count)
+        {
+            return false;
+        }
+
+        _copiedRegion = _regions[index];
+        _copiedBindings = _bindings.Where(b => b.Target == _copiedRegion.Name).ToArray();
+        _status.Message = "已复制ROI“" + _copiedRegion.Name + "”；按Ctrl+V粘贴。";
+        return true;
+    }
+
+    /// <summary>
+    /// 粘贴最近复制的ROI：名称加“-副本”保持唯一，放在原ROI下方（向下、再向上依次找不与其他ROI相交且在图内的位置），并选中新ROI；画布上按Ctrl+V。
+    /// 没有复制内容或未载入待检图时返回false。
+    /// </summary>
+    public bool PasteRegion()
+    {
+        EnsureIdle();
+        if (_copiedRegion == null || _actual == null)
+        {
+            return false;
+        }
+
+        var source = _copiedRegion;
+        var size = source.Bounds;
+        if (size.Width > _actual.Width || size.Height > _actual.Height)
+        {
+            _status.Message = "复制的ROI大于当前图像，不能粘贴。";
+            return false;
+        }
+
+        string stem = source.Name.Length > 90 ? source.Name.Substring(0, 90) : source.Name;
+        string name = stem + "-副本";
+        for (int n = 2; _regions.Any(r => r.Name == name); n++)
+        {
+            name = stem + "-副本" + n;
+        }
+
+        var bounds = PastePosition(size);
+        _regions.Add(
+            new InspectionRegion(
+                name,
+                source.Kind,
+                bounds,
+                source.SingleLine,
+                source.Kind == ERegionKind.Text || source.Kind == ERegionKind.Barcode ? source.Field : null,
+                source.Anomaly
+            ).WithTasks(source.Tasks)
+        );
+        _bindings = _bindings
+            .Concat(_copiedBindings.Select(b => new FieldBinding(name, b.Source, b.Key)))
+            .ToArray();
+        RefreshRegions();
+        SelectRegion(name);
+        _status.Message = "已粘贴ROI“" + name + "”；拖动可调整位置。";
+        return true;
+    }
+
+    private PixelRect PastePosition(PixelRect source)
+    {
+        const int gap = 8;
+        int maxX = _actual!.Width - source.Width,
+            maxY = _actual.Height - source.Height;
+        bool Free(PixelRect box) =>
+            !_regions.Any(r => r.Kind != ERegionKind.Ignore && r.Bounds.Intersects(box));
+        int step = source.Height + gap;
+        foreach (int direction in new[] { 1, -1 })
+        {
+            for (int y = source.Y + direction * step; y >= 0 && y <= maxY; y += direction * step)
+            {
+                var box = new PixelRect(Math.Min(source.X, maxX), y, source.Width, source.Height);
+                if (Free(box))
+                {
+                    return box;
+                }
+            }
+        }
+
+        return new PixelRect(
+            Math.Max(0, Math.Min(source.X + 20, maxX)),
+            Math.Max(0, Math.Min(source.Y + 20, maxY)),
+            source.Width,
+            source.Height
+        );
     }
 
     /// <summary>ROI或字段绑定改变（画布绘制/调整、编辑、清空、载入配方等）后触发。</summary>
