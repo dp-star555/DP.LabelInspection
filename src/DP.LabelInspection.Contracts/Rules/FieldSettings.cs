@@ -128,6 +128,28 @@ public sealed class FieldSettings
     /// <summary>固定的不可变版本号。</summary>
     public int? LibraryRevision { get; }
 
+    /// <summary>复制规则并替换绑定的单字库及其固定修订，其余设置不变。</summary>
+    /// <param name = "libraryId">字库标识；null表示解除绑定。</param>
+    /// <param name = "libraryRevision">固定修订，与标识成对出现。</param>
+    public FieldSettings WithLibrary(string? libraryId, int? libraryRevision)
+    {
+        return new FieldSettings(
+            libraryId,
+            libraryRevision,
+            Expected,
+            Pattern,
+            AllowedCharacters,
+            MinimumLength,
+            MaximumLength,
+            EqualCells,
+            MaximumDifference,
+            GlyphTolerance,
+            MinimumConfidence,
+            BarcodePrint,
+            BarcodeType
+        );
+    }
+
     /// <summary>调用方提供的预期内容。</summary>
     public string? Expected { get; }
 
