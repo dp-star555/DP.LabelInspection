@@ -159,6 +159,23 @@ public sealed class InspectionRegion
         };
     }
 
+    /// <summary>复制ROI并替换内容规则（如单字库修订），保留类型、范围、检测项目及异常模型绑定；只用于文字/码ROI。</summary>
+    /// <param name = "field">新的内容规则。</param>
+    public InspectionRegion WithField(FieldSettings field)
+    {
+        return new InspectionRegion(
+            Name,
+            Kind,
+            Bounds,
+            SingleLine,
+            field ?? throw new ArgumentNullException(nameof(field)),
+            Anomaly
+        )
+        {
+            Tasks = Tasks,
+        };
+    }
+
     /// <summary>复制ROI并替换原图范围，保留类型、规则、检测项目及异常模型绑定。</summary>
     /// <param name = "bounds">新的原图像素范围。</param>
     public InspectionRegion WithBounds(PixelRect bounds)

@@ -13,6 +13,26 @@ namespace DP.LabelInspection.Tests;
 [TestClass]
 public sealed class RoiConfigurationTests
 {
+    /// <summary>改绑字库修订只替换字库绑定，保留范围、其余规则和明确选择的检测项目。</summary>
+    [TestMethod]
+    public void WithFieldRebindsLibraryRevisionAndKeepsTasks()
+    {
+        var field = new FieldSettings("lib", 3, expected: "A01", maximumDifference: .08, minimumConfidence: .6);
+        var region = new InspectionRegion("ROI-1", ERegionKind.Text, new PixelRect(1, 2, 30, 10), true, field)
+            .WithTasks(new RoiInspectionTasks(false, true));
+        var rebound = region.WithField(region.Field.WithLibrary("lib", 4));
+        Assert.AreEqual(4, rebound.Field.LibraryRevision);
+        Assert.AreEqual("lib", rebound.Field.LibraryId);
+        Assert.AreEqual("A01", rebound.Field.Expected);
+        Assert.AreEqual(.08, rebound.Field.MaximumDifference);
+        Assert.AreEqual(.6, rebound.Field.MinimumConfidence);
+        Assert.AreEqual(region.Bounds, rebound.Bounds);
+        Assert.IsTrue(rebound.SingleLine);
+        Assert.IsFalse(rebound.Tasks.ReadData);
+        Assert.IsTrue(rebound.Tasks.CheckQuality);
+        Assert.ThrowsExactly<ArgumentException>(() => region.Field.WithLibrary("lib", null));
+    }
+
     /// <summary>显式项目覆盖冲突的历史标志，不改变阈值或源对象。</summary>
     [TestMethod]
     [DataRow(true)]

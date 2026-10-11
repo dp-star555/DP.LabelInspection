@@ -864,12 +864,14 @@ public sealed class LabelInspectionControl : UserControl
     public void OpenGlyphQuickBuilder()
     {
         EnsureIdle();
+        var before = GlyphLibraryRevisions();
         GlyphQuickBuilderControl.ShowPage(
             FindForm(),
             _libraryManager ?? throw new InvalidOperationException("宿主未连接字库管理器。"),
             _engine as IGlyphCandidateService,
             _actual
         );
+        OfferGlyphRebinding(before);
     }
 
     /// <summary>打开异常模型库（质量方法B）管理窗口。</summary>
@@ -893,6 +895,7 @@ public sealed class LabelInspectionControl : UserControl
         EnsureIdle();
         var manager = _libraryManager ?? throw new InvalidOperationException("宿主尚未连接字库管理器。");
         var service = _engine as IGlyphCandidateService;
+        var before = GlyphLibraryRevisions();
         using var form = new Form
         {
             Text = "字库 · 单字模板管理 / 多图制库",
@@ -941,6 +944,68 @@ public sealed class LabelInspectionControl : UserControl
         GlyphQuickBuilderControl.GuardClose(form, builder);
         InspectionUiStyle.Apply(form);
         form.ShowDialog(FindForm());
+        OfferGlyphRebinding(before);
+    }
+
+    // 各字库当前的最新修订；字库窗口关闭后据此判断窗口中发布了哪些新修订。
+    private Dictionary<string, int> GlyphLibraryRevisions() =>
+        _libraryManager?.ListLibraries(includeArchived: true).ToDictionary(l => l.Id, l => l.Revision, StringComparer.Ordinal)
+        ?? new Dictionary<string, int>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// 字库窗口中补字/删字会发布新修订，但ROI固定绑定旧修订，检测仍用旧内容（新补的字报“缺参考”）。
+    /// 窗口关闭后，对本次发布了新修订的字库，询问是否把仍绑定其旧修订的ROI改绑到最新修订。
+    /// </summary>
+    private void OfferGlyphRebinding(IReadOnlyDictionary<string, int> before)
+    {
+        if (_libraryManager == null)
+        {
+            return;
+        }
+
+        var published = _libraryManager
+            .ListLibraries(includeArchived: false)
+            .Where(l => before.TryGetValue(l.Id, out var revision) && l.Revision > revision)
+            .ToDictionary(l => l.Id, StringComparer.Ordinal);
+        var stale = _regions
+            .Where(r =>
+                r.Field.LibraryId is string id
+                && published.TryGetValue(id, out var library)
+                && r.Field.LibraryRevision < library.Revision
+            )
+            .ToArray();
+        if (stale.Length == 0)
+        {
+            return;
+        }
+
+        string libraries = string.Join(
+            "、",
+            published.Values.Where(l => stale.Any(r => r.Field.LibraryId == l.Id)).Select(l => $"{l.Name} r{l.Revision}")
+        );
+        string regions = string.Join("、", stale.Select(r => $"{r.Name}（r{r.Field.LibraryRevision}）"));
+        if (
+            MessageBox.Show(
+                this,
+                $"字库已发布新修订：{libraries}。\r\n以下ROI仍绑定旧修订，检测时用不到新补的字：{regions}。\r\n\r\n是否把这些ROI改绑到最新修订？",
+                "改绑字库修订",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question
+            ) != DialogResult.Yes
+        )
+        {
+            return;
+        }
+
+        SetRegions(
+            _regions
+                .Select(r =>
+                    stale.Contains(r)
+                        ? r.WithField(r.Field.WithLibrary(r.Field.LibraryId, published[r.Field.LibraryId!].Revision))
+                        : r
+                )
+                .ToArray()
+        );
     }
 
     /// <summary>
@@ -1654,8 +1719,10 @@ public sealed class LabelInspectionControl : UserControl
 
         if (candidate != null)
         {
+            var before = GlyphLibraryRevisions();
             GlyphQuickBuilderControl.ShowPage(FindForm(), _libraryManager,
                 _engine as IGlyphCandidateService, candidate.Patch, candidateCharacter: candidate.Character);
+            OfferGlyphRebinding(before);
         }
         else
         {
