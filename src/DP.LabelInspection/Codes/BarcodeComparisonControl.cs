@@ -96,7 +96,6 @@ internal sealed class BarcodeComparisonControl : UserControl
             HideSelection = false,
             Theme = ModernTheme.Dark,
         };
-        InspectionUiStyle.AttachRowToolTips(_details);
         int S(int logical) => LogicalToDeviceUnits(logical);
         _details.Columns.Add("子项", S(80));
         _details.Columns.Add("结论", S(70));
@@ -109,7 +108,6 @@ internal sealed class BarcodeComparisonControl : UserControl
             var item = new ListViewItem(new[] { child.Id, child.Status, f.Code, f.AreaPixels?.ToString() ?? "", f.Message })
             {
                 Tag = child,
-                ToolTipText = f.Code + "：" + f.Message,
                 UseItemStyleForSubItems = false,
             };
             item.SubItems[1].ForeColor = LabelInspectionControl.VerdictColor(f.Verdict);

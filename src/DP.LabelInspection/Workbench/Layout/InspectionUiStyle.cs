@@ -78,33 +78,6 @@ internal static class InspectionUiStyle
         Fit(null, EventArgs.Empty);
     }
 
-    /// <summary>
-    /// 按行显示列表项的 <see cref="ListViewItem.ToolTipText"/>。自绘列表开启原生 ShowItemToolTips 时，
-    /// 鼠标悬停会让原生控件只重画部分单元格，其余列的文字被擦掉，所以改用独立的提示。
-    /// </summary>
-    internal static void AttachRowToolTips(ListView list)
-    {
-        var tips = new ToolTip { AutoPopDelay = 15000, InitialDelay = 400, ReshowDelay = 100 };
-        ListViewItem? shown = null;
-        list.MouseMove += (_, e) =>
-        {
-            var item = list.GetItemAt(e.X, e.Y);
-            if (ReferenceEquals(item, shown))
-            {
-                return;
-            }
-
-            shown = item;
-            tips.SetToolTip(list, item?.ToolTipText ?? "");
-        };
-        list.MouseLeave += (_, _) =>
-        {
-            shown = null;
-            tips.SetToolTip(list, "");
-        };
-        list.Disposed += (_, _) => tips.Dispose();
-    }
-
     private static void PrepareButtons(Control root)
     {
         if (root is ModernButton button && button.AutoSize)

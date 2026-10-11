@@ -174,7 +174,6 @@ public sealed class LabelInspectionControl : UserControl
         _evidence.MultiSelect = false;
         _evidence.HideSelection = false;
         // 说明较长时悬停查看全文。
-        InspectionUiStyle.AttachRowToolTips(_evidence);
         _evidence.Resize += (_, _) => FitDescriptionColumn();
         return details;
     }
@@ -1634,7 +1633,6 @@ public sealed class LabelInspectionControl : UserControl
         )
         {
             Tag = Tuple.Create(region, finding),
-            ToolTipText = finding.Message,
             UseItemStyleForSubItems = false,
         };
         // 只给结论列着色（深色主题下的绿/橙/红），其余列使用主题文字色。
