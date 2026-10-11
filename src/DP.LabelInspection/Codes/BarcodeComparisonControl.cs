@@ -94,9 +94,9 @@ internal sealed class BarcodeComparisonControl : UserControl
             FullRowSelect = true,
             MultiSelect = false,
             HideSelection = false,
-            ShowItemToolTips = true,
             Theme = ModernTheme.Dark,
         };
+        InspectionUiStyle.AttachRowToolTips(_details);
         int S(int logical) => LogicalToDeviceUnits(logical);
         _details.Columns.Add("子项", S(80));
         _details.Columns.Add("结论", S(70));
