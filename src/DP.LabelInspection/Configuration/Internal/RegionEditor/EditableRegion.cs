@@ -10,7 +10,7 @@ namespace DP.LabelInspection;
 
 internal static partial class RegionEditor
 {
-    internal sealed class EditableRegion
+    internal sealed partial class EditableRegion
     {
         /// <summary>复制ROI配置为属性面板编辑状态，不修改原始快照。</summary>
         /// <param name = "r">要复制为属性面板可编辑状态的不可变ROI配置。</param>
@@ -53,7 +53,7 @@ internal static partial class RegionEditor
         }
 
         [
-            Category("00 检测项目"),
+            Category("01 检测项目"),
             DisplayName("读取实际数据"),
             TypeConverter(typeof(ChineseBooleanConverter)),
             Description(
@@ -63,7 +63,7 @@ internal static partial class RegionEditor
         public bool ReadData { get; set; }
 
         [
-            Category("00 检测项目"),
+            Category("01 检测项目"),
             DisplayName("A 规则质检（按类型）"),
             TypeConverter(typeof(ChineseBooleanConverter)),
             Description(
@@ -73,7 +73,7 @@ internal static partial class RegionEditor
         public bool CheckQuality { get; set; }
 
         [
-            Category("00 检测项目"),
+            Category("01 检测项目"),
             DisplayName("B 局部异常检测（良品模型）"),
             TypeConverter(typeof(ChineseBooleanConverter)),
             Description(
@@ -135,7 +135,7 @@ internal static partial class RegionEditor
         public bool AnomalyInkLoss { get; set; } = true;
 
         [
-            Category("01 区域位置与类型"),
+            Category("00 区域位置与类型"),
             DisplayName("区域名称"),
             Description(
                 "本ROI的名称，不能为空、最长100字符，同一配方内必须唯一。用于报告与字段绑定识别；重命名后请检查相关绑定。"
@@ -144,17 +144,17 @@ internal static partial class RegionEditor
         public string Name { get; set; }
 
         [
-            Category("01 区域位置与类型"),
+            Category("00 区域位置与类型"),
             DisplayName("检查类型"),
             TypeConverter(typeof(ChineseRegionKindConverter)),
             Description(
-                "文字：OCR及已绑定字库比较；条码：读取及可选印刷检查；固定内容：整图模板差异；空白区：污点；忽略区：排除范围。下面标明“仅文字/仅条码”的参数不会作用于其他类型。"
+                "文字：OCR及已绑定字库比较；条码：读取及可选印刷检查；固定内容：整图模板差异；空白区：污点；忽略区：排除范围。面板只显示当前类型可用的检测项目，开启某项后才显示它的参数；切换类型或关闭项目时，已填的参数保留不丢。"
             )
         ]
         public ERegionKind Kind { get; set; }
 
         [
-            Category("01 区域位置与类型"),
+            Category("00 区域位置与类型"),
             DisplayName("左上角X（原图像素）"),
             Description(
                 "ROI左上角相对原图左边的距离，单位为原始像素，整数且不小于0。不是缩放后屏幕坐标；必须保证整个框在待检图内。"
@@ -163,7 +163,7 @@ internal static partial class RegionEditor
         public int X { get; set; }
 
         [
-            Category("01 区域位置与类型"),
+            Category("00 区域位置与类型"),
             DisplayName("左上角Y（原图像素）"),
             Description(
                 "ROI左上角相对原图上边的距离，单位为原始像素，整数且不小于0。增大向下移动；必须保证整个框在待检图内。"
@@ -172,7 +172,7 @@ internal static partial class RegionEditor
         public int Y { get; set; }
 
         [
-            Category("01 区域位置与类型"),
+            Category("00 区域位置与类型"),
             DisplayName("区域宽度（原图像素）"),
             Description(
                 "ROI水平宽度，正整数，单位为原始像素。文字框须包含完整左右笔画，避免截字或带入相邻条码；框不能超出原图。"
@@ -181,7 +181,7 @@ internal static partial class RegionEditor
         public int Width { get; set; }
 
         [
-            Category("01 区域位置与类型"),
+            Category("00 区域位置与类型"),
             DisplayName("区域高度（原图像素）"),
             Description(
                 "ROI垂直高度，正整数，单位为原始像素。文字需保留完整上下笔画及少量白边；过大可能带入条码，过小会触发裁切/分割失败。自动单行分割高度不超过512。"

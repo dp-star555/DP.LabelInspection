@@ -174,6 +174,8 @@ internal sealed class RegionRulesView : UserControl
             ShowMessage(_idleHelp);
         }
 
+        // 类型、检测项目等开关改变了应显示的参数时，重建该卡片的属性表（保留滚动位置与焦点）。
+        card.SyncShownProperties();
         card.Invalidate(true);
         Edited?.Invoke(this, EventArgs.Empty);
     }
@@ -306,6 +308,7 @@ internal sealed class RegionRulesView : UserControl
         private readonly RegionRulesView _owner;
         private readonly CardHeader _header;
         private ModernPropertyGrid.WinForms.ModernPropertyGrid? _grid;
+        private string _shown = "";
         private bool _expanded;
 
         internal RegionCard(RegionRulesView owner, RegionEditor.EditableRegion value)
@@ -345,6 +348,7 @@ internal sealed class RegionRulesView : UserControl
                     };
                     _grid.RegisterEditor(LibraryChoiceEditorProvider.Instance);
                     _grid.SelectedObject = Value;
+                    _shown = Value.ShownSignature();
                     _grid.PropertyValueChanged += (_, e) => _owner.OnPropertyChanged(this, e.Property.Name);
                     Controls.Add(_grid);
                     _grid.BringToFront();
@@ -368,6 +372,31 @@ internal sealed class RegionRulesView : UserControl
             {
                 _grid?.RefreshProperty(name);
             }
+        }
+
+        /// <summary>
+        /// 显示的属性集合变化时重建属性表。在属性值改变事件之后异步执行，不在正在触发事件的编辑器内部销毁它。
+        /// </summary>
+        internal void SyncShownProperties()
+        {
+            if (_grid == null || !IsHandleCreated)
+            {
+                return;
+            }
+
+            BeginInvoke(
+                new Action(() =>
+                {
+                    string shown = Value.ShownSignature();
+                    if (_grid == null || _grid.IsDisposed || shown == _shown)
+                    {
+                        return;
+                    }
+
+                    _shown = shown;
+                    _grid.RefreshProperties();
+                })
+            );
         }
 
         internal void Toggle() => _owner.Toggle(this);
