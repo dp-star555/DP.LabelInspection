@@ -133,6 +133,7 @@
 | `ChineseBooleanConverter` | [src/DP.LabelInspection/Configuration/Converters/ChineseBooleanConverter.cs](src/DP.LabelInspection/Configuration/Converters/ChineseBooleanConverter.cs) |
 | `ChineseRegionKindConverter` | [src/DP.LabelInspection/Configuration/Converters/ChineseRegionKindConverter.cs](src/DP.LabelInspection/Configuration/Converters/ChineseRegionKindConverter.cs) |
 | `RegionEditor.EditableRegion` | [src/DP.LabelInspection/Configuration/Internal/RegionEditor/EditableRegion.cs](src/DP.LabelInspection/Configuration/Internal/RegionEditor/EditableRegion.cs) |
+| `RegionEditor.EditableRegion`（按类型与检测项目显示参数） | [src/DP.LabelInspection/Configuration/Internal/RegionEditor/EditableRegion.Visibility.cs](src/DP.LabelInspection/Configuration/Internal/RegionEditor/EditableRegion.Visibility.cs) |
 | `RegionEditor` | [src/DP.LabelInspection/Configuration/RegionEditor.cs](src/DP.LabelInspection/Configuration/RegionEditor.cs) |
 | `DrawingImageConverter` | [src/DP.LabelInspection/Imaging/DrawingImageConverter.cs](src/DP.LabelInspection/Imaging/DrawingImageConverter.cs) |
 | `GlyphQuickBuilderControl` | [src/DP.LabelInspection/Libraries/Drafting/GlyphQuickBuilderControl.cs](src/DP.LabelInspection/Libraries/Drafting/GlyphQuickBuilderControl.cs) |
